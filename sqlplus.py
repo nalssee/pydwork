@@ -106,7 +106,8 @@ class SQLPlus:
             df.to_csv(filename, index=False)
         else:
             df = pd.DataFrame(list(islice(query, n)), columns=column_names)
-            with pd.option_context("display.max_rows", n):
+            with pd.option_context("display.max_rows", n) \
+                 pd.option_context("display.max_columns", 100):
                 print(df)
 
     def list_tables(self):
