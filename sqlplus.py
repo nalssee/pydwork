@@ -105,7 +105,8 @@ class SQLPlus:
             df = pd.DataFrame(list(query), columns=column_names)
             df.to_csv(filename, index=False)
         else:
-            df = pd.DataFrame(list(islice(query, n)), columns=column_names)
+            # slicing 1 more so that pandas to show "..." in case there are more
+            df = pd.DataFrame(list(islice(query, n + 1)), columns=column_names)
             with pd.option_context("display.max_rows", n):
                 with pd.option_context("display.max_columns", 1000):
                     print(df)
