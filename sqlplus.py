@@ -16,9 +16,57 @@ __all__ = ['SQLPlus', 'gby', 'gflat', 'load_csv', 'load_xl']
 import sqlite3, csv, tempfile, openpyxl, re
 import pandas as pd
 from itertools import groupby, islice, chain
-from collections import namedtuple
 from messytables import CSVTableSet, type_guess
 from messytables.types import DecimalType, IntegerType
+
+
+class Row:
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    def column_names(self):
+        return list(self.__dict__.keys())
+
+    def __str__(self):
+        return str(self.__dict__)
+
+
+# Table info class
+class Tinfo:
+    # columns : [['col1', 'real'], ...]
+    def __init__(self, table_name, columns):
+        self.table_name = table_name
+        if isinstance(columns, str):
+            columns = [c.split() for c in columns.strip().split(',')]
+        self.columns = columns
+
+    def cstmt(self):
+        """make a create table statement
+        """
+        return 'create table if not exists {0}(\n{1}\n)'\
+            .format(self.table_name, ',\n'\
+                    .join(['  {0} {1}'.format(cn, ct) for cn, ct in self.columns])).lower()
+
+    def istmt(self):
+        tname = self.table_name
+        n = len(self.columns)
+        return "insert into {0} values ({1})".format(tname, ', '.join(['?'] * n))
+
+    def cols(self):
+        return ', '.join([c for c, _ in self.columns])
+
+    def __str__(self):
+        n = max([len(c) for c, _ in self.columns])
+        return \
+            ('\n' + '=' * (n + 7)) + '\n' \
+            + self.table_name +'\n' \
+            + ('-' * (n + 7)) + '\n' \
+            + '\n'.join([c.ljust(n) + ' : ' + t for c, t in self.columns]) + '\n' \
+            + ('=' * (n + 7))
+
+    def __repr__(self):
+        return "Tinfo('%s', %s)" % (self.table_name, self.columns)
 
 
 # CAUTION:
@@ -78,7 +126,7 @@ class SQLPlus:
             # writing
             f.write((','.join(colnames) + '\n').encode())
             for row in it:
-                f.write((','.join([str(getattr(x, c)) for c in colnames]) + '\n').encode())
+                f.write((','.join([str(getattr(row, c)) for c in colnames]) + '\n').encode())
 
             # type check
             f.seek(0)
@@ -103,23 +151,25 @@ class SQLPlus:
         if isinstance(query, str):
             query = self._cursor.execute(query, args)
             column_names = [c[0] for c in query.description]
+            values = list(islice(query, n))
+
         # if query is not a string, then it is an iterable.
         else:
             query = iter(query)
             first_row = next(query)
             column_names = first_row.column_names()
-            rest = list(islice(query, n - 1))
-            query = [first_row] + rest
+            values = []
+            for r in chain([first_row], islice(query, n - 1)):
+                values.append([getattr(r, c) for c in column_names])
+
+        df = pd.DataFrame(values, columns=column_names)
 
         if filename:
-            df = pd.DataFrame(list(query), columns=column_names)
             df.to_csv(filename, index=False)
         else:
-            # slicing 1 more so that pandas to show "..." in case there are more
-            df = pd.DataFrame(list(islice(query, n)), columns=column_names)
-            with pd.option_context("display.max_rows", n):
-                with pd.option_context("display.max_columns", 1000):
-                    print(df)
+            with pd.option_context("display.max_rows", n), \
+                 pd.option_context("display.max_columns", 1000):
+                print(df)
 
     def list_tables(self):
         query = self._cursor.execute("""
@@ -135,17 +185,6 @@ class SQLPlus:
         return Tinfo(tname, [[row[1], row[2]] for row in query])
 
 
-def _listify(s):
-    """If s is a comma or space separated string turn it into list"""
-    if isinstance(s, str):
-        columns = [x for x in re.split(',| ', s) if x]
-    elif isinstance(s, list):
-        columns = s
-    else:
-        raise ValueError("header inappropriate", s)
-    return columns
-
-
 # loaded data is string, no matter what!!
 def load_csv(csv_file, header=None):
     """Loads well-formed csv file, 1 header line and the rest is data
@@ -157,6 +196,7 @@ def load_csv(csv_file, header=None):
         header = header or first_line
         columns = _listify(header)
         for line in csv.reader(f):
+            assert len(columns) == len(line), "column number mismatch"
             r =  Row()
             for c, v in zip(columns, line):
                 setattr(r, c, v)
@@ -198,68 +238,42 @@ def gby(it, group):
 
     if group == [] then group them all
     """
-    group = _listify(group)
+    def grouped_row(rows, columns):
+        g_row = Row()
+        for c in columns:
+            setattr(g_row, c, [])
+        for r in rows:
+            for c in columns:
+                getattr(g_row, c).append(getattr(r, c))
+        return g_row
 
     g_it = groupby(it, group if hasattr(group, "__call__") \
-                   else (lambda x: [getattr(x, g) for g in group]))
+                   else (lambda x: [getattr(x, g) for g in _listify(group)]))
     first_group = list(next(g_it)[1])
-    first_row = first_group[0]
-    g_tup = namedtuple("GROUP", first_row._fields)
+    columns = first_group[0].column_names()
 
-    yield g_tup(*tr(first_group))
+    yield grouped_row(first_group, columns)
     for _, g in g_it:
-        yield g_tup(*tr(g))
+        yield grouped_row(g, columns)
 
-# flatten groups
+
 def gflat(it):
     """a stream of a tuple of lists are flattened to a stream of tuples
     """
     it = iter(it)
     try:
-        first_group = next(it)
+        g_row1 = next(it)
     except StopIteration:
         raise ValueError("Empty Rows")
+    columns = g_row1.column_names()
 
-    tup = namedtuple(first_group.__class__.__name__, first_group._fields)
-    for g in chain([first_group], it):
-        for r in zip(*g):
-            yield tup(*r)
+    for gr in chain([g_row1], it):
+        r = Row()
+        for xs in zip(*(getattr(gr, c) for c in columns)):
+            for c, v in zip(columns, xs):
+                setattr(r, c, v)
+            yield r
 
-# Table info class
-class Tinfo:
-    # columns : [['col1', 'real'], ...]
-    def __init__(self, table_name, columns):
-        self.table_name = table_name
-        if isinstance(columns, str):
-            columns = [c.split() for c in columns.strip().split(',')]
-        self.columns = columns
-
-    def cstmt(self):
-        """make a create table statement
-        """
-        return 'create table if not exists {0}(\n{1}\n)'\
-            .format(self.table_name, ',\n'\
-                    .join(['  {0} {1}'.format(cn, ct) for cn, ct in self.columns])).lower()
-
-    def istmt(self):
-        tname = self.table_name
-        n = len(self.columns)
-        return "insert into {0} values ({1})".format(tname, ', '.join(['?'] * n))
-
-    def cols(self):
-        return ', '.join([c for c, _ in self.columns])
-
-    def __str__(self):
-        n = max([len(c) for c, _ in self.columns])
-        return \
-            ('\n' + '=' * (n + 7)) + '\n' \
-            + self.table_name +'\n' \
-            + ('-' * (n + 7)) + '\n' \
-            + '\n'.join([c.ljust(n) + ' : ' + t for c, t in self.columns]) + '\n' \
-            + ('=' * (n + 7))
-
-    def __repr__(self):
-        return "Tinfo('%s', %s)" % (self.table_name, self.columns)
 
 # You might need to check how costly this is.
 def _field_types(f):
@@ -276,13 +290,12 @@ def _field_types(f):
     return [conv(t) for t in type_guess(row_set.sample)]
 
 
-class Row:
-    def __init__(self, **kwargs):
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
-    def column_names(self):
-        return list(self.__dict__.keys())
+def _listify(s):
+    """If s is a comma or space separated string turn it into list"""
+    if isinstance(s, str):
+        return [x for x in re.split(',| ', s) if x]
+    else:
+        return s
 
 
 # todo: add more tests
@@ -293,7 +306,7 @@ if __name__ == "__main__":
     class TestSQLPlus(unittest.TestCase):
         def test_loading(self):
             with SQLPlus(':memory:') as conn:
-                with self.assertRaises(TypeError):
+                with self.assertRaises(AssertionError):
                     # column number mismatch, notice pw is missing
                     for r in load_csv('iris.csv', header="no sl sw pl species"):
                         print(r)
@@ -303,12 +316,21 @@ if __name__ == "__main__":
                 iris = conn.table_info("iris")
                 print("\niris table info", end="")
                 print(iris)
+
                 # But once you save it, this program automatically decides types.
                 self.assertEqual(iris.table_name, 'iris')
-                self.assertEqual(iris.columns, [['no', 'int'], \
-                                                ['sl', 'real'], ['sw', 'real'], \
-                                                ['pl', 'real'], ['pw', 'real'], \
-                                                ['species', 'text']])
+                self.assertEqual(sorted(iris.columns), \
+                                 sorted([['no', 'int'], \
+                                         ['sl', 'real'], ['sw', 'real'], \
+                                         ['pl', 'real'], ['pw', 'real'], \
+                                         ['species', 'text']]))
+
+                iris1 = load_csv('iris.csv', header="no sl sw pl pw species")
+                # Load excel file
+                iris2 = load_xl('iris.xlsx', header="no sl sw pl pw species")
+                for a, b in zip(iris1, iris2):
+                    self.assertEqual(a.sl, b.sl)
+                    self.assertEqual(a.pl, b.pl)
 
         def test_gby(self):
             with SQLPlus(':memory:') as conn:
@@ -325,7 +347,7 @@ if __name__ == "__main__":
                     for g in gby(rows, "sp1"):
                         g.no = g.no[:20]
                         yield g
-                conn.save(top20_sl, flatten=True)
+                conn.save(top20_sl)
 
                 print("\nYou should see the same two tables")
                 print("=====================================")
@@ -335,9 +357,6 @@ if __name__ == "__main__":
                 # or just see the stream
                 conn.show(gflat(top20_sl()), n=3)
                 print("=====================================")
-                # don't forget that you can save it in a file as well
-                # and 'n' parameter is ignored.
-
 
                 r0, r1 = list(conn.run("select avg(sl) as slavg from top20_sl group by sp1"))
                 self.assertEqual(round(r0.slavg, 3), 5.335)
@@ -352,37 +371,9 @@ if __name__ == "__main__":
                 self.assertEqual(sorted(conn.list_tables()), ['first_char', 'top20_sl'])
 
                 def empty_rows(query):
-                    for g in gby(conn.run("select * from first_char order by sl, sw"), "sl"):
+                    for g in gby(conn.run(query), "sl"):
                         if len(g.sl) > 10: yield g
                 with self.assertRaises(ValueError):
-                    conn.save(empty_rows)
+                    conn.save(empty_rows, args=("select * from first_char order by sl, sw",))
 
     unittest.main()
-
-# import time
-
-# it = (x for x in range(100000000))
-# start = time.time()
-# def again():
-#     for i in it:
-#         yield i
-
-# # for i in it:
-# #     pass
-
-# for i in again():
-#     pass
-
-# end = time.time()
-# print("%f" % (end - start,))
-
-
-
-# def foo():
-#     print("")
-#     if True:
-#         return it
-#     next(it)
-#     for i in it:
-#         yield i
-print('done')
