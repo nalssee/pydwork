@@ -10,7 +10,7 @@ For those cases, this module provides a simple generator containing
 rows of each group with some other utils
 """
 
-__all__ = ['SQLPlus', 'gby', 'gflat', 'load_csv', 'load_xl']
+__all__ = ['SQLPlus', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl']
 
 
 import sqlite3, csv, tempfile, openpyxl, re
@@ -21,6 +21,7 @@ from messytables.types import DecimalType, IntegerType
 
 
 class Row:
+    "sql row"
     def __init__(self, **kwargs):
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -32,9 +33,11 @@ class Row:
         return str(self.__dict__)
 
 
-# Table info class
 class Tinfo:
-    # columns : [['col1', 'real'], ...]
+    """Table info
+
+    columns : [['col1', 'real'], ...]
+    """
     def __init__(self, table_name, columns):
         self.table_name = table_name
         if isinstance(columns, str):
@@ -49,6 +52,8 @@ class Tinfo:
                     .join(['  {0} {1}'.format(cn, ct) for cn, ct in self.columns])).lower()
 
     def istmt(self):
+        """Insert statement
+        """
         tname = self.table_name
         n = len(self.columns)
         return "insert into {0} values ({1})".format(tname, ', '.join(['?'] * n))
@@ -71,7 +76,7 @@ class Tinfo:
 
 # CAUTION:
 # While a cursor is executing,
-# other works using the cursor cannot iterfere the process.
+# other works using the cursor cannot interfere the process.
 # Be careful especially when you are working with select query.
 class SQLPlus:
     """SQLPlus object works like a sql cursor.
@@ -89,7 +94,12 @@ class SQLPlus:
         self._conn.close()
 
     # args can be a list, a tuple or a dictionary
-    def run(self, query, args=[]):
+    def run(self, query, args=()):
+        """Simply executes sql statement
+
+        In case it's 'select' statment,
+        iterator is returned.
+        """
         q = self._cursor.execute(query, args)
         command = [x for x in query.split(" ") if not x == ""][0]
         if command.upper() == "SELECT":
@@ -105,6 +115,7 @@ class SQLPlus:
 
         If 'name' is not given, a name of the namedtuple is going to be it.
         """
+        # if 'it' is just a generator function, it is executed to make an iterator
         if hasattr(it, '__call__'):
             name = name or it.__name__
             it = it(*args)
@@ -117,7 +128,9 @@ class SQLPlus:
 
         colnames = first_row.column_names()
 
+
         if isinstance(getattr(first_row, colnames[0]), list):
+            # if it's grouped row, it is flattened
             it = gflat(chain([first_row], it))
         else:
             it = chain([first_row], it)
@@ -135,15 +148,16 @@ class SQLPlus:
             self._cursor.execute(tinfo0.cstmt())
             istmt0 = tinfo0.istmt()
 
-            # loading
+            # Now insertion
             f.seek(0)
             # read out the first line
             f.readline()
             for line in f:
+                # line[:-1] because last index indicates '\n'
                 self._cursor.execute(istmt0, line[:-1].decode().split(','))
 
     # Be careful so that you don't overwrite the file
-    def show(self, query, args=[], n=30, filename=None):
+    def show(self, query, args=(), n=30, filename=None):
         """If 'filename' is given, n is ignored.
 
         'query' can be either a query string or an iterable.
@@ -167,6 +181,7 @@ class SQLPlus:
         if filename:
             df.to_csv(filename, index=False)
         else:
+            # show practically all columns
             with pd.option_context("display.max_rows", n), \
                  pd.option_context("display.max_columns", 1000):
                 print(df)
@@ -197,7 +212,7 @@ def load_csv(csv_file, header=None):
         columns = _listify(header)
         for line in csv.reader(f):
             assert len(columns) == len(line), "column number mismatch"
-            r =  Row()
+            r = Row()
             for c, v in zip(columns, line):
                 setattr(r, c, v)
             yield r
@@ -268,8 +283,8 @@ def gflat(it):
     columns = g_row1.column_names()
 
     for gr in chain([g_row1], it):
-        r = Row()
         for xs in zip(*(getattr(gr, c) for c in columns)):
+            r = Row()
             for c, v in zip(columns, xs):
                 setattr(r, c, v)
             yield r
@@ -338,15 +353,27 @@ if __name__ == "__main__":
                 def first_char():
                     "make a new column with the first charactor of species."
                     for r in load_csv('iris.csv', header="no sl sw pl pw species"):
+                        # Since r is just an object you can simply add new columns
+                        # or delete columns as you'd do with objects.
+
+                        # Each property is either a string, integer or real.
                         r.sp1 = r.species[:1]
                         yield r
+                # function name just becomes the table name
                 conn.save(first_char)
 
                 def top20_sl():
                     rows = conn.run("select * from first_char order by sp1, sl desc")
                     for g in gby(rows, "sp1"):
+                        # g is again an object
+                        # just each property is a list.
+                        # And all properties are of the same length.
+
+                        # Cut off at 20
                         g.no = g.no[:20]
                         yield g
+                # If you are saving grouped objects,
+                # they are flattened
                 conn.save(top20_sl)
 
                 print("\nYou should see the same two tables")
@@ -371,9 +398,20 @@ if __name__ == "__main__":
                 self.assertEqual(sorted(conn.list_tables()), ['first_char', 'top20_sl'])
 
                 def empty_rows(query):
-                    for g in gby(conn.run(query), "sl"):
+                    for g in gby(conn.run(query), ["sl"]):
                         if len(g.sl) > 10: yield g
                 with self.assertRaises(ValueError):
                     conn.save(empty_rows, args=("select * from first_char order by sl, sw",))
+
+        def test_gflat(self):
+            """Tests if applying gby and gflat subsequently yields the original
+            """
+            with SQLPlus(':memory:') as conn:
+                conn.save(load_csv("iris.csv", header="no,sl,sw,pl,pw,sp"), name="iris")
+                a = list(conn.run("select * from iris order by sl"))
+                b = list(gflat(gby(conn.run("select * from iris order by sl"), "sl")))
+                for a1, b1 in zip(a, b):
+                    self.assertEqual(a1.sl, b1.sl)
+                    self.assertEqual(a1.pl, b1.pl)
 
     unittest.main()
