@@ -134,6 +134,18 @@ class SQLPlus:
         query = self._cursor.execute("pragma table_info({})".format(tname))
         return Tinfo(tname, [[row[1], row[2]] for row in query])
 
+
+def _listify(s):
+    """If s is a comma or space separated string turn it into list"""
+    if isinstance(s, str):
+        columns = [x for x in re.split(',| ', s) if x]
+    elif isinstance(s, list):
+        columns = s
+    else:
+        raise ValueError("header inappropriate", s)
+    return columns
+
+
 # loaded data is string, no matter what!!
 def load_csv(csv_file, header=None):
     """Loads well-formed csv file, 1 header line and the rest is data
@@ -143,11 +155,12 @@ def load_csv(csv_file, header=None):
     with open(csv_file) as f:
         first_line = f.readline()
         header = header or first_line
-
-        tup = namedtuple("CSV", header)
+        columns = _listify(header)
         for line in csv.reader(f):
-
-            yield tup(*line)
+            r =  Row()
+            for c, v in zip(columns, line):
+                setattr(r, c, v)
+            yield r
 
 
 def load_xl(xl_file, header=None):
@@ -162,7 +175,8 @@ def load_xl(xl_file, header=None):
     rows = sheet.rows
     header = header or [remove_comma(c) for c in rows[0]]
 
-    tup = namedtuple("EXCEL", header)
+    columns = _listify(header)
+
     for row in rows[1:]:
         cells = []
         for cell in row:
@@ -170,7 +184,10 @@ def load_xl(xl_file, header=None):
                 cells.append("")
             else:
                 cells.append(remove_comma(cell))
-        yield tup(*cells)
+        r = Row()
+        for c, v in zip(columns, cells):
+            setattr(r, c, v)
+        yield r
 
 
 def gby(it, group):
@@ -181,11 +198,7 @@ def gby(it, group):
 
     if group == [] then group them all
     """
-    def tr(rows):
-        return (list(c) for c in zip(*rows))
-
-    if isinstance(group, str):
-        group = [x for x in re.split(',| ', group) if x]
+    group = _listify(group)
 
     g_it = groupby(it, group if hasattr(group, "__call__") \
                    else (lambda x: [getattr(x, g) for g in group]))
@@ -346,29 +359,30 @@ if __name__ == "__main__":
 
     unittest.main()
 
-import time
+# import time
 
-it = (x for x in range(100000000))
-start = time.time()
-def again():
-    for i in it:
-        yield i
+# it = (x for x in range(100000000))
+# start = time.time()
+# def again():
+#     for i in it:
+#         yield i
 
-# for i in it:
+# # for i in it:
+# #     pass
+
+# for i in again():
 #     pass
 
-for i in again():
-    pass
-
-end = time.time()
-print("%f" % (end - start,))
+# end = time.time()
+# print("%f" % (end - start,))
 
 
 
-def foo():
-    print("")
-    if True:
-        return it
-    next(it)
-    for i in it:
-        yield i
+# def foo():
+#     print("")
+#     if True:
+#         return it
+#     next(it)
+#     for i in it:
+#         yield i
+print('done')
