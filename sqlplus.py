@@ -29,6 +29,11 @@ class Row:
     def column_names(self):
         return list(self.__dict__.keys())
 
+    def get_values(self, columns):
+        """columns must be given so that it doesn't cause ordering problems
+        """
+        return [getattr(self, c) for c in columns]
+
     def __str__(self):
         return str(self.__dict__)
 
@@ -89,7 +94,7 @@ class SQLPlus:
     def __enter__(self):
         return self
 
-    def __exit__(self, type, value, trace):
+    def __exit__(self, exe_type, value, trace):
         self._conn.commit()
         self._conn.close()
 
@@ -127,8 +132,6 @@ class SQLPlus:
             raise ValueError("Empty rows")
 
         colnames = first_row.column_names()
-
-
         if isinstance(getattr(first_row, colnames[0]), list):
             # if it's grouped row, it is flattened
             it = gflat(chain([first_row], it))
@@ -139,7 +142,8 @@ class SQLPlus:
             # writing
             f.write((','.join(colnames) + '\n').encode())
             for row in it:
-                f.write((','.join([str(getattr(row, c)) for c in colnames]) + '\n').encode())
+                vals = [str(v) for v in row.get_values(colnames)]
+                f.write((','.join(vals) + '\n').encode())
 
             # type check
             f.seek(0)
@@ -164,19 +168,19 @@ class SQLPlus:
         """
         if isinstance(query, str):
             query = self._cursor.execute(query, args)
-            column_names = [c[0] for c in query.description]
+            colnames = [c[0] for c in query.description]
             values = list(islice(query, n))
 
         # if query is not a string, then it is an iterable.
         else:
             query = iter(query)
             first_row = next(query)
-            column_names = first_row.column_names()
+            colnames = first_row.column_names()
             values = []
             for r in chain([first_row], islice(query, n - 1)):
-                values.append([getattr(r, c) for c in column_names])
+                values.append(r.get_values(colnames))
 
-        df = pd.DataFrame(values, columns=column_names)
+        df = pd.DataFrame(values, columns=colnames)
 
         if filename:
             df.to_csv(filename, index=False)
@@ -280,12 +284,12 @@ def gflat(it):
         g_row1 = next(it)
     except StopIteration:
         raise ValueError("Empty Rows")
-    columns = g_row1.column_names()
+    colnames = g_row1.column_names()
 
     for gr in chain([g_row1], it):
-        for xs in zip(*(getattr(gr, c) for c in columns)):
+        for xs in zip(*gr.get_values(colnames)):
             r = Row()
-            for c, v in zip(columns, xs):
+            for c, v in zip(colnames, xs):
                 setattr(r, c, v)
             yield r
 
@@ -297,8 +301,10 @@ def _field_types(f):
     f is a binary port
     """
     def conv(t):
-        if isinstance(t, IntegerType): return "int"
-        if isinstance(t, DecimalType): return 'real'
+        if isinstance(t, IntegerType):
+            return "int"
+        if isinstance(t, DecimalType):
+            return 'real'
         return 'text'
     tset = CSVTableSet(f)
     row_set = tset.tables[0]
@@ -399,7 +405,8 @@ if __name__ == "__main__":
 
                 def empty_rows(query):
                     for g in gby(conn.run(query), ["sl"]):
-                        if len(g.sl) > 10: yield g
+                        if len(g.sl) > 10:
+                            yield g
                 with self.assertRaises(ValueError):
                     conn.save(empty_rows, args=("select * from first_char order by sl, sw",))
 
