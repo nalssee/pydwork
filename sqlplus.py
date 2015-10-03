@@ -46,34 +46,44 @@ class SQLPlus:
         command = [x for x in query.split(" ") if not x == ""][0]
         if command.upper() == "SELECT":
             columns = [c[0] for c in q.description]
-            row = namedtuple("SELECT", columns)
             for xs in q:
-                yield row(*xs)
+                r = Row()
+                for col, val in zip(columns, xs):
+                    setattr(r, col, val)
+                yield r
 
-    def save(self, it, name=None):
+    def save(self, it, name=None, args=()):
         """create a table from an iterator.
 
         If 'name' is not given, a name of the namedtuple is going to be it.
         """
-        it = iter(it) # in case list is given
+        if hasattr(it, '__call__'):
+            name = name or it.__name__
+            it = it(*args)
+
+        it = iter(it)
         try:
             first_row = next(it)
         except StopIteration:
             raise ValueError("Empty rows")
 
-        tname = name or first_row.__class__.__name__
-        colnames = first_row._fields
+        colnames = first_row.column_names()
+
+        if isinstance(getattr(first_row, colnames[0]), list):
+            it = gflat(chain([first_row], it))
+        else:
+            it = chain([first_row], it)
 
         with tempfile.TemporaryFile() as f:
             # writing
             f.write((','.join(colnames) + '\n').encode())
-            for row in chain([first_row], it):
-                f.write((','.join([str(x) for x in row]) + '\n').encode())
+            for row in it:
+                f.write((','.join([str(getattr(x, c)) for c in colnames]) + '\n').encode())
 
             # type check
             f.seek(0)
             types = _field_types(f)
-            tinfo0 = Tinfo(tname, list(zip(colnames, types)))
+            tinfo0 = Tinfo(name, list(zip(colnames, types)))
             self._cursor.execute(tinfo0.cstmt())
             istmt0 = tinfo0.istmt()
 
@@ -97,7 +107,7 @@ class SQLPlus:
         else:
             query = iter(query)
             first_row = next(query)
-            column_names = first_row._fields
+            column_names = first_row.column_names()
             rest = list(islice(query, n - 1))
             query = [first_row] + rest
 
@@ -136,6 +146,7 @@ def load_csv(csv_file, header=None):
 
         tup = namedtuple("CSV", header)
         for line in csv.reader(f):
+
             yield tup(*line)
 
 
@@ -251,6 +262,16 @@ def _field_types(f):
     row_set = tset.tables[0]
     return [conv(t) for t in type_guess(row_set.sample)]
 
+
+class Row:
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    def column_names(self):
+        return list(self.__dict__.keys())
+
+
 # todo: add more tests
 # This should work as a tutorial as well.
 if __name__ == "__main__":
@@ -280,23 +301,18 @@ if __name__ == "__main__":
             with SQLPlus(':memory:') as conn:
 
                 def first_char():
-                    """make a new column with the first charactor of species.
-                    """
-                    tup = namedtuple("first_char", "no sl sw pl pw species sp1")
+                    "make a new column with the first charactor of species."
                     for r in load_csv('iris.csv', header="no sl sw pl pw species"):
-                        r1 = r + (r.species[:1],)
-                        yield tup(*r1)
-                conn.save(first_char())
+                        r.sp1 = r.species[:1]
+                        yield r
+                conn.save(first_char)
 
                 def top20_sl():
-                    """group by sp1 and sort by sl and extract top 20
-                    """
-                    tup = namedtuple("top20_sl", "no sl sw pl pw species sp1")
                     rows = conn.run("select * from first_char order by sp1, sl desc")
                     for g in gby(rows, "sp1"):
-                        yield tup(g.no[:20], *g[1:])
-                # flattens groups
-                conn.save(gflat(top20_sl()))
+                        g.no = g.no[:20]
+                        yield g
+                conn.save(top20_sl, flatten=True)
 
                 print("\nYou should see the same two tables")
                 print("=====================================")
@@ -308,6 +324,7 @@ if __name__ == "__main__":
                 print("=====================================")
                 # don't forget that you can save it in a file as well
                 # and 'n' parameter is ignored.
+
 
                 r0, r1 = list(conn.run("select avg(sl) as slavg from top20_sl group by sp1"))
                 self.assertEqual(round(r0.slavg, 3), 5.335)
@@ -321,11 +338,37 @@ if __name__ == "__main__":
                 # list_tables
                 self.assertEqual(sorted(conn.list_tables()), ['first_char', 'top20_sl'])
 
-                def empty_rows():
-                    tup = namedtuple("empty_rows", "no, sl, sw, species")
-                    for g in gby(conn.run("select * from first_char order by sl, sw"), ["sl"]):
-                        if len(g.sl) > 10: yield tup(*g)
+                def empty_rows(query):
+                    for g in gby(conn.run("select * from first_char order by sl, sw"), "sl"):
+                        if len(g.sl) > 10: yield g
                 with self.assertRaises(ValueError):
-                    conn.save(empty_rows())
+                    conn.save(empty_rows)
 
     unittest.main()
+
+import time
+
+it = (x for x in range(100000000))
+start = time.time()
+def again():
+    for i in it:
+        yield i
+
+# for i in it:
+#     pass
+
+for i in again():
+    pass
+
+end = time.time()
+print("%f" % (end - start,))
+
+
+
+def foo():
+    print("")
+    if True:
+        return it
+    next(it)
+    for i in it:
+        yield i
