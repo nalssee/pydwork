@@ -270,6 +270,7 @@ def load_csv(csv_file, header=None):
         first_line = f.readline()[:-1]
         header = header or first_line
         columns = _listify(header)
+        assert all(_is_valid_column_name(c) for c in columns), 'Invalid column name'
         for line in csv.reader(f):
             assert len(columns) == len(line), "column number mismatch"
             r = Row()
@@ -297,6 +298,7 @@ def load_xl(xl_file, header=None):
     rows = sheet.rows
     header = header or [remove_comma(c) for c in rows[0]]
     columns = _listify(header)
+    assert all(_is_valid_column_name(c) for c in columns), 'Invalid column name'
     for row in rows[1:]:
         cells = []
         for cell in row:
@@ -391,17 +393,23 @@ def _listify(s):
         return s
 
 
+def _is_valid_column_name(s):
+    return re.match(r'^[A-z]\w*$', s)
+
+
 # This should work as a tutorial as well.
 if __name__ == "__main__":
     import unittest
+
+    print("\nNo need to read the following")
+    print("Simply skim through, and recognize if it's not too weird\n\n")
 
     class TestSQLPlus(unittest.TestCase):
         def test_loading(self):
             with SQLPlus(':memory:') as conn:
                 with self.assertRaises(AssertionError):
                     # column number mismatch, notice pw is missing
-                    for r in load_csv('iris.csv', header="no sl sw pl species"):
-                        print(r)
+                    next(load_csv('iris.csv', header="no sl sw pl species"))
                 # when it's loaded, it's just an iterator of objects with string only properties.
                 # No type guessing is attempted.
                 conn.save(load_csv('iris.csv', header="no sl sw pl pw species"), name="iris")
@@ -545,5 +553,21 @@ if __name__ == "__main__":
 
                 self.assertEqual(len(conn.table_info('co2').columns), 6)
                 self.assertEqual(len(conn.table_info('co2_less').columns), 4)
+
+        def test_column_name_validity(self):
+            with SQLPlus(':memory:') as conn:
+                with self.assertRaises(AssertionError):
+                    # sl.size is not a valid column name
+                    next(load_csv('iris.csv', header="no sl.size sw pl pw species"))
+
+                with self.assertRaises(AssertionError):
+                    # 'no' is not a valid column name
+                    next(load_csv('iris.csv', header="'no' sl sw pl pw species"))
+
+                # no_1 should be ok, underscore is ok as far as it's not the first char
+                try:
+                    next(load_csv('iris.csv', header="no_1 sl sw pl pw species"))
+                except:
+                    self.fail("no_1 is not a valid column name")
 
     unittest.main()
