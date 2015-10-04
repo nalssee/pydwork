@@ -1,13 +1,25 @@
 """
 'sqlite3' based SQL utils
+
 Say if you want to group rows and do some complex jobs,
-you can't simply do it with SQL.
+afaik, you can't simply do it with SQL.
 
 And if the data size is so humongous that your system can't load
 all up in the memory, you can't easily use pandas either.
 
-For those cases, this module provides a simple generator containing
-rows of each group with some other utils
+This program is not a sophisticated, full-fledged automation system.
+I'd rather say this is just a mental framework
+as for data wrangling.
+
+It was a little clunkier experience to learn pandas.
+And I find basic Python syntax is good enough for most of data wrangling jobs.
+And also, SQL is a language as wonderful as Python.
+If you already know SQL and python, all you need to think about is
+how you combine them both.
+
+This program does it.
+
+What you need to know is in unit test code at the end of this file
 """
 
 __all__ = ['SQLPlus', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl']
@@ -15,22 +27,36 @@ __all__ = ['SQLPlus', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl']
 
 import sqlite3, csv, tempfile, openpyxl, re
 import pandas as pd
-from itertools import groupby, islice, chain, zip_longest
+from itertools import groupby, islice, chain
 from messytables import CSVTableSet, type_guess
 from messytables.types import DecimalType, IntegerType
 
-
+# Most of the time you work with SQL rows.
+# You append, delete, replace columns.
+# Or you combine rows with similar properties and think of them as a bunch.
+# And then later flatten'em if you want.
 class Row:
-    "sql row"
+    "SQL row"
     def __init__(self, **kwargs):
+        """ex) Row(a=10, b=20) <= two fields row with 'a' and 'b'
+
+        r = Row(a=10, b=20)
+        # if you want to add column 'c' and delete 'a'
+        r.c = 30
+        del r.a
+        """
         for k, v in kwargs.items():
             setattr(self, k, v)
 
     def column_names(self):
+        """Returns a list of strings(column names)
+        """
         return list(self.__dict__.keys())
 
     def get_values(self, columns):
         """columns must be given so that it doesn't cause ordering problems
+
+        'columns' is a list of strings.
         """
         return [getattr(self, c) for c in columns]
 
@@ -40,10 +66,10 @@ class Row:
 
 class Tinfo:
     """Table info
-
-    columns : [['col1', 'real'], ...]
     """
     def __init__(self, table_name, columns):
+        """columns : [['col1', 'real'], ['col2', 'int'], ...] or 'col1 real, col2 int, ...'
+        """
         self.table_name = table_name
         if isinstance(columns, str):
             columns = [c.split() for c in columns.strip().split(',')]
@@ -64,6 +90,7 @@ class Tinfo:
         return "insert into {0} values ({1})".format(tname, ', '.join(['?'] * n))
 
     def cols(self):
+        "Only column names not types"
         return ', '.join([c for c, _ in self.columns])
 
     def __str__(self):
@@ -79,10 +106,6 @@ class Tinfo:
         return "Tinfo('%s', %s)" % (self.table_name, self.columns)
 
 
-# CAUTION:
-# While a cursor is executing,
-# other works using the cursor cannot interfere the process.
-# Be careful especially when you are working with select query.
 class SQLPlus:
     """SQLPlus object works like a sql cursor.
     """
@@ -103,7 +126,7 @@ class SQLPlus:
         """Simply executes sql statement
 
         In case it's 'select' statment,
-        iterator is returned.
+        an iterator is returned.
         """
         q = self._cursor.execute(query, args)
         command = [x for x in query.split(" ") if not x == ""][0]
@@ -118,13 +141,18 @@ class SQLPlus:
     def save(self, it, name=None, args=()):
         """create a table from an iterator.
 
-        If 'name' is not given, a name of the namedtuple is going to be it.
+        'it' is an iterator or a generator function.
+        if 'it' is a generator function and 'name' is not given,
+        the function name is going to be the table name.
+
+        'args' are going to be passed as arguments for the generator function
         """
-        # if 'it' is just a generator function, it is executed to make an iterator
+        # if 'it' is a generator function, it is executed to make an iterator
         if hasattr(it, '__call__'):
             name = name or it.__name__
             it = it(*args)
 
+        # it can be a list
         it = iter(it)
         try:
             first_row = next(it)
@@ -132,29 +160,43 @@ class SQLPlus:
             raise ValueError("Empty rows")
 
         colnames = first_row.column_names()
+        # if the first_rows properties are lists, it is to be flattend
         if isinstance(getattr(first_row, colnames[0]), list):
-            # if it's grouped row, it is flattened
             it = gflat(chain([first_row], it))
         else:
             it = chain([first_row], it)
 
+        # You can't save the iterator directly because
+        # once you execute a table creation query,
+        # then the query becomes the most recent query,
+        # not the query for the iterator.
+        # Which means, if you iterate over the iterator,
+        # it iterates over the table creation query.
+
+        # You can see the example at the bottom of this file at the unit test section,
+        # 'test_run_over_run'
+
+        # So you save the iterator up in a temporary file
+        # and then save the file to a database.
+        # In the process column types are checked.
         with tempfile.TemporaryFile() as f:
-            # writing
+            # Write the iterator in a temporary file
+            # encode it as binary.
             f.write((','.join(colnames) + '\n').encode())
             for row in it:
                 vals = [str(v) for v in row.get_values(colnames)]
                 f.write((','.join(vals) + '\n').encode())
 
-            # type check
+            # type check, using 'messytables' package
             f.seek(0)
             types = _field_types(f)
             tinfo0 = Tinfo(name, list(zip(colnames, types)))
             self._cursor.execute(tinfo0.cstmt())
             istmt0 = tinfo0.istmt()
 
-            # Now insertion
+            # Now insertion to a DB
             f.seek(0)
-            # read out the first line
+            # read out the first line, header column
             f.readline()
             for line in f:
                 # line[:-1] because last index indicates '\n'
@@ -162,16 +204,20 @@ class SQLPlus:
 
     # Be careful so that you don't overwrite the file
     def show(self, query, args=(), n=30, filename=None):
-        """If 'filename' is given, n is ignored.
+        """Printing to a screen or saving to a file
 
-        'query' can be either a query string or an iterable.
+        'query' can be either a SQL query string or an iterable.
+
+        'n' is a maximun number of rows to show up
+        If 'filename' is given, n is ignored.
         """
         if isinstance(query, str):
             query = self._cursor.execute(query, args)
             colnames = [c[0] for c in query.description]
             values = list(islice(query, n))
 
-        # if query is not a string, then it is an iterable.
+        # if query is not a string, then it is an iterable,
+        # i.e., a list or an iterator
         else:
             query = iter(query)
             first_row = next(query)
@@ -180,8 +226,8 @@ class SQLPlus:
             for r in chain([first_row], islice(query, n - 1)):
                 values.append(r.get_values(colnames))
 
+        # make use of pandas' data frame displaying.
         df = pd.DataFrame(values, columns=colnames)
-
         if filename:
             df.to_csv(filename, index=False)
         else:
@@ -191,6 +237,8 @@ class SQLPlus:
                 print(df)
 
     def list_tables(self):
+        """List of table names in the database
+        """
         query = self._cursor.execute("""
         select * from sqlite_master
         where type='table'
@@ -199,16 +247,22 @@ class SQLPlus:
         return sorted(tables)
 
     def table_info(self, tname):
-        # You cannot use parameter here, only certain values are allowed.
+        """Returns a Tinfo object
+
+        'tname' is a string
+        """
+        # You cannot use parameter here, only certain values(as numbers) are allowed.
+        # see Python sqlite3 package manual
         query = self._cursor.execute("pragma table_info({})".format(tname))
         return Tinfo(tname, [[row[1], row[2]] for row in query])
 
 
-# loaded data is string, no matter what!!
 def load_csv(csv_file, header=None):
     """Loads well-formed csv file, 1 header line and the rest is data
 
     returns an iterator
+    All columns are string, no matter what.
+    it's intentional. Types are guessed once it is saved in DB
     """
     with open(csv_file) as f:
         first_line = f.readline()
@@ -224,18 +278,23 @@ def load_csv(csv_file, header=None):
 
 def load_xl(xl_file, header=None):
     """Loads an Excel file. Only the first sheet
+
+    Basically the same as load_csv.
     """
     def remove_comma(cell):
+        """Extracts a comma-removed value from a cell.
+
+        32,120 => 32120
+        """
         return str(cell.value).strip().replace(",", "")
 
     wbook = openpyxl.load_workbook(xl_file)
     sheet_names = wbook.get_sheet_names()
+    # only the first sheet
     sheet = wbook.get_sheet_by_name(sheet_names[0])
     rows = sheet.rows
     header = header or [remove_comma(c) for c in rows[0]]
-
     columns = _listify(header)
-
     for row in rows[1:]:
         cells = []
         for cell in row:
@@ -248,9 +307,12 @@ def load_xl(xl_file, header=None):
             setattr(r, c, v)
         yield r
 
-
+# 'grouped row' refers to a Row object
+# with all-list properties
 def gby(it, group):
     """group the iterator by columns
+
+    Based on 'groupby' from itertools
 
     'it' is an iterator
     'group' can be either a function or a list(tuple) of group names.
@@ -258,6 +320,8 @@ def gby(it, group):
     if group == [] then group them all
     """
     def grouped_row(rows, columns):
+        """Returns a grouped row, from a list of simple rows
+        """
         g_row = Row()
         for c in columns:
             setattr(g_row, c, [])
@@ -277,7 +341,7 @@ def gby(it, group):
 
 
 def gflat(it):
-    """a stream of a tuple of lists are flattened to a stream of tuples
+    """Turn an iterator of grouped rows into an iterator of simple rows.
     """
     it = iter(it)
     try:
@@ -294,13 +358,18 @@ def gflat(it):
             yield r
 
 
-# You might need to check how costly this is.
+# Not sure how costly this is.
+# This is what 'messytables' pacakge does.
 def _field_types(f):
-    """Guess field types from CSV
+    """Guess field types from a CSV file
 
-    f is a binary port
+    f is a binary file port
     """
     def conv(t):
+        """Once messytables guess what type it is,
+        then is is turned into an appropriate sql type,
+        i.e., 'int', 'real', or 'text'
+        """
         if isinstance(t, IntegerType):
             return "int"
         if isinstance(t, DecimalType):
@@ -312,14 +381,13 @@ def _field_types(f):
 
 
 def _listify(s):
-    """If s is a comma or space separated string turn it into list"""
+    """If s is a comma or space separated string turn it into a list"""
     if isinstance(s, str):
         return [x for x in re.split(',| ', s) if x]
     else:
         return s
 
 
-# todo: add more tests
 # This should work as a tutorial as well.
 if __name__ == "__main__":
     import unittest
@@ -331,15 +399,18 @@ if __name__ == "__main__":
                     # column number mismatch, notice pw is missing
                     for r in load_csv('iris.csv', header="no sl sw pl species"):
                         print(r)
-                # when it's loaded, it's just an iterator of a (named)tuple of strings
+                # when it's loaded, it's just an iterator of objects with string only properties.
+                # No type guessing is attempted.
                 conn.save(load_csv('iris.csv', header="no sl sw pl pw species"), name="iris")
 
                 iris = conn.table_info("iris")
                 print("\niris table info", end="")
                 print(iris)
 
-                # But once you save it, this program automatically decides types.
+                # Once you save it, types are automatically determined.
                 self.assertEqual(iris.table_name, 'iris')
+                # Order of columns can't be predicted.
+                # it is determined by the built-in Python hash function.
                 self.assertEqual(sorted(iris.columns), \
                                  sorted([['no', 'int'], \
                                          ['sl', 'real'], ['sw', 'real'], \
@@ -354,8 +425,9 @@ if __name__ == "__main__":
                     self.assertEqual(a.pl, b.pl)
 
         def test_gby(self):
+            """Just a dumb presentation to show how 'gby' works.
+            """
             with SQLPlus(':memory:') as conn:
-
                 def first_char():
                     "make a new column with the first charactor of species."
                     for r in load_csv('iris.csv', header="no sl sw pl pw species"):
@@ -373,13 +445,18 @@ if __name__ == "__main__":
                     for g in gby(rows, "sp1"):
                         # g is again an object
                         # just each property is a list.
-                        # And all properties are of the same length.
+                        # And all properties are of the same length at this point
 
-                        # Cut off at 20
+                        # Say you add a column with 20 items
+                        # and the other columns have items larger than that.
+                        # Then if you save this iterator in DB,
+                        # the other columns are cut in at 20 as well.
+
+                        # Think what zip does. see gflat
                         g.no = g.no[:20]
                         yield g
                 # If you are saving grouped objects,
-                # they are flattened
+                # they are flattened first
                 conn.save(top20_sl)
 
                 print("\nYou should see the same two tables")
@@ -398,15 +475,17 @@ if __name__ == "__main__":
                 # gby with empty list group
                 # All of the rows in a table is grouped.
                 for g in gby(conn.run("select * from first_char"), []):
+                    # the entire data sample is 150
                     self.assertEqual(len(g.no), 150)
 
-                # list_tables
-                self.assertEqual(sorted(conn.list_tables()), ['first_char', 'top20_sl'])
+                # list_tables, in alphabetical order
+                self.assertEqual(conn.list_tables(), ['first_char', 'top20_sl'])
 
                 def empty_rows(query):
                     for g in gby(conn.run(query), ["sl"]):
                         if len(g.sl) > 10:
                             yield g
+                # try to save empty rows
                 with self.assertRaises(ValueError):
                     conn.save(empty_rows, args=("select * from first_char order by sl, sw",))
 
