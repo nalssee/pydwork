@@ -15,7 +15,7 @@ __all__ = ['SQLPlus', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl']
 
 import sqlite3, csv, tempfile, openpyxl, re
 import pandas as pd
-from itertools import groupby, islice, chain
+from itertools import groupby, islice, chain, zip_longest
 from messytables import CSVTableSet, type_guess
 from messytables.types import DecimalType, IntegerType
 
@@ -420,5 +420,20 @@ if __name__ == "__main__":
                 for a1, b1 in zip(a, b):
                     self.assertEqual(a1.sl, b1.sl)
                     self.assertEqual(a1.pl, b1.pl)
+
+        def test_run_over_run(self):
+            with SQLPlus(':memory:') as conn:
+                conn.save(load_csv("iris.csv", header="no,sl,sw,pl,pw,sp"), name="iris1")
+                conn.save(load_csv("iris.csv", header="no,sl,sw,pl,pw,sp"), name="iris2")
+                a = conn.run("select * from iris1 where sp='setosa'")
+                b = conn.run("select * from iris2 where sp='versicolor'")
+                self.assertEqual(next(a).sp, 'setosa')
+                self.assertEqual(next(b).sp, 'versicolor')
+                # now you iterate over 'a' again and you may expect 'setosa' to show up
+                # but you'll see 'versicolor'
+                # it doesn't matter you iterate over a or b
+                # you simply iterate over the most recent query.
+                self.assertEqual(next(a).sp, 'versicolor')
+                self.assertEqual(next(b).sp, 'versicolor')
 
     unittest.main()
