@@ -216,9 +216,11 @@ class SQLPlus:
             colnames = [c[0] for c in query.description]
             values = list(islice(query, n))
 
-        # if query is not a string, then it is an iterable,
+        # then it is an iterable,
         # i.e., a list or an iterator
         else:
+            if hasattr(query, '__call__'):
+                query = query(*args)
             query = iter(query)
             first_row = next(query)
             colnames = first_row.column_names()
@@ -265,7 +267,7 @@ def load_csv(csv_file, header=None):
     it's intentional. Types are guessed once it is saved in DB
     """
     with open(csv_file) as f:
-        first_line = f.readline()
+        first_line = f.readline()[:-1]
         header = header or first_line
         columns = _listify(header)
         for line in csv.reader(f):
@@ -306,6 +308,7 @@ def load_xl(xl_file, header=None):
         for c, v in zip(columns, cells):
             setattr(r, c, v)
         yield r
+
 
 # 'grouped row' refers to a Row object
 # with all-list properties
@@ -514,5 +517,33 @@ if __name__ == "__main__":
                 # you simply iterate over the most recent query.
                 self.assertEqual(next(a).sp, 'versicolor')
                 self.assertEqual(next(b).sp, 'versicolor')
+
+        def test_del(self):
+            """tests column deletion
+            """
+            with SQLPlus(':memory:') as conn:
+                conn.save(load_csv('co2.csv'), name='co2')
+                def co2_less(*col):
+                    """remove columns"""
+                    co2 = conn.run("select * from co2")
+                    for r in co2:
+                        for c in col:
+                            delattr(r, c)
+                        yield r
+
+                print('\nco2 table')
+                print('==============================================================')
+                conn.show("select * from co2", n=5)
+                print("\nco2 table without plant and number column")
+                print("order of columns not preserved")
+                print('==============================================================')
+                # of course you can call conn.show(co2_less('plant'), n=5)
+                conn.show(co2_less, args=('plant', 'no'), n=5)
+                print('==============================================================')
+
+                conn.save(co2_less, args=('plant', 'no'))
+
+                self.assertEqual(len(conn.table_info('co2').columns), 6)
+                self.assertEqual(len(conn.table_info('co2_less').columns), 4)
 
     unittest.main()
