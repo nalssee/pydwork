@@ -348,6 +348,5 @@ class HTBLTest(unittest.TestCase):
         print(soup2df(self.tbl4), end='\n\n')
 
 
-
 if __name__ == '__main__':
     unittest.main()

@@ -1,12 +1,14 @@
 """ Web scraping framework using selenium
-Most of the time I had to use selenium (with firefox or phantomjs) not 'requests'
+Most of the time I had to use selenium (with firefox or phantomjs)
+not 'requests'
 """
 
+import os
+import logging
+import pickle
 import pandas as pd
-import os, logging, pickle
 from datetime import datetime
-
-import cnp
+from pydwork import cnp
 
 
 __all__ = ['fetch_items', 'result_files_to_df', 'RESULT_FILE_PREFIX',
@@ -18,6 +20,7 @@ RESULT_FILE_PREFIX = 'result'
 LOG_FILE = 'logfile.txt'
 PICKLE_FILE = 'items_dict.pkl'
 
+
 def fetch_items(drivers, items_dict, fetchfn,
                 max_items=1000000, save_every_n=100, max_trials=3):
     """
@@ -28,7 +31,8 @@ def fetch_items(drivers, items_dict, fetchfn,
     max_trials: If fetching fails more than max_trials just skip it
     Others are obvious.
 
-    search for files like RESULT_FILE_PREFIX + "2015-06-17 10:04:54.560384.csv" files
+    search for files like RESULT_FILE_PREFIX +
+    "2015-06-17 10:04:54.560384.csv" files
     """
     # logging setup
     logging.basicConfig(filename=LOG_FILE,
@@ -40,7 +44,8 @@ def fetch_items(drivers, items_dict, fetchfn,
         result = []
         count = 0
         for item, ntrial in items_dict.items():
-            if count >= max_items: return result
+            if count >= max_items:
+                return result
             if ntrial >= 0 and ntrial <= max_trials:
                 result.append((item, ntrial))
                 count += 1
@@ -89,7 +94,8 @@ def fetch_items(drivers, items_dict, fetchfn,
 
     cnp.npc(producers, consumer)
 
-    if results: save_results()
+    if results:
+        save_results()
 
     # save items_dict for later in case you haven't finished fetching
     # and want to do it later.

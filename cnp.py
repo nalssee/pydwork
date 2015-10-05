@@ -1,9 +1,13 @@
 """Concurrency and parallelism patterns
 """
 
+import math
+import random
+import string
+import inspect
 import multiprocessing as mp
 import threading as th
-import math, random, string, inspect
+
 from queue import Queue
 from itertools import zip_longest
 
@@ -51,7 +55,8 @@ def npc(producers, consumer, parallel=False, max_qsize=100):
         else:
             consumer(val)
 
-    for w in ws: w.join()
+    for w in ws:
+        w.join()
 
 
 def random_string(nchars=20):
