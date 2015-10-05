@@ -27,7 +27,7 @@ __all__ = ['SQLPlus', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl']
 
 import sqlite3, csv, tempfile, openpyxl, re
 import pandas as pd
-from itertools import groupby, islice, tee, chain
+from itertools import groupby, islice, chain
 from messytables import CSVTableSet, type_guess
 from messytables.types import DecimalType, IntegerType
 
@@ -392,7 +392,7 @@ def _is_valid_column_name(s):
 def _peek_first(it):
     """Returns a tuple (first_item, it)
 
-    'it' is untouched, first_item is pushed back, to be exact
+    'it' is untouched, first_item is pushed back to be exact
     """
     it = iter(it)
     first_item = next(it)
