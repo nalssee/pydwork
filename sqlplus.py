@@ -390,9 +390,9 @@ def _is_valid_column_name(s):
 
 
 def _peek_first(it):
-    """Returns an iterator (first_item, it)
+    """Returns a tuple (first_item, it)
 
-    it is untouched, first_item is pushed back to be exact
+    'it' is untouched, first_item is pushed back, to be exact
     """
     it = iter(it)
     first_item = next(it)
