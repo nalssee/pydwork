@@ -171,4 +171,13 @@ class TestSQLPlus(unittest.TestCase):
             except:
                 self.fail("no_1 is not a valid column name")
 
+    def test_saving_csv(self):
+        import os
+        with SQLPlus(':memory:') as conn:
+            iris = load_csv('data/iris.csv', header="no sl sw pl pw sp")
+            conn.show(gby(iris, "sp"), n=2, filename='sample.csv')
+            # each group contains 50 rows, hence 100
+            self.assertEqual(len(list(load_csv('sample.csv'))), 100)
+            os.remove('sample.csv')
+
 unittest.main()

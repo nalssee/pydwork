@@ -203,18 +203,52 @@ class SQLPlus:
                 self._cursor.execute(istmt0, line[:-1].decode().split(','))
 
     # Be careful so that you don't overwrite the file
+    # def show(self, query, args=(), n=30, filename=None):
+    #     """Printing to a screen or saving to a file
+
+    #     'query' can be either a SQL query string or an iterable.
+
+    #     'n' is a maximun number of rows to show up
+    #     If 'filename' is given, n is ignored.
+    #     """
+    #     if isinstance(query, str):
+    #         query = self._cursor.execute(query, args)
+    #         colnames = [c[0] for c in query.description]
+    #         values = list(islice(query, n))
+
+    #     # then it is an iterable,
+    #     # i.e., a list or an iterator
+    #     else:
+    #         if hasattr(query, '__call__'):
+    #             query = query(*args)
+    #         query = iter(query)
+    #         first_row = next(query)
+    #         colnames = first_row.column_names()
+    #         values = []
+    #         for r in chain([first_row], islice(query, n - 1)):
+    #             values.append(r.get_values(colnames))
+
+    #     # make use of pandas' data frame displaying.
+    #     df = pd.DataFrame(values, columns=colnames)
+    #     if filename:
+    #         df.to_csv(filename, index=False)
+    #     else:
+    #         # show practically all columns
+    #         with pd.option_context("display.max_rows", n), \
+    #              pd.option_context("display.max_columns", 1000):
+    #             print(df)
+
     def show(self, query, args=(), n=30, filename=None):
         """Printing to a screen or saving to a file
 
         'query' can be either a SQL query string or an iterable.
-
-        'n' is a maximun number of rows to show up
-        If 'filename' is given, n is ignored.
+        'n' is a maximun number of rows to show up,
+        if 'query' is the grouped iterator then n is the number of groups
         """
         if isinstance(query, str):
             query = self._cursor.execute(query, args)
             colnames = [c[0] for c in query.description]
-            values = list(islice(query, n))
+            rows = islice(query, n)
 
         # then it is an iterable,
         # i.e., a list or an iterator
@@ -224,15 +258,27 @@ class SQLPlus:
             query = iter(query)
             first_row = next(query)
             colnames = first_row.column_names()
-            values = []
-            for r in chain([first_row], islice(query, n - 1)):
-                values.append(r.get_values(colnames))
 
-        # make use of pandas' data frame displaying.
-        df = pd.DataFrame(values, columns=colnames)
+            if isinstance(getattr(first_row, colnames[0]), list):
+                # n groups, not n rows
+                it = gflat(chain([first_row], islice(query, n - 1)))
+            else:
+                it = chain([first_row], islice(query,  n -  1))
+
+            def get_rowvals():
+                for r in it:
+                    yield r.get_values(colnames)
+            rows = get_rowvals()
+
         if filename:
-            df.to_csv(filename, index=False)
+            with open(filename, 'w') as f:
+                f.write(','.join(colnames) + '\n')
+                for r in rows:
+                    rstr = [str(r1) for r1 in r]
+                    f.write(','.join(rstr) + '\n')
         else:
+            # make use of pandas' data frame displaying.
+            df = pd.DataFrame(list(rows), columns=colnames)
             # show practically all columns
             with pd.option_context("display.max_rows", n), \
                  pd.option_context("display.max_columns", 1000):
