@@ -70,14 +70,14 @@ class TestSQLPlus(unittest.TestCase):
             # If you are saving grouped objects,
             # they are flattened first
             conn.save(top20_sl)
-
+            set_option('maxrows_display', 2)
             print("\nYou should see the same two tables")
             print("=====================================")
             # you can send a query
-            conn.show("select * from top20_sl", n=3)
+            conn.show("select * from top20_sl")
             print("-------------------------------------")
             # or just see the stream
-            conn.show(gflat(top20_sl()), n=3)
+            conn.show(gflat(top20_sl()))
             print("=====================================")
 
             r0, r1 = list(conn.run("select avg(sl) as slavg from top20_sl group by sp1"))
@@ -139,15 +139,15 @@ class TestSQLPlus(unittest.TestCase):
                     for c in col:
                         delattr(r, c)
                     yield r
-
+            set_option('maxrows_display', 3)
             print('\nco2 table')
             print('==============================================================')
-            conn.show("select * from co2", n=5)
+            conn.show("select * from co2")
             print("\nco2 table without plant and number column")
             print("order of columns not preserved")
             print('==============================================================')
             # of course you can call conn.show(co2_less('plant'), n=5)
-            conn.show(co2_less, args=('plant', 'no'), n=5)
+            conn.show(co2_less, args=('plant', 'no'))
             print('==============================================================')
 
             conn.save(co2_less, args=('plant', 'no'))
@@ -174,8 +174,9 @@ class TestSQLPlus(unittest.TestCase):
     def test_saving_csv(self):
         import os
         with SQLPlus(':memory:') as conn:
+            set_option('maxrows_display', 2)
             iris = load_csv('data/iris.csv', header="no sl sw pl pw sp")
-            conn.show(gby(iris, "sp"), n=2, filename='sample.csv')
+            conn.show(gby(iris, "sp"), filename='sample.csv')
             # each group contains 50 rows, hence 100
             self.assertEqual(len(list(load_csv('sample.csv'))), 100)
             os.remove('sample.csv')
