@@ -27,7 +27,7 @@ __all__ = ['SQLPlus', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl']
 
 import sqlite3, csv, tempfile, openpyxl, re
 import pandas as pd
-from itertools import groupby, islice, chain
+from itertools import groupby, islice, tee, chain
 from messytables import CSVTableSet, type_guess
 from messytables.types import DecimalType, IntegerType
 
@@ -153,20 +153,8 @@ class SQLPlus:
             name = name or it.__name__
             it = it(*args)
 
-        # it can be a list
-        it = iter(it)
-        try:
-            first_row = next(it)
-        except StopIteration:
-            raise ValueError("Empty rows")
-
-        colnames = first_row.column_names()
-        # if the first_rows properties are lists, it is to be flattend
-        if isinstance(getattr(first_row, colnames[0]), list):
-            it = gflat(chain([first_row], it))
-        else:
-            it = chain([first_row], it)
-
+        r0, it = _peek_first(it)
+        colnames = r0.column_names()
         # You can't save the iterator directly because
         # once you execute a table creation query,
         # then the query becomes the most recent query,
@@ -184,7 +172,8 @@ class SQLPlus:
             # Write the iterator in a temporary file
             # encode it as binary.
             f.write((','.join(colnames) + '\n').encode())
-            for row in it:
+            # implicitly flatten
+            for row in gflat(it):
                 vals = [str(v) for v in row.get_values(colnames)]
                 f.write((','.join(vals) + '\n').encode())
 
@@ -221,20 +210,10 @@ class SQLPlus:
         else:
             if hasattr(query, '__call__'):
                 query = query(*args)
-            query = iter(query)
-            first_row = next(query)
-            colnames = first_row.column_names()
-
-            if isinstance(getattr(first_row, colnames[0]), list):
-                # n groups, not n rows
-                it = gflat(chain([first_row], islice(query, n - 1)))
-            else:
-                it = chain([first_row], islice(query,  n -  1))
-
-            def get_rowvals():
-                for r in it:
-                    yield r.get_values(colnames)
-            rows = get_rowvals()
+            r0, it = _peek_first(query)
+            colnames = r0.column_names()
+            # implicit gflat
+            rows = (r.get_values(colnames) for r in gflat(islice(it, n)))
 
         if filename:
             with open(filename, 'w') as f:
@@ -360,18 +339,19 @@ def gby(it, group):
 def gflat(it):
     """Turn an iterator of grouped rows into an iterator of simple rows.
     """
-    it = iter(it)
-    try:
-        g_row1 = next(it)
-    except StopIteration:
-        raise ValueError("Empty Rows")
-    colnames = g_row1.column_names()
-
-    for gr in chain([g_row1], it):
-        for xs in zip(*gr.get_values(colnames)):
-            r = Row()
-            for c, v in zip(colnames, xs):
-                setattr(r, c, v)
+    r0, it = _peek_first(it)
+    colnames = r0.column_names()
+    # Every attribute must be a list
+    # No idea how far should I go
+    if isinstance(getattr(r0, colnames[0]), list):
+        for gr in it:
+            for xs in zip(*gr.get_values(colnames)):
+                r = Row()
+                for c, v in zip(colnames, xs):
+                    setattr(r, c, v)
+                yield r
+    else:
+        for r in it:
             yield r
 
 
@@ -407,3 +387,13 @@ def _listify(s):
 
 def _is_valid_column_name(s):
     return re.match(r'^[A-z]\w*$', s)
+
+
+def _peek_first(it):
+    """Returns an iterator (first_item, it)
+
+    it is untouched, first_item is pushed back to be exact
+    """
+    it = iter(it)
+    first_item = next(it)
+    return first_item, chain([first_item], it)

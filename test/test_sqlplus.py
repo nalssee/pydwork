@@ -98,7 +98,7 @@ class TestSQLPlus(unittest.TestCase):
                     if len(g.sl) > 10:
                         yield g
             # try to save empty rows
-            with self.assertRaises(ValueError):
+            with self.assertRaises(StopIteration):
                 conn.save(empty_rows, args=("select * from first_char order by sl, sw",))
 
     def test_gflat(self):
