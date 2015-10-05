@@ -53,11 +53,12 @@ class Row:
         """
         return list(self.__dict__.keys())
 
-    def get_values(self, columns):
+    def get_values(self, columns=None):
         """columns must be given so that it doesn't cause ordering problems
 
         'columns' is a list of strings.
         """
+        columns = _listify(columns) or self.column_names()
         return [getattr(self, c) for c in columns]
 
     def __str__(self):
