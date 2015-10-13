@@ -381,6 +381,8 @@ def gflat(seq):
 
 def set_option(opt_name, val):
     """set options for displaying
+
+    ex) set_option('maxrows_display', 100)
     """
     OPTIONS[opt_name] = val
 
