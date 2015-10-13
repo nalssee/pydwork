@@ -139,8 +139,7 @@ class SQLPlus:
         an iterator is returned.
         """
         result = self._cursor.execute(query, args)
-        command = [x for x in query.split(" ") if not x == ""][0]
-        if command.upper() == "SELECT":
+        if query.strip().partition(' ')[0].upper() == "SELECT":
             columns = [c[0] for c in result.description]
             for row1 in result:
                 row = Row()
