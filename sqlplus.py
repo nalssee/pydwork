@@ -21,7 +21,7 @@ This program does it.
 
 What you need to know is in unit test code at test/sqlplus_test.py
 """
-__all__ = ['SQLPlus', 'Row', 'gby', 'set_option',
+__all__ = ['dbopen', 'Row', 'gby', 'set_option',
            'gflat', 'load_csv', 'load_xl']
 
 
@@ -31,6 +31,7 @@ import tempfile
 import openpyxl
 import re
 import pandas as pd
+from contextlib import contextmanager
 from itertools import groupby, islice, chain
 from messytables import CSVTableSet, type_guess
 from messytables.types import DecimalType, IntegerType
@@ -129,13 +130,6 @@ class SQLPlus:
         self._dbfile = dbfile
         self._conn = sqlite3.connect(self._dbfile)
         self._cursor = self._conn.cursor()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exe_type, value, trace):
-        self._conn.commit()
-        self._conn.close()
 
     # args can be a list, a tuple or a dictionary
     def run(self, query, args=()):
@@ -265,6 +259,18 @@ class SQLPlus:
         # see Python sqlite3 package manual
         query = self._cursor.execute("pragma table_info({})".format(tname))
         return Tinfo(tname, [[row[1], row[2]] for row in query])
+
+
+@contextmanager
+def dbopen(dbfile):
+    """Connects to SQL database(sqlite)
+    """
+    splus = SQLPlus(dbfile)
+    try:
+        yield splus
+    finally:
+        splus._conn.commit()
+        splus._conn.close()
 
 
 def load_csv(csv_file, header=None):

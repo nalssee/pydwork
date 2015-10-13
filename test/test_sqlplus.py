@@ -5,9 +5,9 @@ from pydwork.sqlplus import *
 print("\nNo need to read the following")
 print("Simply skim through, and recognize if it's not too weird\n\n")
 
-class TestSQLPlus(unittest.TestCase):
+class Testdbopen(unittest.TestCase):
     def test_loading(self):
-        with SQLPlus(':memory:') as conn:
+        with dbopen(':memory:') as conn:
             with self.assertRaises(AssertionError):
                 # column number mismatch, notice pw is missing
                 next(load_csv('data/iris.csv', header="no sl sw pl species"))
@@ -39,7 +39,7 @@ class TestSQLPlus(unittest.TestCase):
     def test_gby(self):
         """Just a dumb presentation to show how 'gby' works.
         """
-        with SQLPlus(':memory:') as conn:
+        with dbopen(':memory:') as conn:
             def first_char():
                 "make a new column with the first charactor of species."
                 for r in load_csv('data/iris.csv', header="no sl sw pl pw species"):
@@ -104,7 +104,7 @@ class TestSQLPlus(unittest.TestCase):
     def test_gflat(self):
         """Tests if applying gby and gflat subsequently yields the original
         """
-        with SQLPlus(':memory:') as conn:
+        with dbopen(':memory:') as conn:
             conn.save(load_csv("data/iris.csv", header="no,sl,sw,pl,pw,sp"), name="iris")
             a = list(conn.run("select * from iris order by sl"))
             b = list(gflat(gby(conn.run("select * from iris order by sl"), "sl")))
@@ -113,7 +113,7 @@ class TestSQLPlus(unittest.TestCase):
                 self.assertEqual(a1.pl, b1.pl)
 
     def test_run_over_run(self):
-        with SQLPlus(':memory:') as conn:
+        with dbopen(':memory:') as conn:
             conn.save(load_csv("data/iris.csv", header="no,sl,sw,pl,pw,sp"), name="iris1")
             conn.save(load_csv("data/iris.csv", header="no,sl,sw,pl,pw,sp"), name="iris2")
             a = conn.run("select * from iris1 where sp='setosa'")
@@ -130,7 +130,7 @@ class TestSQLPlus(unittest.TestCase):
     def test_del(self):
         """tests column deletion
         """
-        with SQLPlus(':memory:') as conn:
+        with dbopen(':memory:') as conn:
             conn.save(load_csv('data/co2.csv'), name='co2')
             def co2_less(*col):
                 """remove columns"""
@@ -156,7 +156,7 @@ class TestSQLPlus(unittest.TestCase):
             self.assertEqual(len(conn.table_info('co2_less').columns), 4)
 
     def test_column_name_validity(self):
-        with SQLPlus(':memory:') as conn:
+        with dbopen(':memory:') as conn:
             with self.assertRaises(AssertionError):
                 # sl.size is not a valid column name
                 next(load_csv('data/iris.csv', header="no sl.size sw pl pw species"))
@@ -173,7 +173,7 @@ class TestSQLPlus(unittest.TestCase):
 
     def test_saving_csv(self):
         import os
-        with SQLPlus(':memory:') as conn:
+        with dbopen(':memory:') as conn:
             set_option('maxrows_display', 2)
             iris = load_csv('data/iris.csv', header="no sl sw pl pw sp")
             conn.show(gby(iris, "sp"), filename='sample.csv')
