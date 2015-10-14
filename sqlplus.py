@@ -21,8 +21,7 @@ This program does it.
 
 What you need to know is in unit test code at test/sqlplus_test.py
 """
-__all__ = ['dbopen', 'Row', 'gby', 'set_option',
-           'gflat', 'load_csv', 'load_xl']
+__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl']
 
 
 import sqlite3
@@ -31,21 +30,20 @@ import tempfile
 import openpyxl
 import re
 import pandas as pd
+
+from collections import Counter
 from contextlib import contextmanager
-from itertools import groupby, islice, chain
+from itertools import groupby, islice, chain, zip_longest
 from messytables import CSVTableSet, type_guess
 from messytables.types import DecimalType, IntegerType
 
+from pydwork.sqlite_keywords import SQLITE_KEYWORDS
 
-OPTIONS = {
-    'maxrows_display': 30,
-}
+
 # Most of the time you work with SQL rows.
 # You append, delete, replace columns.
 # Or you combine rows with similar properties and think of them as a bunch.
 # And then later flatten'em if you want.
-
-
 class Row:
     "SQL row"
     def __init__(self, **kwargs):
@@ -130,22 +128,27 @@ class SQLPlus:
         self._dbfile = dbfile
         self._conn = sqlite3.connect(self._dbfile)
         self._cursor = self._conn.cursor()
+        self.tables = self.list_tables()
 
     # args can be a list, a tuple or a dictionary
+    # <- fix it
     def run(self, query, args=()):
-        """Simply executes sql statement
-
-        In case it's 'select' statment,
-        an iterator is returned.
+        """Simply executes sql statement and update tables attribute
         """
-        result = self._cursor.execute(query, args)
-        if query.strip().partition(' ')[0].upper() == "SELECT":
-            columns = [c[0] for c in result.description]
-            for row1 in result:
-                row = Row()
-                for col, val in zip(columns, row1):
-                    setattr(row, col, val)
-                yield row
+        self._cursor.execute(query, args)
+        # update tables
+        self.tables = self.list_tables()
+
+    def reel(self, query, args=()):
+        if query.strip().partition(' ')[0].upper() != "SELECT":
+            raise ValueError("use 'run' for ", query)
+        rows = self._cursor.execute(query, args)
+        columns = [c[0] for c in rows.description]
+        for row1 in rows:
+            row = Row()
+            for col, val in zip(columns, row1):
+                setattr(row, col, val)
+            yield row
 
     def save(self, seq, name=None, args=()):
         """create a table from an iterator.
@@ -161,7 +164,15 @@ class SQLPlus:
             name = name or seq.__name__
             seq = seq(*args)
 
-        row0, seq = _peek_first(seq)
+        if name in self.tables:
+            return
+
+        try:
+            row0, seq = _peek_first(seq)
+        except StopIteration:
+            print("Empty sequence")
+            return
+
         colnames = row0.column_names()
         # You can't save the iterator directly because
         # once you execute a table creation query,
@@ -198,10 +209,18 @@ class SQLPlus:
             fport.readline()
             for line in fport:
                 # line[:-1] because last index indicates '\n'
-                self._cursor.execute(istmt0, line[:-1].decode().split(','))
+                try:
+                    self._cursor.execute(istmt0, line[:-1].decode().split(','))
+                except Exception as e:
+                    print("Failed to save")
+                    for col, type1, val in \
+                        zip_longest(colnames, types, line[:-1].decode().split(',')):
+                        print(col, type1, val)
+                    raise ValueError("Invalid line to save")
+        self.tables.append(name)
 
     # Be careful so that you don't overwrite the file
-    def show(self, query, args=(), filename=None):
+    def show(self, query, args=(), filename=None, n=30):
         """Printing to a screen or saving to a file
 
         'query' can be either a SQL query string or an iterable.
@@ -209,22 +228,25 @@ class SQLPlus:
         if 'query' is the grouped iterator then n is the number of groups
         """
         if isinstance(query, str):
-            query = self._cursor.execute(query, args)
-            colnames = [c[0] for c in query.description]
-            rows = islice(query, get_option('maxrows_display'))
+            rows = self._cursor.execute(query, args)
+            colnames = [c[0] for c in rows.description]
 
         # then it is an iterable,
         # i.e., a list or an iterator
         else:
             if hasattr(query, '__call__'):
                 query = query(*args)
-            row0, seq = _peek_first(query)
+            try:
+                row0, rows = _peek_first(query)
+            except StopIteration:
+                print("Empty sequence")
+                return
             colnames = row0.column_names()
             # implicit gflat
-            rows = (r.get_values(colnames)
-                    for r in gflat(islice(seq, get_option('maxrows_display'))))
+            rows = (r.get_values(colnames) for r in gflat(rows))
 
         if filename:
+            # ignore n
             with open(filename, 'w') as fout:
                 fout.write(','.join(colnames) + '\n')
                 for row1 in rows:
@@ -232,11 +254,10 @@ class SQLPlus:
                     fout.write(','.join(row1_str) + '\n')
         else:
             # show practically all columns
-            nrows = get_option('maxrows_display')
-            with pd.option_context("display.max_rows", nrows),\
-                    pd.option_context("display.max_columns", 1000):
+            with pd.option_context("display.max_rows", n), \
+                 pd.option_context("display.max_columns", 1000):
                 # make use of pandas DataFrame displaying
-                print(pd.DataFrame(list(rows), columns=colnames))
+                print(pd.DataFrame(list(islice(rows, n)), columns=colnames))
 
     def list_tables(self):
         """List of table names in the database
@@ -272,7 +293,7 @@ def dbopen(dbfile):
         splus._conn.close()
 
 
-def load_csv(csv_file, header=None):
+def load_csv(csv_file, header=None, line_fix=(lambda x: x)):
     """Loads well-formed csv file, 1 header line and the rest is data
 
     returns an iterator
@@ -282,11 +303,16 @@ def load_csv(csv_file, header=None):
     with open(csv_file) as fin:
         first_line = fin.readline()[:-1]
         header = header or first_line
-        columns = _listify(header)
-        assert all(_is_valid_column_name(c) for c in columns), \
-            'Invalid column name'
+        columns = _gen_valid_column_names(_listify(header))
+        n = len(columns)
         for line in csv.reader(fin):
-            assert len(columns) == len(line), "column number mismatch"
+            if len(line) != n:
+                if _is_empty_line(line):
+                    continue
+                line = line_fix(line)
+                # if it's still not valid
+                if len(line) != n:
+                    raise ValueError("column number mismatch", columns, line)
             row1 = Row()
             for col, val in zip(columns, line):
                 setattr(row1, col, val)
@@ -311,9 +337,7 @@ def load_xl(xl_file, header=None):
     sheet = wbook.get_sheet_by_name(sheet_names[0])
     rows = sheet.rows
     header = header or [remove_comma(c) for c in rows[0]]
-    columns = _listify(header)
-    assert all(_is_valid_column_name(c) for c in columns), \
-        'Invalid column name'
+    columns = _gen_valid_column_names(_listify(header))
     for row in rows[1:]:
         cells = []
         for cell in row:
@@ -379,14 +403,6 @@ def gflat(seq):
             yield row1
 
 
-def set_option(opt_name, val):
-    """set options for displaying
-
-    ex) set_option('maxrows_display', 100)
-    """
-    OPTIONS[opt_name] = val
-
-
 def get_option(opt_name):
     """get options for displaying
     """
@@ -423,11 +439,39 @@ def _listify(colstr):
         return colstr
 
 
-def _is_valid_column_name(colstr):
-    """column name must start with a letter and
-    letters, digits and underscores are allowed for columns names
+def _gen_valid_column_names(columns):
+    """generate valid column names automatically
+
+    ['a', '_b', 'a', 'a1"*c', 'a1c'] => ['a0', 'a_b', 'a1', 'a1c0', 'a1c1']
     """
-    return re.match(r'^[A-z]\w*$', colstr)
+    temp_columns = []
+    for col in columns:
+        # save only alphanumeric and underscore
+        # and remove all the others
+        newcol = re.sub('[^\w]+', '', col)
+        if newcol == '':
+            newcol = 'temp'
+        elif not newcol[0].isalpha():
+            newcol = 'a_' + newcol
+        elif newcol.upper() in SQLITE_KEYWORDS:
+            newcol = 'a_' + newcol
+        temp_columns.append(newcol)
+
+    if len(temp_columns) == len(set(temp_columns)):
+        return temp_columns
+
+    cnt = {col:n for col, n in Counter(temp_columns).items() if n > 1}
+    cnt_copy = dict(cnt)
+
+    result_columns = []
+    for col in temp_columns:
+        if col in cnt:
+            n = cnt_copy[col] - cnt[col]
+            result_columns.append(col + str(n))
+            cnt[col] -= 1
+        else:
+            result_columns.append(col)
+    return result_columns
 
 
 def _peek_first(seq):
@@ -438,3 +482,9 @@ def _peek_first(seq):
     seq = iter(seq)
     first_item = next(seq)
     return first_item, chain([first_item], seq)
+
+
+def _is_empty_line(line):
+    """Tests if a list of strings is empty for example ["", ""] or []
+    """
+    return [x for x in line if x.strip() != ""] == []

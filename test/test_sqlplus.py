@@ -1,5 +1,6 @@
 import unittest
 from pydwork.sqlplus import *
+from itertools import islice
 
 # This should work as a tutorial as well.
 print("\nNo need to read the following")
@@ -8,7 +9,7 @@ print("Simply skim through, and recognize if it's not too weird\n\n")
 class Testdbopen(unittest.TestCase):
     def test_loading(self):
         with dbopen(':memory:') as conn:
-            with self.assertRaises(AssertionError):
+            with self.assertRaises(ValueError):
                 # column number mismatch, notice pw is missing
                 next(load_csv('data/iris.csv', header="no sl sw pl species"))
             # when it's loaded, it's just an iterator of objects with string only properties.
@@ -53,7 +54,7 @@ class Testdbopen(unittest.TestCase):
             conn.save(first_char)
 
             def top20_sl():
-                rows = conn.run("select * from first_char order by sp1, sl desc")
+                rows = conn.reel("select * from first_char order by sp1, sl desc")
                 for g in gby(rows, "sp1"):
                     # g is again an object
                     # just each property is a list.
@@ -70,23 +71,22 @@ class Testdbopen(unittest.TestCase):
             # If you are saving grouped objects,
             # they are flattened first
             conn.save(top20_sl)
-            set_option('maxrows_display', 2)
             print("\nYou should see the same two tables")
             print("=====================================")
             # you can send a query
-            conn.show("select * from top20_sl")
+            conn.show("select * from top20_sl", n=3)
             print("-------------------------------------")
             # or just see the stream
-            conn.show(gflat(top20_sl()))
+            conn.show(gflat(top20_sl()), n=3)
             print("=====================================")
 
-            r0, r1 = list(conn.run("select avg(sl) as slavg from top20_sl group by sp1"))
+            r0, r1 = list(conn.reel("select avg(sl) as slavg from top20_sl group by sp1"))
             self.assertEqual(round(r0.slavg, 3), 5.335)
             self.assertEqual(round(r1.slavg, 3), 7.235)
 
             # gby with empty list group
             # All of the rows in a table is grouped.
-            for g in gby(conn.run("select * from first_char"), []):
+            for g in gby(conn.reel("select * from first_char"), []):
                 # the entire data sample is 150
                 self.assertEqual(len(g.no), 150)
 
@@ -94,20 +94,17 @@ class Testdbopen(unittest.TestCase):
             self.assertEqual(conn.list_tables(), ['first_char', 'top20_sl'])
 
             def empty_rows(query):
-                for g in gby(conn.run(query), ["sl"]):
+                for g in gby(conn.reel(query), ["sl"]):
                     if len(g.sl) > 10:
                         yield g
-            # try to save empty rows
-            with self.assertRaises(StopIteration):
-                conn.save(empty_rows, args=("select * from first_char order by sl, sw",))
 
     def test_gflat(self):
         """Tests if applying gby and gflat subsequently yields the original
         """
         with dbopen(':memory:') as conn:
             conn.save(load_csv("data/iris.csv", header="no,sl,sw,pl,pw,sp"), name="iris")
-            a = list(conn.run("select * from iris order by sl"))
-            b = list(gflat(gby(conn.run("select * from iris order by sl"), "sl")))
+            a = list(conn.reel("select * from iris order by sl"))
+            b = list(gflat(gby(conn.reel("select * from iris order by sl"), 'sl')))
             for a1, b1 in zip(a, b):
                 self.assertEqual(a1.sl, b1.sl)
                 self.assertEqual(a1.pl, b1.pl)
@@ -116,8 +113,8 @@ class Testdbopen(unittest.TestCase):
         with dbopen(':memory:') as conn:
             conn.save(load_csv("data/iris.csv", header="no,sl,sw,pl,pw,sp"), name="iris1")
             conn.save(load_csv("data/iris.csv", header="no,sl,sw,pl,pw,sp"), name="iris2")
-            a = conn.run("select * from iris1 where sp='setosa'")
-            b = conn.run("select * from iris2 where sp='versicolor'")
+            a = conn.reel("select * from iris1 where sp='setosa'")
+            b = conn.reel("select * from iris2 where sp='versicolor'")
             self.assertEqual(next(a).sp, 'setosa')
             self.assertEqual(next(b).sp, 'versicolor')
             # now you iterate over 'a' again and you may expect 'setosa' to show up
@@ -134,20 +131,19 @@ class Testdbopen(unittest.TestCase):
             conn.save(load_csv('data/co2.csv'), name='co2')
             def co2_less(*col):
                 """remove columns"""
-                co2 = conn.run("select * from co2")
+                co2 = conn.reel("select * from co2")
                 for r in co2:
                     for c in col:
                         delattr(r, c)
                     yield r
-            set_option('maxrows_display', 3)
             print('\nco2 table')
             print('==============================================================')
-            conn.show("select * from co2")
+            conn.show("select * from co2", n=2)
             print("\nco2 table without plant and number column")
             print("order of columns not preserved")
             print('==============================================================')
             # of course you can call conn.show(co2_less('plant'), n=5)
-            conn.show(co2_less, args=('plant', 'no'))
+            conn.show(co2_less, args=('plant', 'no'), n=2)
             print('==============================================================')
 
             conn.save(co2_less, args=('plant', 'no'))
@@ -155,30 +151,20 @@ class Testdbopen(unittest.TestCase):
             self.assertEqual(len(conn.table_info('co2').columns), 6)
             self.assertEqual(len(conn.table_info('co2_less').columns), 4)
 
-    def test_column_name_validity(self):
-        with dbopen(':memory:') as conn:
-            with self.assertRaises(AssertionError):
-                # sl.size is not a valid column name
-                next(load_csv('data/iris.csv', header="no sl.size sw pl pw species"))
-
-            with self.assertRaises(AssertionError):
-                # 'no' is not a valid column name
-                next(load_csv('data/iris.csv', header="'no' sl sw pl pw species"))
-
-            # no_1 should be ok, underscore is ok as far as it's not the first char
-            try:
-                next(load_csv('data/iris.csv', header="no_1 sl sw pl pw species"))
-            except:
-                self.fail("no_1 is not a valid column name")
-
     def test_saving_csv(self):
         import os
         with dbopen(':memory:') as conn:
-            set_option('maxrows_display', 2)
             iris = load_csv('data/iris.csv', header="no sl sw pl pw sp")
-            conn.show(gby(iris, "sp"), filename='sample.csv')
+            conn.show(islice(gby(iris, "sp"), 2), filename='sample.csv')
             # each group contains 50 rows, hence 100
             self.assertEqual(len(list(load_csv('sample.csv'))), 100)
             os.remove('sample.csv')
+
+    def test_wierd_file(self):
+        with dbopen(':memory:') as conn:
+            sample = load_csv('data/sample.csv')
+            conn.save(sample, name="sample")
+            cols = sorted(conn.table_info('sample').columns)
+            self.assertEqual(cols, [['a', 'real'], ['b', 'int'], ['c', 'text']])
 
 unittest.main()
