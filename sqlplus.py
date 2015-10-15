@@ -338,7 +338,7 @@ def chunkn(seq, num):
 
 
 # Some files don't have a header
-def add_header(header, filename):
+def add_header(filename, header):
     """Adds a header line to an existing file.
     """
     for line in fileinput.input(filename, inplace=True):

@@ -173,7 +173,7 @@ class Testdbopen(unittest.TestCase):
             with self.assertRaises(ValueError):
                 for r in load_csv('data/wierd.csv'): pass
             try:
-                add_header('a,b,c', 'data/wierd.csv')
+                add_header('data/wierd.csv', 'a,b,c')
                 rows = list(load_csv('data/wierd.csv', line_fix=lambda x: fillin(x, 3)))
             finally:
                 del_header('data/wierd.csv')
@@ -187,7 +187,7 @@ class Testdbopen(unittest.TestCase):
     def test_column_generation(self):
         with dbopen(':memory:') as conn:
             try:
-                add_header('a,,b,c,c,a,', 'data/wierd.csv')
+                add_header('data/wierd.csv', 'a,,b,c,c,a,')
                 row = next(load_csv('data/wierd.csv', line_fix=lambda x: fillin(x, 7)))
                 self.assertEqual(row.columns,
                                  ['a0', 'temp0', 'b', 'c0', 'c1', 'a1', 'temp1'])
@@ -197,7 +197,7 @@ class Testdbopen(unittest.TestCase):
             try:
                 # in and no are keywords
                 # no is ok
-                add_header('_1, in, no, *-*a, a', 'data/wierd.csv')
+                add_header('data/wierd.csv', '_1, in, no, *-*a, a')
                 row = next(load_csv('data/wierd.csv', line_fix=lambda x: fillin(x, 5)))
                 self.assertEqual(row.columns,
                                  ['a__1', 'a_in', 'no', 'a0', 'a1'])
