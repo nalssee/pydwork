@@ -71,10 +71,10 @@ class Testdbopen(unittest.TestCase):
             print("\nYou should see the same two tables")
             print("=====================================")
             # you can send a query
-            conn.show("top20_sl", n=3)
+            conn.show("top20_sl", num=3)
             print("-------------------------------------")
             # or just see the stream
-            conn.show(gflat(top20_sl()), n=3)
+            conn.show(gflat(top20_sl()), num=3)
             print("=====================================")
 
             r0, r1 = list(conn.reel("select avg(sl) as slavg from top20_sl group by sp1"))
@@ -135,12 +135,12 @@ class Testdbopen(unittest.TestCase):
                     yield r
             print('\nco2 table')
             print('==============================================================')
-            conn.show("select * from co2", n=2)
+            conn.show("select * from co2", num=2)
             print("\nco2 table without plant and number column")
             print("order of columns not preserved")
             print('==============================================================')
             # of course you can call conn.show(co2_less('plant'), n=5)
-            conn.show(co2_less, args=('plant', 'no'), n=2)
+            conn.show(co2_less, args=('plant', 'no'), num=2)
             print('==============================================================')
 
             conn.save(co2_less, args=('plant', 'no'))

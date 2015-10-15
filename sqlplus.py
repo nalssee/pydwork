@@ -19,7 +19,7 @@ how you combine them both.
 
 This program does it.
 
-What you need to know is in unit test code at test/sqlplus_test.py
+What you need to know is in unit test code at test/*
 """
 __all__ = ['dbopen', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl',
            'chunkn', 'add_header', 'del_header']
@@ -108,8 +108,8 @@ class SQLPlus:
     """
     def __init__(self, dbfile):
         self._dbfile = dbfile
-        self._conn = sqlite3.connect(self._dbfile)
-        self._cursor = self._conn.cursor()
+        self.conn = sqlite3.connect(self._dbfile)
+        self._cursor = self.conn.cursor()
         self.tables = self.list_tables()
 
     # args can be a list, a tuple or a dictionary
@@ -122,6 +122,10 @@ class SQLPlus:
         self.tables = self.list_tables()
 
     def reel(self, query, args=()):
+        """Generates a sequence of rows from a query.
+
+        Query can be a select statement or table name.
+        """
         query = _select_statement(query)
         if query.strip().partition(' ')[0].upper() != "SELECT":
             raise ValueError("use 'run' for ", query)
@@ -200,7 +204,7 @@ class SQLPlus:
         self.tables.append(name)
 
     # Be careful so that you don't overwrite the file
-    def show(self, query, args=(), filename=None, n=30):
+    def show(self, query, args=(), filename=None, num=30):
         """Printing to a screen or saving to a file
 
         'query' can be either a SQL query string or an iterable.
@@ -235,10 +239,10 @@ class SQLPlus:
                     fout.write(','.join(row1_str) + '\n')
         else:
             # show practically all columns
-            with pd.option_context("display.max_rows", n), \
+            with pd.option_context("display.max_rows", num), \
                  pd.option_context("display.max_columns", 1000):
                 # make use of pandas DataFrame displaying
-                print(pd.DataFrame(list(islice(rows, n)), columns=colnames))
+                print(pd.DataFrame(list(islice(rows, num)), columns=colnames))
 
     def list_tables(self):
         """List of table names in the database
@@ -259,8 +263,8 @@ def dbopen(dbfile):
     try:
         yield splus
     finally:
-        splus._conn.commit()
-        splus._conn.close()
+        splus.conn.commit()
+        splus.conn.close()
 
 
 # 'grouped row' refers to a Row object
@@ -316,10 +320,10 @@ def gflat(seq):
 
 
 #  Useful for building portfolios
-def chunkn(seq, n):
-    """Makes n chunks from a seq, each about the same size.
+def chunkn(seq, num):
+    """Makes num chunks from a seq, each about the same size.
     """
-    size = len(list(seq)) / n
+    size = len(list(seq)) / num
     last = 0.0
 
     i = 0
@@ -339,11 +343,11 @@ def add_header(header, filename):
         print(line, end='')
 
 
-def del_header(filename, n=1):
+def del_header(filename, num=1):
     """Delete n lines from a file
     """
     for line_number, line in enumerate(fileinput.input(filename, inplace=True)):
-        if line_number >= n:
+        if line_number >= num:
             print(line, end='')
 
 
@@ -358,14 +362,14 @@ def load_csv(csv_file, header=None, line_fix=(lambda x: x)):
         first_line = fin.readline()[:-1]
         header = header or first_line
         columns = _gen_valid_column_names(_listify(header))
-        n = len(columns)
+        ncol = len(columns)
         for line in csv.reader(fin):
-            if len(line) != n:
+            if len(line) != ncol:
                 if _is_empty_line(line):
                     continue
                 line = line_fix(line)
                 # if it's still not valid
-                if len(line) != n:
+                if len(line) != ncol:
                     raise ValueError("column number mismatch", columns, line)
             row1 = Row()
             for col, val in zip(columns, line):
@@ -435,8 +439,7 @@ def _gen_valid_column_names(columns):
     result_columns = []
     for col in temp_columns:
         if col in cnt:
-            n = cnt_copy[col] - cnt[col]
-            result_columns.append(col + str(n))
+            result_columns.append(col + str(cnt_copy[col] - cnt[col]))
             cnt[col] -= 1
         else:
             result_columns.append(col)
@@ -480,9 +483,10 @@ def _create_statement(name, colnames):
     return "create table if not exists %s (%s)" % (name.lower(), schema)
 
 
-def _insert_statement(name, n):
-    qs = ', '.join(['?'] * n)
-    return "insert into %s values (%s)" % (name, qs)
+def _insert_statement(name, ncol):
+    "insert into foo values (?, ?, ?, ...)"
+    qmarks = ', '.join(['?'] * ncol)
+    return "insert into %s values (%s)" % (name, qmarks)
 
 
 def _select_statement(query):
