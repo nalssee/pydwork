@@ -33,9 +33,7 @@ import pandas as pd
 
 from collections import Counter
 from contextlib import contextmanager
-from itertools import groupby, islice, chain, zip_longest
-from messytables import CSVTableSet, type_guess
-from messytables.types import DecimalType, IntegerType
+from itertools import groupby, islice, chain, zip_longest, cycle
 
 from pydwork.sqlite_keywords import SQLITE_KEYWORDS
 
@@ -147,7 +145,7 @@ class SQLPlus:
         for row1 in rows:
             row = Row()
             for col, val in zip(columns, row1):
-                setattr(row, col, val)
+                setattr(row, col, _det_type(val))
             yield row
 
     def save(self, seq, name=None, args=()):
@@ -196,10 +194,8 @@ class SQLPlus:
                 vals = [str(v) for v in row.get_values(colnames)]
                 fport.write((','.join(vals) + '\n').encode())
 
-            # type check, using 'messytables' package
-            fport.seek(0)
-            types = _field_types(fport)
-            tinfo0 = Tinfo(name, list(zip(colnames, types)))
+            # Every column type is text
+            tinfo0 = Tinfo(name, list(zip(colnames, cycle(['text']))))
             self._cursor.execute(tinfo0.cstmt())
             istmt0 = tinfo0.istmt()
 
@@ -210,14 +206,15 @@ class SQLPlus:
             for line in fport:
                 # line[:-1] because last index indicates '\n'
                 try:
-                    self._cursor.execute(istmt0, line[:-1].decode().split(','))
+                    line_vals = line[:-1].decode().split(',')
+                    self._cursor.execute(istmt0, line_vals)
                 except Exception as e:
                     print("Failed to save")
-                    for col, type1, val in \
-                        zip_longest(colnames, types, line[:-1].decode().split(',')):
-                        print(col, type1, val)
+                    for col, val in zip_longest(colnames, line_vals):
+                        print(col, val)
                     raise ValueError("Invalid line to save")
         self.tables.append(name)
+
 
     # Be careful so that you don't overwrite the file
     def show(self, query, args=(), filename=None, n=30):
@@ -228,6 +225,9 @@ class SQLPlus:
         if 'query' is the grouped iterator then n is the number of groups
         """
         if isinstance(query, str):
+            # just a table name
+            if len(query.strip().split(' ')) == 1:
+                query = "select * from " + query
             rows = self._cursor.execute(query, args)
             colnames = [c[0] for c in rows.description]
 
@@ -268,17 +268,6 @@ class SQLPlus:
         """)
         tables = [row[1] for row in query]
         return sorted(tables)
-
-    def table_info(self, tname):
-        """Returns a Tinfo object
-
-        'tname' is a string
-        """
-        # You cannot use parameter here, only certain values(as numbers)
-        # are allowed.
-        # see Python sqlite3 package manual
-        query = self._cursor.execute("pragma table_info({})".format(tname))
-        return Tinfo(tname, [[row[1], row[2]] for row in query])
 
 
 @contextmanager
@@ -409,26 +398,21 @@ def get_option(opt_name):
     return OPTIONS[opt_name]
 
 
-# Not sure how costly this is.
-# This is what 'messytables' pacakge does.
-def _field_types(fport):
-    """Guess field types from a CSV file
-
-    f is a binary file port
+def _det_type(val):
+    """Enforce to turn val into number if possible
     """
-    def conv(valtype):
-        """Once messytables guess what type it is,
-        then is is turned into an appropriate sql type,
-        i.e., 'int', 'real', or 'text'
-        """
-        if isinstance(valtype, IntegerType):
-            return "int"
-        if isinstance(valtype, DecimalType):
-            return 'real'
-        return 'text'
-    tset = CSVTableSet(fport)
-    row_set = tset.tables[0]
-    return [conv(t) for t in type_guess(row_set.sample)]
+    # int(3.2) => 3
+    # int('3.2') => raises an error
+    val = str(val)
+    try:
+        return int(val)
+    except:
+        try:
+            return float(val)
+        except:
+            if isinstance(val, str):
+                return val
+            raise ValueError(val)
 
 
 def _listify(colstr):

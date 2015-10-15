@@ -17,20 +17,6 @@ class Testdbopen(unittest.TestCase):
             # No type guessing is attempted.
             conn.save(load_csv('data/iris.csv', header="no sl sw pl pw species"), name="iris")
 
-            iris = conn.table_info("iris")
-            print("\niris table info", end="")
-            print(iris)
-
-            # Once you save it, types are automatically determined.
-            self.assertEqual(iris.table_name, 'iris')
-            # Order of columns can't be predicted.
-            # it is determined by the built-in Python hash function.
-            self.assertEqual(sorted(iris.columns), \
-                             sorted([['no', 'int'], \
-                                     ['sl', 'real'], ['sw', 'real'], \
-                                     ['pl', 'real'], ['pw', 'real'], \
-                                     ['species', 'text']]))
-
             iris1 = load_csv('data/iris.csv', header="no sl sw pl pw species")
             # Load excel file
             iris2 = load_xl('data/iris.xlsx', header="no sl sw pl pw species")
@@ -149,9 +135,6 @@ class Testdbopen(unittest.TestCase):
 
             conn.save(co2_less, args=('plant', 'no'))
 
-            self.assertEqual(len(conn.table_info('co2').columns), 6)
-            self.assertEqual(len(conn.table_info('co2_less').columns), 4)
-
     def test_saving_csv(self):
         import os
         with dbopen(':memory:') as conn:
@@ -160,46 +143,5 @@ class Testdbopen(unittest.TestCase):
             # each group contains 50 rows, hence 100
             self.assertEqual(len(list(load_csv('sample.csv'))), 100)
             os.remove('sample.csv')
-
-    def test_wierd_file(self):
-        with dbopen(':memory:') as conn:
-            sample = load_csv('data/sample.csv')
-            conn.save(sample, name="sample")
-            cols = sorted(conn.table_info('sample').columns)
-            self.assertEqual(cols, [['a', 'real'], ['b', 'int'], ['c', 'text']])
-
-
-    def test_types1(self):
-        with dbopen(':memory:') as conn:
-            conn.run("""
-            create table foo(
-            a int,
-            b real,
-            c text
-            )
-            """)
-            conn.run("insert into foo (a, b, c) values ('abc', 3, 10.0001)")
-            conn.run("insert into foo (a, b, c) values (3, 10.0001, 'abc')")
-            conn.run("insert into foo (a, b, c) values (10.0001, 'abc', 3)")
-            for r in conn.reel("""select * from foo
-            """):
-                print(r)
-
-    def test_types2(self):
-        with dbopen(':memory:') as conn:
-            conn.run("""
-            create table foo(
-            a int,
-            b real,
-            c text
-            )
-            """)
-            conn.run("insert into foo (a, b, c) values ('abc', 3, 10.0001)")
-            conn.run("insert into foo (a, b, c) values (3, 10.0001, 'abc')")
-            conn.run("insert into foo (a, b, c) values (10.0001, 'abc', 3)")
-            for r in conn.reel("""select * from foo
-            """):
-                print(r)
-
 
 unittest.main()
