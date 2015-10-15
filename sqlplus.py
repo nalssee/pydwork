@@ -99,8 +99,8 @@ class Row:
         if name == 'columns' or name == 'values':
             raise AttributeError('Name not allowed', name)
         loc = self.columns.index(name)
-        self.columns.__delitem__(loc)
-        self.values.__delitem__(loc)
+        del self.columns[loc]
+        del self.values[loc]
         super().__delattr__(name)
 
     def __str__(self):
@@ -133,11 +133,11 @@ class SQLPlus:
         query = _select_statement(query)
         if query.strip().partition(' ')[0].upper() != "SELECT":
             raise ValueError("use 'run' for ", query)
-        rows = self._cursor.execute(query, args)
-        columns = [c[0] for c in rows.description]
-        for row1 in rows:
+        qrows = self._cursor.execute(query, args)
+        columns = [c[0] for c in qrows.description]
+        for qrow in qrows:
             row = Row()
-            for col, val in zip(columns, row1):
+            for col, val in zip(columns, qrow):
                 setattr(row, col, val)
             yield row
 
