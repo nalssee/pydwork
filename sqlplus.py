@@ -21,7 +21,8 @@ This program does it.
 
 What you need to know is in unit test code at test/sqlplus_test.py
 """
-__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl']
+__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl',
+           'chunkn', 'add_header', 'del_header']
 
 
 import sqlite3
@@ -29,13 +30,39 @@ import csv
 import tempfile
 import openpyxl
 import re
+import fileinput
 import pandas as pd
 
 from collections import Counter
 from contextlib import contextmanager
-from itertools import groupby, islice, chain, zip_longest, cycle
+from itertools import groupby, islice, chain, zip_longest
 
-from pydwork.sqlite_keywords import SQLITE_KEYWORDS
+
+# Some of the sqlite keywords are not allowed for column names
+# http://www.sqlite.org/sessions/lang_keywords.html
+SQLITE_KEYWORDS = [
+    "ABORT", "ACTION", "ADD", "AFTER", "ALL", "ALTER", "ANALYZE", "AND",
+    "AS", "ASC", "ATTACH", "AUTOINCREMENT", "BEFORE", "BEGIN", "BETWEEN",
+    "BY", "CASCADE", "CASE", "CAST", "CHECK", "COLLATE", "COLUMN", "COMMIT",
+    "CONFLICT", "CONSTRAINT", "CREATE", "CROSS", "CURRENT_DATE", "CURRENT_TIME",
+    "CURRENT_TIMESTAMP", "DATABASE", "DEFAULT", "DEFERRABLE", "DEFERRED",
+    "DELETE", "DESC", "DETACH", "DISTINCT", "DROP", "EACH", "ELSE", "END",
+    "ESCAPE", "EXCEPT", "EXCLUSIVE", "EXISTS", "EXPLAIN", "FAIL", "FOR",
+    "FOREIGN", "FROM", "FULL", "GLOB", "GROUP", "HAVING", "IF", "IGNORE",
+    "IMMEDIATE", "IN", "INDEX", "INDEXED", "INITIALLY", "INNER", "INSERT", "INSTEAD",
+    "INTERSECT", "INTO", "IS", "ISNULL", "JOIN", "KEY", "LEFT", "LIKE", "LIMIT",
+    "MATCH", "NATURAL",
+    # no is ok somehow
+    # no idea why
+    # "NO",
+    "NOT",
+    "NOTNULL", "NULL", "OF", "OFFSET", "ON", "OR", "ORDER", "OUTER", "PLAN",
+    "PRAGMA", "PRIMARY", "QUERY", "RAISE", "REFERENCES", "REGEXP", "REINDEX",
+    "RENAME", "REPLACE", "RESTRICT", "RIGHT", "ROLLBACK", "ROW", "SAVEPOINT",
+    "SELECT", "SET", "TABLE", "TEMP", "TEMPORARY", "THEN", "TO", "TRANSACTION",
+    "TRIGGER", "UNION", "UNIQUE", "UPDATE", "USING", "VACUUM", "VALUES", "VIEW",
+    "VIRTUAL", "WHEN", "WHERE"
+]
 
 
 # Most of the time you work with SQL rows.
@@ -43,7 +70,11 @@ from pydwork.sqlite_keywords import SQLITE_KEYWORDS
 # Or you combine rows with similar properties and think of them as a bunch.
 # And then later flatten'em if you want.
 class Row:
-    "SQL row"
+    """SQL row
+
+    Pretty much nothing, but essential part of this program.
+    No need to redefine  __getattr__, __setattr__.
+    """
     def __init__(self, **kwargs):
         """ex) Row(a=10, b=20) <= two fields row with 'a' and 'b'
 
@@ -72,53 +103,6 @@ class Row:
         return str(self.__dict__)
 
 
-class Tinfo:
-    """Table info
-    """
-    def __init__(self, table_name, columns):
-        """columns : [['col1', 'real'], ['col2', 'int'], ...]
-        or 'col1 real, col2 int, ...'
-        """
-        self.table_name = table_name
-        if isinstance(columns, str):
-            columns = [c.split() for c in columns.strip().split(',')]
-        self.columns = columns
-
-    def cstmt(self):
-        """make a create table statement
-        """
-        return 'create table if not exists {0}(\n{1}\n)' \
-            .format(self.table_name,
-                    ',\n'
-                    .join(['  {0} {1}'
-                           .format(cn, ct) for cn, ct in self.columns])
-                    .lower())
-
-    def istmt(self):
-        """Insert statement
-        """
-        tname = self.table_name
-        return "insert into {0} values ({1})".\
-            format(tname, ', '.join(['?'] * len(self.columns)))
-
-    def cols(self):
-        "Only column names not types"
-        return ', '.join([c for c, _ in self.columns])
-
-    def __str__(self):
-        ncols = max([len(c) for c, _ in self.columns])
-        return \
-            ('\n' + '=' * (ncols + 7)) + '\n' \
-            + self.table_name + '\n' \
-            + ('-' * (ncols + 7)) + '\n' \
-            + '\n'.join([c.ljust(ncols) + ' : ' + t for c, t in self.columns]) \
-            + '\n' \
-            + ('=' * (ncols + 7))
-
-    def __repr__(self):
-        return "Tinfo('%s', %s)" % (self.table_name, self.columns)
-
-
 class SQLPlus:
     """SQLPlus object works like a sql cursor.
     """
@@ -138,6 +122,7 @@ class SQLPlus:
         self.tables = self.list_tables()
 
     def reel(self, query, args=()):
+        query = _select_statement(query)
         if query.strip().partition(' ')[0].upper() != "SELECT":
             raise ValueError("use 'run' for ", query)
         rows = self._cursor.execute(query, args)
@@ -145,7 +130,7 @@ class SQLPlus:
         for row1 in rows:
             row = Row()
             for col, val in zip(columns, row1):
-                setattr(row, col, _det_type(val))
+                setattr(row, col, val)
             yield row
 
     def save(self, seq, name=None, args=()):
@@ -194,10 +179,9 @@ class SQLPlus:
                 vals = [str(v) for v in row.get_values(colnames)]
                 fport.write((','.join(vals) + '\n').encode())
 
-            # Every column type is text
-            tinfo0 = Tinfo(name, list(zip(colnames, cycle(['text']))))
-            self._cursor.execute(tinfo0.cstmt())
-            istmt0 = tinfo0.istmt()
+            # create table
+            istmt = _insert_statement(name, len(colnames))
+            self._cursor.execute(_create_statement(name, colnames))
 
             # Now insertion to a DB
             fport.seek(0)
@@ -207,14 +191,13 @@ class SQLPlus:
                 # line[:-1] because last index indicates '\n'
                 try:
                     line_vals = line[:-1].decode().split(',')
-                    self._cursor.execute(istmt0, line_vals)
-                except Exception as e:
+                    self._cursor.execute(istmt, line_vals)
+                except:
                     print("Failed to save")
                     for col, val in zip_longest(colnames, line_vals):
                         print(col, val)
                     raise ValueError("Invalid line to save")
         self.tables.append(name)
-
 
     # Be careful so that you don't overwrite the file
     def show(self, query, args=(), filename=None, n=30):
@@ -226,9 +209,7 @@ class SQLPlus:
         """
         if isinstance(query, str):
             # just a table name
-            if len(query.strip().split(' ')) == 1:
-                query = "select * from " + query
-            rows = self._cursor.execute(query, args)
+            rows = self._cursor.execute(_select_statement(query), args)
             colnames = [c[0] for c in rows.description]
 
         # then it is an iterable,
@@ -280,64 +261,6 @@ def dbopen(dbfile):
     finally:
         splus._conn.commit()
         splus._conn.close()
-
-
-def load_csv(csv_file, header=None, line_fix=(lambda x: x)):
-    """Loads well-formed csv file, 1 header line and the rest is data
-
-    returns an iterator
-    All columns are string, no matter what.
-    it's intentional. Types are guessed once it is saved in DB
-    """
-    with open(csv_file) as fin:
-        first_line = fin.readline()[:-1]
-        header = header or first_line
-        columns = _gen_valid_column_names(_listify(header))
-        n = len(columns)
-        for line in csv.reader(fin):
-            if len(line) != n:
-                if _is_empty_line(line):
-                    continue
-                line = line_fix(line)
-                # if it's still not valid
-                if len(line) != n:
-                    raise ValueError("column number mismatch", columns, line)
-            row1 = Row()
-            for col, val in zip(columns, line):
-                setattr(row1, col, val)
-            yield row1
-
-
-def load_xl(xl_file, header=None):
-    """Loads an Excel file. Only the first sheet
-
-    Basically the same as load_csv.
-    """
-    def remove_comma(cell):
-        """Extracts a comma-removed value from a cell.
-
-        32,120 => 32120
-        """
-        return str(cell.value).strip().replace(",", "")
-
-    wbook = openpyxl.load_workbook(xl_file)
-    sheet_names = wbook.get_sheet_names()
-    # only the first sheet
-    sheet = wbook.get_sheet_by_name(sheet_names[0])
-    rows = sheet.rows
-    header = header or [remove_comma(c) for c in rows[0]]
-    columns = _gen_valid_column_names(_listify(header))
-    for row in rows[1:]:
-        cells = []
-        for cell in row:
-            if cell.value is None:
-                cells.append("")
-            else:
-                cells.append(remove_comma(cell))
-        result_row = Row()
-        for col, val in zip(columns, cells):
-            setattr(result_row, col, val)
-        yield result_row
 
 
 # 'grouped row' refers to a Row object
@@ -392,35 +315,95 @@ def gflat(seq):
             yield row1
 
 
-def get_option(opt_name):
-    """get options for displaying
+#  Useful for building portfolios
+def chunkn(seq, n):
+    """Makes n chunks from a seq, each about the same size.
     """
-    return OPTIONS[opt_name]
+    size = len(list(seq)) / n
+    last = 0.0
+
+    i = 0
+    while last < len(seq):
+        yield i, seq[int(last):int(last + size)]
+        last += size
+        i += 1
 
 
-def _det_type(val):
-    """Enforce to turn val into number if possible
+# Some files don't have a header
+def add_header(header, filename):
+    """Adds a header line to an existing file.
     """
-    # int(3.2) => 3
-    # int('3.2') => raises an error
-    val = str(val)
-    try:
-        return int(val)
-    except:
-        try:
-            return float(val)
-        except:
-            if isinstance(val, str):
-                return val
-            raise ValueError(val)
+    for line in fileinput.input(filename, inplace=True):
+        if fileinput.isfirstline():
+            print(header)
+        print(line, end='')
 
 
-def _listify(colstr):
-    """If s is a comma or space separated string turn it into a list"""
-    if isinstance(colstr, str):
-        return [x for x in re.split(',| ', colstr) if x]
-    else:
-        return colstr
+def del_header(filename, n=1):
+    """Delete n lines from a file
+    """
+    for line_number, line in enumerate(fileinput.input(filename, inplace=True)):
+        if line_number >= n:
+            print(line, end='')
+
+
+def load_csv(csv_file, header=None, line_fix=(lambda x: x)):
+    """Loads well-formed csv file, 1 header line and the rest is data
+
+    returns an iterator
+    All columns are string, no matter what.
+    it's intentional. Types are guessed once it is saved in DB
+    """
+    with open(csv_file) as fin:
+        first_line = fin.readline()[:-1]
+        header = header or first_line
+        columns = _gen_valid_column_names(_listify(header))
+        n = len(columns)
+        for line in csv.reader(fin):
+            if len(line) != n:
+                if _is_empty_line(line):
+                    continue
+                line = line_fix(line)
+                # if it's still not valid
+                if len(line) != n:
+                    raise ValueError("column number mismatch", columns, line)
+            row1 = Row()
+            for col, val in zip(columns, line):
+                setattr(row1, col, val)
+            yield row1
+
+
+# todo
+def load_xl(xl_file, header=None):
+    """Loads an Excel file. Only the first sheet
+
+    Basically the same as load_csv.
+    """
+    def remove_comma(cell):
+        """Extracts a comma-removed value from a cell.
+
+        32,120 => 32120
+        """
+        return str(cell.value).strip().replace(",", "")
+
+    wbook = openpyxl.load_workbook(xl_file)
+    sheet_names = wbook.get_sheet_names()
+    # only the first sheet
+    sheet = wbook.get_sheet_by_name(sheet_names[0])
+    rows = sheet.rows
+    header = header or [remove_comma(c) for c in rows[0]]
+    columns = _gen_valid_column_names(_listify(header))
+    for row in rows[1:]:
+        cells = []
+        for cell in row:
+            if cell.value is None:
+                cells.append("")
+            else:
+                cells.append(remove_comma(cell))
+        result_row = Row()
+        for col, val in zip(columns, cells):
+            setattr(result_row, col, val)
+        yield result_row
 
 
 def _gen_valid_column_names(columns):
@@ -432,7 +415,7 @@ def _gen_valid_column_names(columns):
     for col in columns:
         # save only alphanumeric and underscore
         # and remove all the others
-        newcol = re.sub('[^\w]+', '', col)
+        newcol = re.sub(r'[^\w]+', '', col)
         if newcol == '':
             newcol = 'temp'
         elif not newcol[0].isalpha():
@@ -441,9 +424,11 @@ def _gen_valid_column_names(columns):
             newcol = 'a_' + newcol
         temp_columns.append(newcol)
 
+    # no duplicates
     if len(temp_columns) == len(set(temp_columns)):
         return temp_columns
 
+    # Tag numbers to column-names starting from 0 if there are duplicates
     cnt = {col:n for col, n in Counter(temp_columns).items() if n > 1}
     cnt_copy = dict(cnt)
 
@@ -458,6 +443,23 @@ def _gen_valid_column_names(columns):
     return result_columns
 
 
+def _is_empty_line(line):
+    """Tests if a list of strings is empty for example ["", ""] or []
+    """
+    return [x for x in line if x.strip() != ""] == []
+
+
+def _listify(colstr):
+    """If s is a comma or space separated string turn it into a list"""
+    if isinstance(colstr, str):
+        if ',' in colstr:
+            return [x.strip() for x in colstr.split(',')]
+        else:
+            return [x for x in colstr.split(' ') if x]
+    else:
+        return colstr
+
+
 def _peek_first(seq):
     """Returns a tuple (first_item, it)
 
@@ -468,7 +470,25 @@ def _peek_first(seq):
     return first_item, chain([first_item], seq)
 
 
-def _is_empty_line(line):
-    """Tests if a list of strings is empty for example ["", ""] or []
+def _create_statement(name, colnames):
+    """create table if not exists foo (...)
+
+    Every type is numeric.
+    Table name and column names are all lower case.
     """
-    return [x for x in line if x.strip() != ""] == []
+    schema = ', '.join([col.lower() + ' ' + 'numeric' for col in colnames])
+    return "create table if not exists %s (%s)" % (name.lower(), schema)
+
+
+def _insert_statement(name, n):
+    qs = ', '.join(['?'] * n)
+    return "insert into %s values (%s)" % (name, qs)
+
+
+def _select_statement(query):
+    """If query is just one word, then it is transformed to a select stmt
+    or leave it
+    """
+    if len(query.strip().split(' ')) == 1:
+        return "select * from " + query
+    return query

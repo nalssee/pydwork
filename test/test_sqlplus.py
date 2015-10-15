@@ -7,6 +7,15 @@ from itertools import islice
 print("\nNo need to read the following")
 print("Simply skim through, and recognize if it's not too weird\n\n")
 
+def fillin(line, n):
+    """For invalid line handling"""
+    if len(line) < n:
+        return line + [''] * (n - len(line))
+    if len(line) > n:
+        return line[:n]
+    return line
+
+
 class Testdbopen(unittest.TestCase):
     def test_loading(self):
         with dbopen(':memory:') as conn:
@@ -58,10 +67,11 @@ class Testdbopen(unittest.TestCase):
             # If you are saving grouped objects,
             # they are flattened first
             conn.save(top20_sl)
+
             print("\nYou should see the same two tables")
             print("=====================================")
             # you can send a query
-            conn.show("select * from top20_sl", n=3)
+            conn.show("top20_sl", n=3)
             print("-------------------------------------")
             # or just see the stream
             conn.show(gflat(top20_sl()), n=3)
@@ -143,5 +153,60 @@ class Testdbopen(unittest.TestCase):
             # each group contains 50 rows, hence 100
             self.assertEqual(len(list(load_csv('sample.csv'))), 100)
             os.remove('sample.csv')
+
+    def test_column_case(self):
+        with dbopen(':memory:') as conn:
+            conn.run("create table Foo (a int, B real)")
+            conn.run("insert into foo values (10, 20.2)")
+            rows = list(conn.reel('fOO'))
+            with self.assertRaises(AttributeError):
+                print(rows[0].b)
+            self.assertEqual(rows[0].B, 20.2)
+            # save it
+            conn.save(conn.reel('foo'), name='foo1')
+            rows = list(conn.reel('foo1'))
+            # now it's lower cased
+            with self.assertRaises(AttributeError):
+                print(rows[0].B)
+
+
+    def test_add_header(self):
+
+        with dbopen(':memory:') as conn:
+            with self.assertRaises(ValueError):
+                for r in load_csv('data/wierd.csv'): pass
+            try:
+                add_header('a,b,c', 'data/wierd.csv')
+                rows = list(load_csv('data/wierd.csv', line_fix=lambda x: fillin(x, 3)))
+            finally:
+                del_header('data/wierd.csv')
+
+            self.assertEqual(len(rows), 7)
+            conn.save(rows, name='wierd')
+
+            avals =[r.a for r in conn.reel("select * from wierd order by a")][:3]
+            self.assertEqual(avals, [10, 20, 30])
+
+    def test_column_generation(self):
+        with dbopen(':memory:') as conn:
+            try:
+                add_header('a,,b,c,c,a,', 'data/wierd.csv')
+                row = next(load_csv('data/wierd.csv', line_fix=lambda x: fillin(x, 7)))
+                self.assertEqual(sorted(row.column_names()),
+                                 sorted(['a0', 'temp0', 'b', 'c0',
+                                         'c1', 'a1', 'temp1']))
+            finally:
+                del_header('data/wierd.csv')
+
+            try:
+                # in and no are keywords
+                # no is ok
+                add_header('_1, in, no, *-*a, a', 'data/wierd.csv')
+                row = next(load_csv('data/wierd.csv', line_fix=lambda x: fillin(x, 5)))
+                self.assertEqual(sorted(row.column_names()),
+                                 sorted(['a__1', 'a_in', 'no', 'a0', 'a1']))
+            finally:
+                del_header('data/wierd.csv')
+
 
 unittest.main()
