@@ -73,34 +73,38 @@ class Row:
     """SQL row
 
     Pretty much nothing, but essential part of this program.
-    No need to redefine  __getattr__, __setattr__.
     """
-    def __init__(self, **kwargs):
-        """ex) Row(a=10, b=20) <= two fields row with 'a' and 'b'
+    def __init__(self):
+        """Example:
 
-        r = Row(a=10, b=20)
-        # if you want to add column 'c' and delete 'a'
-        r.c = 30
-        del r.a
+        r = Row()
+        r.x = 10; r.y = 20
+        del r.x
         """
-        for k, val in kwargs.items():
-            setattr(self, k, val)
+        super().__setattr__('columns', [])
+        super().__setattr__('values', [])
 
-    def column_names(self):
-        """Returns a list of strings(column names)
-        """
-        return list(self.__dict__.keys())
+    def __setattr__(self, name, value):
+        if name == 'columns' or name == 'values':
+            raise AttributeError('Name not allowed', name)
+        try:
+            loc = self.columns.index(name)
+            self.values[loc] = value
+        except:
+            self.columns.append(name)
+            self.values.append(value)
+        super().__setattr__(name, value)
 
-    def get_values(self, columns=None):
-        """columns must be given so that it doesn't cause ordering problems
-
-        'columns' is a list of strings.
-        """
-        columns = _listify(columns) or self.column_names()
-        return [getattr(self, c) for c in columns]
+    def __delattr__(self, name):
+        if name == 'columns' or name == 'values':
+            raise AttributeError('Name not allowed', name)
+        loc = self.columns.index(name)
+        self.columns.__delitem__(loc)
+        self.values.__delitem__(loc)
+        super().__delattr__(name)
 
     def __str__(self):
-        return str(self.__dict__)
+        return str(list(zip(self.columns, self.values)))
 
 
 class SQLPlus:
@@ -160,7 +164,7 @@ class SQLPlus:
             print("Empty sequence")
             return
 
-        colnames = row0.column_names()
+        colnames = row0.columns
         # You can't save the iterator directly because
         # once you execute a table creation query,
         # then the query becomes the most recent query,
@@ -180,7 +184,7 @@ class SQLPlus:
             fport.write((','.join(colnames) + '\n').encode())
             # implicitly flatten
             for row in gflat(seq):
-                vals = [str(v) for v in row.get_values(colnames)]
+                vals = [str(v) for v in row.values]
                 fport.write((','.join(vals) + '\n').encode())
 
             # create table
@@ -226,9 +230,9 @@ class SQLPlus:
             except StopIteration:
                 print("Empty sequence")
                 return
-            colnames = row0.column_names()
+            colnames = row0.columns
             # implicit gflat
-            rows = (r.get_values(colnames) for r in gflat(rows))
+            rows = (r.values for r in gflat(rows))
 
         if filename:
             # ignore n
@@ -293,7 +297,7 @@ def gby(seq, group):
     g_seq = groupby(seq, group if hasattr(group, "__call__")
                     else (lambda x: [getattr(x, g) for g in _listify(group)]))
     first_group = list(next(g_seq)[1])
-    colnames = first_group[0].column_names()
+    colnames = first_group[0].columns
 
     yield grouped_row(first_group, colnames)
     for _, rows in g_seq:
@@ -304,12 +308,12 @@ def gflat(seq):
     """Turn an iterator of grouped rows into an iterator of simple rows.
     """
     row0, seq = _peek_first(seq)
-    colnames = row0.column_names()
+    colnames = row0.columns
     # Every attribute must be a list
     # No idea how far should I go
     if isinstance(getattr(row0, colnames[0]), list):
         for g_row in seq:
-            for vals in zip(*g_row.get_values(colnames)):
+            for vals in zip(*g_row.values):
                 result_row = Row()
                 for col, val in zip(colnames, vals):
                     setattr(result_row, col, val)

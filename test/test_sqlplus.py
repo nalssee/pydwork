@@ -134,16 +134,15 @@ class Testdbopen(unittest.TestCase):
                         delattr(r, c)
                     yield r
             print('\nco2 table')
-            print('==============================================================')
+            print('=============================================')
             conn.show("select * from co2", num=2)
-            print("\nco2 table without plant and number column")
-            print("order of columns not preserved")
-            print('==============================================================')
-            # of course you can call conn.show(co2_less('plant'), n=5)
-            conn.show(co2_less, args=('plant', 'no'), num=2)
-            print('==============================================================')
-
-            conn.save(co2_less, args=('plant', 'no'))
+            print('=============================================')
+            print("\nco2 table without plant and conc")
+            print('=============================================')
+            # of course you can call conn.show(co2_less('plant', 'conc'), num=2)
+            conn.show(co2_less, args=('plant', 'conc'), num=2)
+            print('=============================================')
+            conn.save(co2_less, args=('plant', 'conc'))
 
     def test_saving_csv(self):
         import os
@@ -169,9 +168,7 @@ class Testdbopen(unittest.TestCase):
             with self.assertRaises(AttributeError):
                 print(rows[0].B)
 
-
     def test_add_header(self):
-
         with dbopen(':memory:') as conn:
             with self.assertRaises(ValueError):
                 for r in load_csv('data/wierd.csv'): pass
@@ -192,9 +189,8 @@ class Testdbopen(unittest.TestCase):
             try:
                 add_header('a,,b,c,c,a,', 'data/wierd.csv')
                 row = next(load_csv('data/wierd.csv', line_fix=lambda x: fillin(x, 7)))
-                self.assertEqual(sorted(row.column_names()),
-                                 sorted(['a0', 'temp0', 'b', 'c0',
-                                         'c1', 'a1', 'temp1']))
+                self.assertEqual(row.columns,
+                                 ['a0', 'temp0', 'b', 'c0', 'c1', 'a1', 'temp1'])
             finally:
                 del_header('data/wierd.csv')
 
@@ -203,10 +199,19 @@ class Testdbopen(unittest.TestCase):
                 # no is ok
                 add_header('_1, in, no, *-*a, a', 'data/wierd.csv')
                 row = next(load_csv('data/wierd.csv', line_fix=lambda x: fillin(x, 5)))
-                self.assertEqual(sorted(row.column_names()),
-                                 sorted(['a__1', 'a_in', 'no', 'a0', 'a1']))
+                self.assertEqual(row.columns,
+                                 ['a__1', 'a_in', 'no', 'a0', 'a1'])
             finally:
                 del_header('data/wierd.csv')
 
+    def test_order_of_columns(self):
+        with dbopen(':memory:') as conn:
+            row = next(load_csv('data/iris.csv'))
+            self.assertEqual(row.columns, ['temp', 'SepalLength', 'SepalWidth',
+                                           'PetalLength', 'PetalWidth', 'Species'])
+            conn.save(load_csv('data/iris.csv'), 'iris')
+            row = next(conn.reel('iris'))
+            self.assertEqual(row.columns, ['temp', 'sepallength', 'sepalwidth',
+                                           'petallength', 'petalwidth', 'species'])
 
 unittest.main()
