@@ -2,6 +2,7 @@ import unittest
 from pydwork.sqlplus import *
 from itertools import islice
 
+
 # This should work as a tutorial as well.
 print("\nNo need to read the following")
 print("Simply skim through, and recognize if it's not too weird\n\n")
@@ -166,5 +167,39 @@ class Testdbopen(unittest.TestCase):
             conn.save(sample, name="sample")
             cols = sorted(conn.table_info('sample').columns)
             self.assertEqual(cols, [['a', 'real'], ['b', 'int'], ['c', 'text']])
+
+
+    def test_types1(self):
+        with dbopen(':memory:') as conn:
+            conn.run("""
+            create table foo(
+            a int,
+            b real,
+            c text
+            )
+            """)
+            conn.run("insert into foo (a, b, c) values ('abc', 3, 10.0001)")
+            conn.run("insert into foo (a, b, c) values (3, 10.0001, 'abc')")
+            conn.run("insert into foo (a, b, c) values (10.0001, 'abc', 3)")
+            for r in conn.reel("""select * from foo
+            """):
+                print(r)
+
+    def test_types2(self):
+        with dbopen(':memory:') as conn:
+            conn.run("""
+            create table foo(
+            a int,
+            b real,
+            c text
+            )
+            """)
+            conn.run("insert into foo (a, b, c) values ('abc', 3, 10.0001)")
+            conn.run("insert into foo (a, b, c) values (3, 10.0001, 'abc')")
+            conn.run("insert into foo (a, b, c) values (10.0001, 'abc', 3)")
+            for r in conn.reel("""select * from foo
+            """):
+                print(r)
+
 
 unittest.main()
