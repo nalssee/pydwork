@@ -71,7 +71,12 @@ class Testdbopen(unittest.TestCase):
             print("==========")
             conn.show("select no, sl from top20_sl", n=3)
             print("----------")
-            conn.show(top20_sl, n=3, cols='no, sl')
+            # when passed a seq of grouped rows then n means the number of groups
+            # so the following will show them all
+            # conn.show(top20_sl, n=3, cols='no, sl')
+            # If you realy want see just nros, you should do instead,
+            conn.show(gflat(top20_sl()), n=3, cols='no sl')
+
             print("==========")
 
             r0, r1 = list(conn.reel("select avg(sl) as slavg from top20_sl group by sp1"))
@@ -238,5 +243,11 @@ class Testdbopen(unittest.TestCase):
             with self.assertRaises(ValueError):
                 # temp doesn't exist
                 conn.save(pick(safe(), "temp"))
+
+    def test_partial_loading(self):
+        # You can save only some part of a sequence.
+        with dbopen(':memory:') as conn:
+            conn.save(gby(load_csv('data/iris.csv'), 'Species'), n=1, name='setosa')
+            self.assertEqual(len(list(conn.reel('setosa'))), 50)
 
 unittest.main()
