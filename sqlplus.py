@@ -347,7 +347,6 @@ def gflat(seq):
         yield from seq
 
 
-# Haven't decided yet to export this or not
 def pick(seq, cols):
     """map only part of columns passed
 
@@ -356,12 +355,12 @@ def pick(seq, cols):
         cols: ex) 'col1 col2 col3' or 'col1, col2, col3'
     """
     cols = _listify(cols)
-    def key_func(row):
+    def partial_row(row):
         new_row = Row()
         for col in cols:
             setattr(new_row, col, getattr(row, col))
         return new_row
-    yield from map(key_func, seq)
+    yield from (partial_row(row) for row in seq)
 
 
 #  Useful for building portfolios
