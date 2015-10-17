@@ -22,7 +22,7 @@ This program does it.
 What you need to know is in unit test code at test/*
 """
 __all__ = ['dbopen', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl',
-           'chunkn', 'add_header', 'del_header', 'adjoin', 'disjoin', 'pick']
+           'chunk', 'add_header', 'del_header', 'adjoin', 'disjoin', 'pick']
 
 
 import sqlite3
@@ -85,8 +85,6 @@ class Row:
         # To preserve orders
         super().__setattr__('columns', [])
 
-    # You can of course just use '.values' but
-    # this is safer for later
     def get_values(self, columns):
         """Returns a list of values
 
@@ -113,7 +111,7 @@ class Row:
         super().__delattr__(name)
 
     def __str__(self):
-        return str(list(zip(self.columns, self.values)))
+        return str(list(zip(self.columns, self.get_values(self.columns))))
 
 
 class SQLPlus:
@@ -356,6 +354,7 @@ def pick(seq, cols):
     """
     cols = _listify(cols)
     def partial_row(row):
+        "a new row for cols"
         new_row = Row()
         for col in cols:
             setattr(new_row, col, getattr(row, col))
@@ -364,7 +363,7 @@ def pick(seq, cols):
 
 
 #  Useful for building portfolios
-def chunkn(seq, num):
+def chunk(seq, num):
     """Makes num chunks from a seq, each about the same size.
     """
     size = len(list(seq)) / num
