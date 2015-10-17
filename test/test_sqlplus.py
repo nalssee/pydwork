@@ -1,7 +1,6 @@
 import unittest
 from pydwork.sqlplus import *
-from itertools import islice
-
+from itertools import islice, groupby
 
 # This should work as a tutorial as well.
 print("\nNo need to read the following")
@@ -14,7 +13,6 @@ def fillin(line, n):
     if len(line) > n:
         return line[:n]
     return line
-
 
 class Testdbopen(unittest.TestCase):
     def test_loading(self):
@@ -49,6 +47,7 @@ class Testdbopen(unittest.TestCase):
             # function name just becomes the table name
             conn.save(first_char)
 
+
             def top20_sl():
                 rows = conn.reel("select * from first_char order by sp1, sl desc")
                 for g in gby(rows, "sp1"):
@@ -69,13 +68,11 @@ class Testdbopen(unittest.TestCase):
             conn.save(top20_sl)
 
             print("\nYou should see the same two tables")
-            print("=====================================")
-            # you can send a query
-            conn.show("top20_sl", num=3)
-            print("-------------------------------------")
-            # or just see the stream
-            conn.show(gflat(top20_sl()), num=3)
-            print("=====================================")
+            print("==========")
+            conn.show("select no, sl from top20_sl", n=3)
+            print("----------")
+            conn.show(top20_sl, n=3, cols='no, sl')
+            print("==========")
 
             r0, r1 = list(conn.reel("select avg(sl) as slavg from top20_sl group by sp1"))
             self.assertEqual(round(r0.slavg, 3), 5.335)
@@ -135,12 +132,12 @@ class Testdbopen(unittest.TestCase):
                     yield r
             print('\nco2 table')
             print('=============================================')
-            conn.show("select * from co2", num=2)
+            conn.show("co2", n=2)
             print('=============================================')
             print("\nco2 table without plant and conc")
             print('=============================================')
-            # of course you can call conn.show(co2_less('plant', 'conc'), num=2)
-            conn.show(co2_less, args=('plant', 'conc'), num=2)
+            # of course you can call conn.show(co2_less('plant', 'conc'), n=2)
+            conn.show(co2_less, args=('plant', 'conc'), n=2)
             print('=============================================')
             conn.save(co2_less, args=('plant', 'conc'))
 
@@ -213,5 +210,33 @@ class Testdbopen(unittest.TestCase):
             row = next(conn.reel('iris'))
             self.assertEqual(row.columns, ['temp', 'sepallength', 'sepalwidth',
                                            'petallength', 'petalwidth', 'species'])
+
+    def test_adjoin_disjoin(self):
+        with dbopen(':memory:') as conn:
+            def unsafe():
+                for rs in gby(load_csv('data/iris.csv'), 'Species', bind=False):
+                    rs[0].first = 'yes'
+                    rs[1].second = 'yes'
+                    rs[2].third = 'yes'
+                    del rs[2].temp
+                    yield from rs
+
+            # no need to use del anymore here
+            @disjoin('temp')
+            @adjoin('first', 'second', 'third')
+            def safe():
+                for rs in gby(load_csv('data/iris.csv'), 'Species', bind=False):
+                    rs[0].first = 'yes'
+                    rs[1].second = 'yes'
+                    rs[2].third = 'yes'
+                    yield from rs
+            with self.assertRaises(ValueError):
+                conn.save(unsafe)
+
+            # No error
+            conn.save(safe)
+            with self.assertRaises(ValueError):
+                # temp doesn't exist
+                conn.save(pick(safe(), "temp"))
 
 unittest.main()

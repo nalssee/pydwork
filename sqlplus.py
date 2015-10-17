@@ -22,7 +22,7 @@ This program does it.
 What you need to know is in unit test code at test/*
 """
 __all__ = ['dbopen', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl',
-           'chunkn', 'add_header', 'del_header']
+           'chunkn', 'add_header', 'del_header', 'adjoin', 'disjoin', 'pick']
 
 
 import sqlite3
@@ -36,6 +36,7 @@ import pandas as pd
 from collections import Counter
 from contextlib import contextmanager
 from itertools import groupby, islice, chain, zip_longest
+from functools import wraps
 
 
 # Some of the sqlite keywords are not allowed for column names
@@ -157,12 +158,13 @@ class SQLPlus:
 
         if name in self.tables:
             return
+        if name is None:
+            raise ValueError('name should be passed')
 
         try:
             row0, seq = _peek_first(seq)
         except StopIteration:
-            print("Empty sequence")
-            return
+            raise ValueError('Empty sequence')
 
         colnames = row0.columns
         # You can't save the iterator directly because
@@ -195,58 +197,63 @@ class SQLPlus:
             fport.seek(0)
             # read out the first line, header column
             fport.readline()
+
             for line in fport:
                 # line[:-1] because last index indicates '\n'
                 try:
                     line_vals = line[:-1].decode().split(',')
                     self._cursor.execute(istmt, line_vals)
                 except:
-                    print("Failed to save")
-                    for col, val in zip_longest(colnames, line_vals):
-                        print(col, val)
-                    raise ValueError("Invalid line to save")
+                    raise ValueError("Invalid line to save", line_vals)
         self.tables.append(name)
 
     # Be careful so that you don't overwrite the file
-    def show(self, query, args=(), filename=None, num=30):
+    def show(self, query, args=(), filename=None, n=30, cols=None):
         """Printing to a screen or saving to a file
 
         'query' can be either a SQL query string or an iterable.
         'n' is a maximun number of rows to show up,
-        if 'query' is the grouped iterator then n is the number of groups
         """
-        if isinstance(query, str):
-            # just a table name
-            rows = self._cursor.execute(_select_statement(query), args)
-            colnames = [c[0] for c in rows.description]
+        # so that you can easily maintain code
+        # Searching nrows is easier than searching n in editors
+        nrows = n
 
-        # then it is an iterable,
-        # i.e., a list or an iterator
+        if isinstance(query, str):
+            seq_rvals = self._cursor.execute(_select_statement(query), args)
+            colnames = [c[0] for c in seq_rvals.description]
+
+        # then query is an iterator of rows, or a list of rows
+        # of course it can be just a generator function of rows
         else:
-            if hasattr(query, '__call__'):
-                query = query(*args)
+            rows = query
+            if hasattr(rows, '__call__'):
+                rows = rows(*args)
+
+            if cols:
+                rows = pick(rows, cols)
+
             try:
-                row0, rows = _peek_first(query)
+                row0, rows = _peek_first(rows)
             except StopIteration:
-                print("Empty sequence")
+                print('Empty Sequence')
                 return
+
             colnames = row0.columns
             # implicit gflat
-            rows = (r.values for r in gflat(rows))
+            seq_rvals = (r.values for r in gflat(rows))
 
         if filename:
             # ignore n
             with open(filename, 'w') as fout:
                 fout.write(','.join(colnames) + '\n')
-                for row1 in rows:
-                    row1_str = [str(val) for val in row1]
-                    fout.write(','.join(row1_str) + '\n')
+                for rvals in seq_rvals:
+                    fout.write(','.join([str(val) for val in rvals]) + '\n')
         else:
             # show practically all columns
-            with pd.option_context("display.max_rows", num), \
+            with pd.option_context("display.max_rows", nrows), \
                  pd.option_context("display.max_columns", 1000):
                 # make use of pandas DataFrame displaying
-                print(pd.DataFrame(list(islice(rows, num)), columns=colnames))
+                print(pd.DataFrame(list(islice(seq_rvals, nrows)), columns=colnames))
 
     def list_tables(self):
         """List of table names in the database
@@ -273,7 +280,7 @@ def dbopen(dbfile):
 
 # 'grouped row' refers to a Row object
 # with all-list properties
-def gby(seq, group):
+def gby(seq, group, bind=True):
     """group the iterator by columns
 
     Based on 'groupby' from itertools
@@ -296,12 +303,16 @@ def gby(seq, group):
 
     g_seq = groupby(seq, group if hasattr(group, "__call__")
                     else (lambda x: [getattr(x, g) for g in _listify(group)]))
-    first_group = list(next(g_seq)[1])
-    colnames = first_group[0].columns
+    if bind:
+        first_group = list(next(g_seq)[1])
+        colnames = first_group[0].columns
 
-    yield grouped_row(first_group, colnames)
-    for _, rows in g_seq:
-        yield grouped_row(rows, colnames)
+        yield grouped_row(first_group, colnames)
+        for _, rows in g_seq:
+            yield grouped_row(rows, colnames)
+    else:
+        for _, rows in g_seq:
+            yield list(rows)
 
 
 def gflat(seq):
@@ -319,8 +330,24 @@ def gflat(seq):
                     setattr(result_row, col, val)
                 yield result_row
     else:
-        for row1 in seq:
-            yield row1
+        yield from seq
+
+
+# Haven't decided yet to export this or not
+def pick(seq, cols):
+    """map only part of columns passed
+
+    Generator
+    Args
+        cols: ex) 'col1 col2 col3' or 'col1, col2, col3'
+    """
+    cols = _listify(cols)
+    def key_func(row):
+        new_row = Row()
+        for col in cols:
+            setattr(new_row, col, getattr(row, col))
+        return new_row
+    yield from map(key_func, seq)
 
 
 #  Useful for building portfolios
@@ -412,6 +439,41 @@ def load_xl(xl_file, header=None):
         for col, val in zip(columns, cells):
             setattr(result_row, col, val)
         yield result_row
+
+
+def adjoin(*colnames):
+    """Decorator to ensure that the rows to have the columns for sure
+    """
+    def dec(gen):
+        @wraps(gen)
+        def wrapper(*args, **kwargs):
+            for row in gen(*args, **kwargs):
+                for col in colnames:
+                    try:
+                        getattr(row, col)
+                    except AttributeError:
+                        setattr(row, col, '')
+                yield row
+        return wrapper
+    return dec
+
+
+def disjoin(*colnames):
+    """Decorator to ensure that the rows are missing
+    """
+    def dec(gen):
+        @wraps(gen)
+        def wrapper(*args, **kwargs):
+            for row in gen(*args, **kwargs):
+                for col in colnames:
+                    # whatever it is, just delete it
+                    try:
+                        delattr(row, col)
+                    except:
+                        pass
+                yield row
+        return wrapper
+    return dec
 
 
 def _gen_valid_column_names(columns):
