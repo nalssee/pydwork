@@ -441,14 +441,14 @@ def load_xl(xl_file, header=None):
         yield result_row
 
 
-def adjoin(*colnames):
+def adjoin(colnames):
     """Decorator to ensure that the rows to have the columns for sure
     """
     def dec(gen):
         @wraps(gen)
         def wrapper(*args, **kwargs):
             for row in gen(*args, **kwargs):
-                for col in colnames:
+                for col in _listify(colnames):
                     try:
                         getattr(row, col)
                     except AttributeError:
@@ -458,14 +458,14 @@ def adjoin(*colnames):
     return dec
 
 
-def disjoin(*colnames):
+def disjoin(colnames):
     """Decorator to ensure that the rows are missing
     """
     def dec(gen):
         @wraps(gen)
         def wrapper(*args, **kwargs):
             for row in gen(*args, **kwargs):
-                for col in colnames:
+                for col in _listify(colnames):
                     # whatever it is, just delete it
                     try:
                         delattr(row, col)

@@ -223,7 +223,7 @@ class Testdbopen(unittest.TestCase):
 
             # no need to use del anymore here
             @disjoin('temp')
-            @adjoin('first', 'second', 'third')
+            @adjoin('first, second, third')
             def safe():
                 for rs in gby(load_csv('data/iris.csv'), 'Species', bind=False):
                     rs[0].first = 'yes'
