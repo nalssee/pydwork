@@ -82,26 +82,34 @@ class Row:
         r.x = 10; r.y = 20
         del r.x
         """
+        # To preserve orders
         super().__setattr__('columns', [])
-        super().__setattr__('values', [])
+
+    # You can of course just use '.values' but
+    # this is safer for later
+    def get_values(self, columns):
+        """Returns a list of values
+
+        Args
+            columns: list of column name strings
+        """
+        return [getattr(self, c) for c in columns]
 
     def __setattr__(self, name, value):
-        if name == 'columns' or name == 'values':
-            raise AttributeError('Name not allowed', name)
-        try:
-            loc = self.columns.index(name)
-            self.values[loc] = value
-        except:
+        if name == 'columns':
+            raise AttributeError("'columns' not allowed")
+
+        if name not in self.columns:
             self.columns.append(name)
-            self.values.append(value)
         super().__setattr__(name, value)
 
     def __delattr__(self, name):
-        if name == 'columns' or name == 'values':
-            raise AttributeError('Name not allowed', name)
-        loc = self.columns.index(name)
-        del self.columns[loc]
-        del self.values[loc]
+        if name == 'columns':
+            raise AttributeError("'columns' not allowed")
+        try:
+            del self.columns[self.columns.index(name)]
+        except:
+            raise AttributeError("Does not exist", name)
         super().__delattr__(name)
 
     def __str__(self):
@@ -192,7 +200,7 @@ class SQLPlus:
             fport.write((','.join(colnames) + '\n').encode())
             # implicitly flatten
             for row in gflat(seq):
-                vals = [str(v) for v in row.values]
+                vals = [str(v) for v in row.get_values(colnames)]
                 fport.write((','.join(vals) + '\n').encode())
 
             # create table
@@ -246,7 +254,7 @@ class SQLPlus:
 
             colnames = row0.columns
             # implicit gflat
-            seq_rvals = (r.values for r in gflat(rows))
+            seq_rvals = (r.get_values(colnames) for r in gflat(rows))
 
         if filename:
             # ignore n
@@ -330,7 +338,7 @@ def gflat(seq):
     # No idea how far should I go
     if isinstance(getattr(row0, colnames[0]), list):
         for g_row in seq:
-            for vals in zip(*g_row.values):
+            for vals in zip(*g_row.get_values(colnames)):
                 result_row = Row()
                 for col, val in zip(colnames, vals):
                     setattr(result_row, col, val)
@@ -456,7 +464,10 @@ def adjoin(colnames):
             for row in gen(*args, **kwargs):
                 for col in _listify(colnames):
                     try:
-                        getattr(row, col)
+                        # rearrange the order
+                        val = getattr(row, col)
+                        delattr(row, col)
+                        setattr(row, col, val)
                     except AttributeError:
                         setattr(row, col, '')
                 yield row

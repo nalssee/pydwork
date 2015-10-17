@@ -221,6 +221,9 @@ class Testdbopen(unittest.TestCase):
                     del rs[2].temp
                     yield from rs
 
+            with self.assertRaises(AttributeError):
+                conn.save(unsafe)
+
             # no need to use del anymore here
             @disjoin('temp')
             @adjoin('first, second, third')
@@ -230,14 +233,18 @@ class Testdbopen(unittest.TestCase):
                     rs[1].second = 'yes'
                     rs[2].third = 'yes'
                     yield from rs
-            with self.assertRaises(ValueError):
-                conn.save(unsafe)
 
             # No error
             conn.save(safe)
             with self.assertRaises(ValueError):
                 # temp doesn't exist
                 conn.save(pick(safe(), "temp"))
+
+            r1, r2, r3, *_ = safe()
+            self.assertEqual([r1.first, r1.second, r1.third], ['yes', '', ''])
+            self.assertEqual([r2.first, r2.second, r2.third], ['', 'yes', ''])
+            self.assertEqual([r3.first, r3.second, r3.third], ['', '', 'yes'])
+
 
     def test_partial_loading(self):
         # You can save only some part of a sequence.
