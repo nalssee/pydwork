@@ -71,12 +71,7 @@ class Testdbopen(unittest.TestCase):
             print("==========")
             conn.show("select no, sl from top20_sl", n=3)
             print("----------")
-            # when passed a seq of grouped rows then n means the number of groups
-            # so the following will show them all
-            # conn.show(top20_sl, n=3, cols='no, sl')
-            # If you realy want see just nros, you should do instead,
-            conn.show(gflat(top20_sl()), n=3, cols='no sl')
-
+            conn.show(top20_sl, n=3, cols='no, sl')
             print("==========")
 
             r0, r1 = list(conn.reel("select avg(sl) as slavg from top20_sl group by sp1"))

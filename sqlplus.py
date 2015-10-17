@@ -226,7 +226,6 @@ class SQLPlus:
 
         if isinstance(query, str):
             seq_rvals = self._cursor.execute(_select_statement(query), args)
-            seq_rvals_partial = islice(seq_rvals, nrows)
             colnames = [c[0] for c in seq_rvals.description]
 
         # then query is an iterator of rows, or a list of rows
@@ -248,7 +247,6 @@ class SQLPlus:
             colnames = row0.columns
             # implicit gflat
             seq_rvals = (r.values for r in gflat(rows))
-            seq_rvals_partial = (r.values for r in gflat(islice(rows, nrows)))
 
         if filename:
             # ignore n
@@ -258,10 +256,10 @@ class SQLPlus:
                     fout.write(','.join([str(val) for val in rvals]) + '\n')
         else:
             # show practically all rows, columns.
-            with pd.option_context("display.max_rows", 100000), \
+            with pd.option_context("display.max_rows", nrows), \
                  pd.option_context("display.max_columns", 1000):
                 # make use of pandas DataFrame displaying
-                print(pd.DataFrame(list(seq_rvals_partial), columns=colnames))
+                print(pd.DataFrame(list(islice(seq_rvals, nrows)), columns=colnames))
 
     def list_tables(self):
         """List of table names in the database
