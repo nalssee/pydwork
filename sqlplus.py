@@ -93,6 +93,14 @@ class Row:
         """
         return [getattr(self, c) for c in columns]
 
+    def __getattr__(self, name):
+        "if the attribute doesn't exist just return ''"
+        try:
+            val = super().__getattr__(name)
+        except AttributeError:
+            return ''
+        return val
+
     def __setattr__(self, name, value):
         if name == 'columns':
             raise AttributeError("'columns' not allowed")

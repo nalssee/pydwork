@@ -155,15 +155,16 @@ class Testdbopen(unittest.TestCase):
             conn.run("create table Foo (a int, B real)")
             conn.run("insert into foo values (10, 20.2)")
             rows = list(conn.reel('fOO'))
-            with self.assertRaises(AttributeError):
-                print(rows[0].b)
+
+            self.assertEqual(rows[0].b, '')
             self.assertEqual(rows[0].B, 20.2)
+
             # save it
             conn.save(conn.reel('foo'), name='foo1')
             rows = list(conn.reel('foo1'))
             # now it's lower cased
-            with self.assertRaises(AttributeError):
-                print(rows[0].B)
+            self.assertEqual(rows[0].B, '')
+            self.assertEqual(rows[0].b, 20.2)
 
     def test_add_header(self):
         with dbopen(':memory:') as conn:
@@ -220,9 +221,12 @@ class Testdbopen(unittest.TestCase):
                     rs[2].third = 'yes'
                     del rs[2].temp
                     yield from rs
-
-            with self.assertRaises(AttributeError):
-                conn.save(unsafe)
+            conn.save(unsafe)
+            for r in islice(conn.reel('unsafe'), 5):
+                self.assertEqual(r.columns, ['temp', 'sepallength', 'sepalwidth',
+                                             'petallength', 'petalwidth', 'species',
+                                             'first'
+                ])
 
             # no need to use del anymore here
             @disjoin('temp')
