@@ -1,6 +1,8 @@
 import unittest
 from pydwork.sqlplus import *
 from itertools import islice, groupby
+import pandas as pd
+
 
 # This should work as a tutorial as well.
 print("\nNo need to read the following")
@@ -269,5 +271,12 @@ class Testdbopen(unittest.TestCase):
             conn.save(foo)
             self.assertEqual([r.s for r in conn.reel('foo')],
                              ['setosa', 'versicolor', 'virginica'])
+
+    def test_df(self):
+        "Generate pandas dataframes"
+        with dbopen(':memory:') as conn:
+            conn.save(load_csv('data/iris.csv'), name='iris')
+            for df in gby(conn.reel('iris'), 'species', bind='df'):
+                self.assertEqual(df.shape, (50, 6))
 
 unittest.main()

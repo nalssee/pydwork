@@ -303,16 +303,24 @@ def dbopen(dbfile):
 # 'grouped row' refers to a Row object
 # with all-list properties
 def gby(seq, group, bind=True):
-    """group the iterator by columns
+    """Group the iterator by columns
 
-    Based on 'groupby' from itertools
+    Depends heavily on 'groupby' from itertools
 
-    seq is an iterator
-    'group' can be either a function or a list(tuple) of group names.
-
-    if group == [] then group them all
+    Args
+        seq: an iterator
+        group: Either a function, or a comma(space) separated string,
+               or a list(tuple) of strings
+               or [] to group them all
+        bind: True, for a grouped rows
+              'df', for a data frame
+              False, for a list of rows
     """
-    def grouped_row(rows, columns):
+    def todf(g_row):
+        "grouped row to a data from from pandas"
+        return pd.DataFrame({col:getattr(g_row, col) for col in g_row.columns})
+
+    def grouped_row(rows, columns, bind):
         """Returns a grouped row, from a list of simple rows
         """
         g_row = Row()
@@ -321,7 +329,8 @@ def gby(seq, group, bind=True):
         for row1 in rows:
             for col in columns:
                 getattr(g_row, col).append(getattr(row1, col))
-        return g_row
+        return todf(g_row) if isinstance(bind, str) and bind.upper() == 'DF' \
+            else g_row
 
     g_seq = groupby(seq, group if hasattr(group, "__call__")
                     else (lambda x: [getattr(x, g) for g in _listify(group)]))
@@ -329,9 +338,9 @@ def gby(seq, group, bind=True):
         first_group = list(next(g_seq)[1])
         colnames = first_group[0].columns
 
-        yield grouped_row(first_group, colnames)
+        yield grouped_row(first_group, colnames, bind)
         for _, rows in g_seq:
-            yield grouped_row(rows, colnames)
+            yield grouped_row(rows, colnames, bind)
     else:
         for _, rows in g_seq:
             yield list(rows)
