@@ -341,6 +341,7 @@ def gflat(seq):
     """Turn an iterator of grouped rows into an iterator of simple rows.
     """
     def tolist(val):
+        "if val is not a list then make it a list"
         if isinstance(val, list):
             return val
         else:
@@ -469,8 +470,10 @@ def adjoin(colnames):
     """Decorator to ensure that the rows to have the columns for sure
     """
     def dec(gen):
+        "real decorator"
         @wraps(gen)
         def wrapper(*args, **kwargs):
+            "if a column doesn't exist, append it"
             for row in gen(*args, **kwargs):
                 for col in _listify(colnames):
                     try:
@@ -489,8 +492,10 @@ def disjoin(colnames):
     """Decorator to ensure that the rows are missing
     """
     def dec(gen):
+        "real decorator"
         @wraps(gen)
         def wrapper(*args, **kwargs):
+            "Delete a column"
             for row in gen(*args, **kwargs):
                 for col in _listify(colnames):
                     # whatever it is, just delete it
