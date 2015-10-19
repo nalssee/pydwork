@@ -252,4 +252,18 @@ class Testdbopen(unittest.TestCase):
             conn.save(gby(load_csv('data/iris.csv'), 'Species'), n=78, name='setosa')
             self.assertEqual(len(list(conn.reel('setosa'))), 78)
 
+    def test_gflat2(self):
+        with dbopen(':memory:') as conn:
+            def foo():
+                for g in gby(load_csv('data/iris.csv'), 'Species'):
+                    r = Row()
+                    # sometimes just a value
+                    r.x = 10
+                    # sometimes a list, instead of g.Species[0], just
+                    r.s = g.Species
+                    yield r
+            conn.save(foo)
+            self.assertEqual([r.s for r in conn.reel('foo')],
+                             ['setosa', 'versicolor', 'virginica'])
+
 unittest.main()

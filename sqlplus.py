@@ -332,19 +332,21 @@ def gby(seq, group, bind=True):
 def gflat(seq):
     """Turn an iterator of grouped rows into an iterator of simple rows.
     """
+    def tolist(val):
+        if isinstance(val, list):
+            return val
+        else:
+            return [val]
+
     row0, seq = _peek_first(seq)
     colnames = row0.columns
-    # Every attribute must be a list
-    # No idea how far should I go
-    if isinstance(getattr(row0, colnames[0]), list):
-        for g_row in seq:
-            for vals in zip(*g_row.get_values(colnames)):
-                result_row = Row()
-                for col, val in zip(colnames, vals):
-                    setattr(result_row, col, val)
-                yield result_row
-    else:
-        yield from seq
+
+    for row in seq:
+        for vals in zip(*(tolist(getattr(row, col)) for col in colnames)):
+            new_row = Row()
+            for col, val in zip(colnames, vals):
+                setattr(new_row, col, val)
+            yield new_row
 
 
 def pick(seq, cols):
