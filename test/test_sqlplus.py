@@ -249,7 +249,7 @@ class Testdbopen(unittest.TestCase):
     def test_partial_loading(self):
         # You can save only some part of a sequence.
         with dbopen(':memory:') as conn:
-            conn.save(gby(load_csv('data/iris.csv'), 'Species'), n=1, name='setosa')
-            self.assertEqual(len(list(conn.reel('setosa'))), 50)
+            conn.save(gby(load_csv('data/iris.csv'), 'Species'), n=78, name='setosa')
+            self.assertEqual(len(list(conn.reel('setosa'))), 78)
 
 unittest.main()

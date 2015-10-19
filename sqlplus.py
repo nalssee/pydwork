@@ -165,6 +165,8 @@ class SQLPlus:
             name = name or seq.__name__
             seq = seq(*args)
 
+        # implicitly gflat
+        seq = gflat(seq)
         if nrow:
             seq = islice(seq, nrow)
 
@@ -197,7 +199,7 @@ class SQLPlus:
             # encode it as binary.
             fport.write((','.join(colnames) + '\n').encode())
             # implicitly flatten
-            for row in gflat(seq):
+            for row in seq:
                 vals = [str(v) for v in row.get_values(colnames)]
                 fport.write((','.join(vals) + '\n').encode())
 
