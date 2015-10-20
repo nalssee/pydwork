@@ -351,13 +351,13 @@ def gflat(seq):
     """
     def tolist(val):
         "if val is not a list then make it a list"
-        if isinstance(val, list):
-            return val
+        if isinstance(val, list) or isinstance(val, pd.core.series.Series):
+            return list(val)
         else:
             return [val]
 
     row0, seq = _peek_first(seq)
-    colnames = row0.columns
+    colnames = list(row0.columns)
 
     for row in seq:
         for vals in zip(*(tolist(getattr(row, col)) for col in colnames)):
@@ -484,6 +484,9 @@ def adjoin(colnames):
         def wrapper(*args, **kwargs):
             "if a column doesn't exist, append it"
             for row in gen(*args, **kwargs):
+                # row must be a Row instance,
+                # Do not use this for dataframes, it's really not necessary
+                assert isinstance(row, Row)
                 for col in _listify(colnames):
                     try:
                         # rearrange the order
@@ -506,6 +509,9 @@ def disjoin(colnames):
         def wrapper(*args, **kwargs):
             "Delete a column"
             for row in gen(*args, **kwargs):
+                assert isinstance(row, Row)
+                # row must be a Row instance,
+                # Do not use this for dataframes, it's really not necessary
                 for col in _listify(colnames):
                     # whatever it is, just delete it
                     try:

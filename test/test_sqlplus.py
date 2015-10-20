@@ -279,4 +279,30 @@ class Testdbopen(unittest.TestCase):
             for df in gby(conn.reel('iris'), 'species', bind='df'):
                 self.assertEqual(df.shape, (50, 6))
 
+    def test_gflat3(self):
+        "Yield pandas data frames and they are flattened again"
+        with dbopen(':memory:') as conn:
+            conn.save(load_csv('data/iris.csv'), name='iris')
+
+            # do not use adjoin or disjoin. it's crazy
+            def length_plus_width():
+                for df in gby(conn.reel('iris'), 'species', bind='df'):
+                    df['sepal'] = df.sepallength + df.sepalwidth
+                    df['petal'] = df.petallength + df.petalwidth
+                    del df['sepallength']
+                    del df['sepalwidth']
+                    del df['petallength']
+                    del df['petalwidth']
+                    yield df
+
+            conn.save(length_plus_width)
+            iris_add = list(conn.reel('length_plus_width'))
+            for r1, r2 in zip(conn.reel('iris'), iris_add):
+                a = round(r1.sepallength + r1.sepalwidth, 2)
+                b = round(r2.sepal, 2)
+                self.assertEqual(a, b)
+                c = round(r1.petallength + r1.petalwidth, 2)
+                d = round(r2.petal, 2)
+                self.assertEqual(c, d)
+
 unittest.main()
