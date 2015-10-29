@@ -1,7 +1,11 @@
+import sys
+sys.path.append('/Users/kenjin/py')
+
 import unittest
 from pydwork.sqlplus import *
 from itertools import islice, groupby
 import pandas as pd
+
 
 
 # This should work as a tutorial as well.
