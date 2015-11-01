@@ -283,11 +283,10 @@ class Testdbopen(unittest.TestCase):
                              ['setosa', 'versicolor', 'virginica'])
 
     def test_df(self):
-        "Generate pandas dataframes"
         with dbopen(':memory:') as conn:
             conn.save(load_csv(dpath('iris.csv')), name='iris')
-            for df in gby(conn.reel('iris'), 'species', bind='df'):
-                self.assertEqual(df.shape, (50, 6))
+            for g in gby(conn.reel('iris'), 'species'):
+                self.assertEqual(todf(g).shape, (50, 6))
 
     def test_gflat3(self):
         "Yield pandas data frames and they are flattened again"
@@ -296,7 +295,8 @@ class Testdbopen(unittest.TestCase):
 
             # do not use adjoin or disjoin. it's crazy
             def length_plus_width():
-                for df in gby(conn.reel('iris'), 'species', bind='df'):
+                for g in gby(conn.reel('iris'), 'species'):
+                    df = todf(g)
                     df['sepal'] = df.sepallength + df.sepalwidth
                     df['petal'] = df.petallength + df.petalwidth
                     del df['sepallength']

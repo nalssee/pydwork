@@ -21,8 +21,9 @@ This program does it.
 
 What you need to know is in unit test code at test/*
 """
-__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl',
-           'chunk', 'add_header', 'del_header', 'adjoin', 'disjoin', 'pick']
+__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl'
+           ,'chunk', 'add_header', 'del_header', 'adjoin', 'disjoin', 'pick'
+           ,'todf']
 
 
 import sqlite3
@@ -313,14 +314,9 @@ def gby(seq, group, bind=True):
                or a list(tuple) of strings
                or [] to group them all
         bind: True, for a grouped rows
-              'df', for a data frame
               False, for a list of rows
     """
-    def todf(g_row):
-        "grouped row to a data from from pandas"
-        return pd.DataFrame({col:getattr(g_row, col) for col in g_row.columns})
-
-    def grouped_row(rows, columns, bind):
+    def _grouped_row(rows, columns):
         """Returns a grouped row, from a list of simple rows
         """
         g_row = Row()
@@ -329,8 +325,7 @@ def gby(seq, group, bind=True):
         for row1 in rows:
             for col in columns:
                 getattr(g_row, col).append(getattr(row1, col))
-        return todf(g_row) if isinstance(bind, str) and bind.upper() == 'DF' \
-            else g_row
+        return g_row
 
     g_seq = groupby(seq, group if hasattr(group, "__call__")
                     else (lambda x: [getattr(x, g) for g in _listify(group)]))
@@ -338,12 +333,17 @@ def gby(seq, group, bind=True):
         first_group = list(next(g_seq)[1])
         colnames = first_group[0].columns
 
-        yield grouped_row(first_group, colnames, bind)
+        yield _grouped_row(first_group, colnames)
         for _, rows in g_seq:
-            yield grouped_row(rows, colnames, bind)
+            yield _grouped_row(rows, colnames)
     else:
         for _, rows in g_seq:
             yield list(rows)
+
+
+def todf(g_row):
+    "A grouped row to a data from from pandas"
+    return pd.DataFrame({col:getattr(g_row, col) for col in g_row.columns})
 
 
 def gflat(seq):
