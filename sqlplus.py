@@ -21,7 +21,7 @@ This program does it.
 
 What you need to know is in unit test code at test/*
 """
-__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl'
+__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'load_csv'
            ,'chunk', 'add_header', 'del_header', 'adjoin', 'disjoin', 'pick'
            ,'todf']
 
@@ -29,7 +29,6 @@ __all__ = ['dbopen', 'Row', 'gby', 'gflat', 'load_csv', 'load_xl'
 import sqlite3
 import csv
 import tempfile
-import openpyxl
 import re
 import fileinput
 import pandas as pd
@@ -440,39 +439,6 @@ def load_csv(csv_file, header=None, line_fix=(lambda x: x)):
             for col, val in zip(columns, line):
                 setattr(row1, col, val)
             yield row1
-
-
-# todo
-def load_xl(xl_file, header=None):
-    """Loads an Excel file. Only the first sheet
-
-    Basically the same as load_csv.
-    """
-    def remove_comma(cell):
-        """Extracts a comma-removed value from a cell.
-
-        32,120 => 32120
-        """
-        return str(cell.value).strip().replace(",", "")
-
-    wbook = openpyxl.load_workbook(xl_file)
-    sheet_names = wbook.get_sheet_names()
-    # only the first sheet
-    sheet = wbook.get_sheet_by_name(sheet_names[0])
-    rows = sheet.rows
-    header = header or [remove_comma(c) for c in rows[0]]
-    columns = _gen_valid_column_names(_listify(header))
-    for row in rows[1:]:
-        cells = []
-        for cell in row:
-            if cell.value is None:
-                cells.append("")
-            else:
-                cells.append(remove_comma(cell))
-        result_row = Row()
-        for col, val in zip(columns, cells):
-            setattr(result_row, col, val)
-        yield result_row
 
 
 def adjoin(colnames):

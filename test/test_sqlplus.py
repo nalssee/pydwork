@@ -36,13 +36,6 @@ class Testdbopen(unittest.TestCase):
             # No type guessing is attempted.
             conn.save(load_csv(dpath('iris.csv'), header="no sl sw pl pw species"), name="iris")
 
-            iris1 = load_csv(dpath('iris.csv'), header="no sl sw pl pw species")
-            # Load excel file
-            iris2 = load_xl(dpath('iris.xlsx'), header="no sl sw pl pw species")
-            for a, b in zip(iris1, iris2):
-                self.assertEqual(a.sl, b.sl)
-                self.assertEqual(a.pl, b.pl)
-
     def test_gby(self):
         """Just a dumb presentation to show how 'gby' works.
         """
