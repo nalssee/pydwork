@@ -241,7 +241,7 @@ class SQLPlus:
         nrows = n
 
         if isinstance(query, str):
-            seq_rvals = self._cursor.execute(_select_statement(query), args)
+            seq_rvals = self._cursor.execute(_select_statement(query, cols), args)
             colnames = [c[0] for c in seq_rvals.description]
 
         # then query is an iterator of rows, or a list of rows
@@ -568,10 +568,11 @@ def _insert_statement(name, ncol):
     return "insert into %s values (%s)" % (name, qmarks)
 
 
-def _select_statement(query):
+def _select_statement(query, cols=None):
     """If query is just one word, then it is transformed to a select stmt
     or leave it
     """
+    cols = cols or '*'
     if len(query.strip().split(' ')) == 1:
-        return "select * from " + query
+        return "select %s from %s" % (', '.join(_listify(cols)), query)
     return query
