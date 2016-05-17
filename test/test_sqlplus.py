@@ -1,14 +1,16 @@
 import os
 import sys
+import unittest
+from itertools import groupby, islice
+
+import pandas as pd
+from pydwork.sqlplus import *
 
 TESTPATH = os.path.dirname(os.path.realpath(__file__))
 PYPATH = os.path.join(TESTPATH, '..', '..')
 sys.path.append(PYPATH)
 
-import unittest
-from pydwork.sqlplus import *
-from itertools import islice, groupby
-import pandas as pd
+
 
 def dpath(filename):
     return os.path.join(TESTPATH, 'data', filename)
@@ -18,6 +20,7 @@ def dpath(filename):
 print("\nNo need to read the following")
 print("Simply skim through, and recognize if it's not too weird\n\n")
 
+
 def fillin(line, n):
     """For invalid line handling"""
     if len(line) < n:
@@ -26,15 +29,18 @@ def fillin(line, n):
         return line[:n]
     return line
 
+
 class Testdbopen(unittest.TestCase):
+
     def test_loading(self):
         with dbopen(':memory:') as conn:
             with self.assertRaises(ValueError):
                 # column number mismatch, notice pw is missing
                 next(load_csv(dpath('iris.csv'), header="no sl sw pl species"))
-            # when it's loaded, it's just an iterator of objects with string only properties.
-            # No type guessing is attempted.
-            conn.save(load_csv(dpath('iris.csv'), header="no sl sw pl pw species"), name="iris")
+            # when it's loaded, it's just an iterator of objects
+            # with string only properties. No type guessing is attempted.
+            conn.save(load_csv(dpath('iris.csv'),
+                               header="no sl sw pl pw species"), name="iris")
 
     def test_gby(self):
         """Just a dumb presentation to show how 'gby' works.
@@ -52,9 +58,9 @@ class Testdbopen(unittest.TestCase):
             # function name just becomes the table name
             conn.save(first_char)
 
-
             def top20_sl():
-                rows = conn.reel("select * from first_char order by sp1, sl desc")
+                rows = conn.reel(
+                    "select * from first_char order by sp1, sl desc")
                 for g in gby(rows, "sp1"):
                     # g is again an object
                     # just each property is a list.
@@ -79,7 +85,8 @@ class Testdbopen(unittest.TestCase):
             conn.show(top20_sl, n=3, cols='no, sl')
             print("==========")
 
-            r0, r1 = list(conn.reel("select avg(sl) as slavg from top20_sl group by sp1"))
+            r0, r1 = list(
+                conn.reel("select avg(sl) as slavg from top20_sl group by sp1"))
             self.assertEqual(round(r0.slavg, 3), 5.335)
             self.assertEqual(round(r1.slavg, 3), 7.235)
 
@@ -101,7 +108,8 @@ class Testdbopen(unittest.TestCase):
         """Tests if applying gby and gflat subsequently yields the original
         """
         with dbopen(':memory:') as conn:
-            conn.save(load_csv(dpath("iris.csv"), header="no,sl,sw,pl,pw,sp"), name="iris")
+            conn.save(load_csv(dpath("iris.csv"),
+                               header="no,sl,sw,pl,pw,sp"), name="iris")
             a = list(conn.reel("select * from iris order by sl"))
             b = list(gflat(gby(conn.reel("select * from iris order by sl"), 'sl')))
             for a1, b1 in zip(a, b):
@@ -110,8 +118,10 @@ class Testdbopen(unittest.TestCase):
 
     def test_run_over_run(self):
         with dbopen(':memory:') as conn:
-            conn.save(load_csv(dpath("iris.csv"), header="no,sl,sw,pl,pw,sp"), name="iris1")
-            conn.save(load_csv(dpath("iris.csv"), header="no,sl,sw,pl,pw,sp"), name="iris2")
+            conn.save(load_csv(dpath("iris.csv"),
+                               header="no,sl,sw,pl,pw,sp"), name="iris1")
+            conn.save(load_csv(dpath("iris.csv"),
+                               header="no,sl,sw,pl,pw,sp"), name="iris2")
             a = conn.reel("select * from iris1 where sp='setosa'")
             b = conn.reel("select * from iris2 where sp='versicolor'")
             self.assertEqual(next(a).sp, 'setosa')
@@ -128,6 +138,7 @@ class Testdbopen(unittest.TestCase):
         """
         with dbopen(':memory:') as conn:
             conn.save(load_csv(dpath('co2.csv')), name='co2')
+
             def co2_less(*col):
                 """remove columns"""
                 co2 = conn.reel("select * from co2")
@@ -174,24 +185,28 @@ class Testdbopen(unittest.TestCase):
     def test_add_header(self):
         with dbopen(':memory:') as conn:
             with self.assertRaises(ValueError):
-                for r in load_csv(dpath('wierd.csv')): pass
+                for r in load_csv(dpath('wierd.csv')):
+                    pass
             try:
                 add_header(dpath('wierd.csv'), 'a,b,c')
-                rows = list(load_csv(dpath('wierd.csv'), line_fix=lambda x: fillin(x, 3)))
+                rows = list(load_csv(dpath('wierd.csv'),
+                                     line_fix=lambda x: fillin(x, 3)))
             finally:
                 del_header(dpath('wierd.csv'))
 
             self.assertEqual(len(rows), 7)
             conn.save(rows, name='wierd')
 
-            avals =[r.a for r in conn.reel("select * from wierd order by a")][:3]
+            avals = [r.a for r in conn.reel(
+                "select * from wierd order by a")][:3]
             self.assertEqual(avals, [10, 20, 30])
 
     def test_column_generation(self):
         with dbopen(':memory:') as conn:
             try:
                 add_header(dpath('wierd.csv'), 'a,,b,c,c,a,')
-                row = next(load_csv(dpath('wierd.csv'), line_fix=lambda x: fillin(x, 7)))
+                row = next(load_csv(dpath('wierd.csv'),
+                                    line_fix=lambda x: fillin(x, 7)))
                 self.assertEqual(row.columns,
                                  ['a0', 'temp0', 'b', 'c0', 'c1', 'a1', 'temp1'])
             finally:
@@ -201,7 +216,8 @@ class Testdbopen(unittest.TestCase):
                 # in and no are keywords
                 # no is ok
                 add_header(dpath('wierd.csv'), '_1, in, no, *-*a, a')
-                row = next(load_csv(dpath('wierd.csv'), line_fix=lambda x: fillin(x, 5)))
+                row = next(load_csv(dpath('wierd.csv'),
+                                    line_fix=lambda x: fillin(x, 5)))
                 self.assertEqual(row.columns,
                                  ['a__1', 'a_in', 'no', 'a0', 'a1'])
             finally:
@@ -231,7 +247,7 @@ class Testdbopen(unittest.TestCase):
                 self.assertEqual(r.columns, ['temp', 'sepallength', 'sepalwidth',
                                              'petallength', 'petalwidth', 'species',
                                              'first'
-                ])
+                                             ])
 
             # no need to use del anymore here
             @disjoin('temp')
@@ -254,11 +270,11 @@ class Testdbopen(unittest.TestCase):
             self.assertEqual([r2.first, r2.second, r2.third], ['', 'yes', ''])
             self.assertEqual([r3.first, r3.second, r3.third], ['', '', 'yes'])
 
-
     def test_partial_loading(self):
         # You can save only some part of a sequence.
         with dbopen(':memory:') as conn:
-            conn.save(gby(load_csv(dpath('iris.csv')), 'Species'), n=78, name='setosa')
+            conn.save(gby(load_csv(dpath('iris.csv')),
+                          'Species'), n=78, name='setosa')
             self.assertEqual(len(list(conn.reel('setosa'))), 78)
 
     def test_gflat2(self):
