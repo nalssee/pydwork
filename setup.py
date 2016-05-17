@@ -1,7 +1,9 @@
+import os
 from setuptools import setup
 
+dir = os.path.dirname(os.path.realpath(__file__))
 
-with open('requirements.txt') as f:
+with open(os.path.join(dir, 'requirements.txt')) as f:
     required = f.read().splitlines()
 
 
