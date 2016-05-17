@@ -1,3 +1,4 @@
+
 """
 'sqlite3' based SQL utils
 
@@ -21,22 +22,21 @@ This program does it.
 
 What you need to know is in unit test code at test/*
 """
-__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'load_csv'
-           ,'chunk', 'add_header', 'del_header', 'adjoin', 'disjoin', 'pick'
-           ,'todf']
 
-
-import sqlite3
 import csv
-import tempfile
-import re
 import fileinput
-import pandas as pd
-
+import re
+import sqlite3
+import tempfile
 from collections import Counter
 from contextlib import contextmanager
-from itertools import groupby, islice, chain
 from functools import wraps
+from itertools import chain, groupby, islice
+
+import pandas as pd
+
+__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'load_csv', 'chunk',
+           'add_header', 'del_header', 'adjoin', 'disjoin', 'pick', 'todf']
 
 
 # Some of the sqlite keywords are not allowed for column names
@@ -45,14 +45,14 @@ SQLITE_KEYWORDS = [
     "ABORT", "ACTION", "ADD", "AFTER", "ALL", "ALTER", "ANALYZE", "AND",
     "AS", "ASC", "ATTACH", "AUTOINCREMENT", "BEFORE", "BEGIN", "BETWEEN",
     "BY", "CASCADE", "CASE", "CAST", "CHECK", "COLLATE", "COLUMN", "COMMIT",
-    "CONFLICT", "CONSTRAINT", "CREATE", "CROSS", "CURRENT_DATE", "CURRENT_TIME",
-    "CURRENT_TIMESTAMP", "DATABASE", "DEFAULT", "DEFERRABLE", "DEFERRED",
-    "DELETE", "DESC", "DETACH", "DISTINCT", "DROP", "EACH", "ELSE", "END",
-    "ESCAPE", "EXCEPT", "EXCLUSIVE", "EXISTS", "EXPLAIN", "FAIL", "FOR",
-    "FOREIGN", "FROM", "FULL", "GLOB", "GROUP", "HAVING", "IF", "IGNORE",
-    "IMMEDIATE", "IN", "INDEX", "INDEXED", "INITIALLY", "INNER", "INSERT", "INSTEAD",
-    "INTERSECT", "INTO", "IS", "ISNULL", "JOIN", "KEY", "LEFT", "LIKE", "LIMIT",
-    "MATCH", "NATURAL",
+    "CONFLICT", "CONSTRAINT", "CREATE", "CROSS", "CURRENT_DATE",
+    "CURRENT_TIME", "CURRENT_TIMESTAMP", "DATABASE", "DEFAULT", "DEFERRABLE",
+    "DEFERRED", "DELETE", "DESC", "DETACH", "DISTINCT", "DROP", "EACH", "ELSE",
+    "END", "ESCAPE", "EXCEPT", "EXCLUSIVE", "EXISTS", "EXPLAIN", "FAIL",
+    "FOR", "FOREIGN", "FROM", "FULL", "GLOB", "GROUP", "HAVING", "IF",
+    "IGNORE", "IMMEDIATE", "IN", "INDEX", "INDEXED", "INITIALLY", "INNER",
+    "INSERT", "INSTEAD", "INTERSECT", "INTO", "IS", "ISNULL", "JOIN", "KEY",
+    "LEFT", "LIKE", "LIMIT", "MATCH", "NATURAL",
     # no is ok somehow
     # no idea why
     # "NO",
@@ -61,8 +61,8 @@ SQLITE_KEYWORDS = [
     "PRAGMA", "PRIMARY", "QUERY", "RAISE", "REFERENCES", "REGEXP", "REINDEX",
     "RENAME", "REPLACE", "RESTRICT", "RIGHT", "ROLLBACK", "ROW", "SAVEPOINT",
     "SELECT", "SET", "TABLE", "TEMP", "TEMPORARY", "THEN", "TO", "TRANSACTION",
-    "TRIGGER", "UNION", "UNIQUE", "UPDATE", "USING", "VACUUM", "VALUES", "VIEW",
-    "VIRTUAL", "WHEN", "WHERE"
+    "TRIGGER", "UNION", "UNIQUE", "UPDATE", "USING", "VACUUM", "VALUES",
+    "VIEW", "VIRTUAL", "WHEN", "WHERE"
 ]
 
 
@@ -75,6 +75,7 @@ class Row:
 
     Pretty much nothing, but essential part of this program.
     """
+
     def __init__(self):
         """Example:
 
@@ -125,6 +126,7 @@ class Row:
 class SQLPlus:
     """SQLPlus object works like a sql cursor.
     """
+
     def __init__(self, dbfile):
         self._dbfile = dbfile
         self.conn = sqlite3.connect(self._dbfile)
@@ -241,7 +243,8 @@ class SQLPlus:
         nrows = n
 
         if isinstance(query, str):
-            seq_rvals = self._cursor.execute(_select_statement(query, cols), args)
+            seq_rvals = self._cursor.execute(
+                _select_statement(query, cols), args)
             colnames = [c[0] for c in seq_rvals.description]
 
         # then query is an iterator of rows, or a list of rows
@@ -273,9 +276,10 @@ class SQLPlus:
         else:
             # show practically all rows, columns.
             with pd.option_context("display.max_rows", nrows), \
-                 pd.option_context("display.max_columns", 1000):
+                    pd.option_context("display.max_columns", 1000):
                 # make use of pandas DataFrame displaying
-                print(pd.DataFrame(list(islice(seq_rvals, nrows)), columns=colnames))
+                print(pd.DataFrame(list(islice(seq_rvals, nrows)),
+                                   columns=colnames))
 
     def list_tables(self):
         """List of table names in the database
@@ -342,7 +346,7 @@ def gby(seq, group, bind=True):
 
 def todf(g_row):
     "A grouped row to a data from from pandas"
-    return pd.DataFrame({col:getattr(g_row, col) for col in g_row.columns})
+    return pd.DataFrame({col: getattr(g_row, col) for col in g_row.columns})
 
 
 def gflat(seq):
@@ -374,6 +378,7 @@ def pick(seq, cols):
         cols: ex) 'col1 col2 col3' or 'col1, col2, col3'
     """
     cols = _listify(cols)
+
     def partial_row(row):
         "a new row for cols"
         new_row = Row()
@@ -410,7 +415,8 @@ def add_header(filename, header):
 def del_header(filename, num=1):
     """Delete n lines from a file
     """
-    for line_number, line in enumerate(fileinput.input(filename, inplace=True)):
+    for line_number, line in enumerate(fileinput.input(filename,
+                                                       inplace=True)):
         if line_number >= num:
             print(line, end='')
 
@@ -512,7 +518,7 @@ def _gen_valid_column_names(columns):
         return temp_columns
 
     # Tag numbers to column-names starting from 0 if there are duplicates
-    cnt = {col:n for col, n in Counter(temp_columns).items() if n > 1}
+    cnt = {col: n for col, n in Counter(temp_columns).items() if n > 1}
     cnt_copy = dict(cnt)
 
     result_columns = []
