@@ -1,3 +1,5 @@
-TAGS
 __pycache__
-venv
+*.pyc
+/*.egg-info
+/dist/
+
