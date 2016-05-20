@@ -3,43 +3,48 @@ Most of the time I had to use selenium (with firefox or phantomjs)
 not 'requests'
 """
 
+
 import os
-import logging
 import pickle
 import pandas as pd
 from . import npc
 from datetime import datetime
 
 
-
-__all__ = ['fetch_items', 'result_files_to_df', 'RESULT_FILE_PREFIX',
-           'load_items_dict', 'show_failed_items',
-           'LOG_FILE', 'PICKLE_FILE']
+__all__ = ['fetch_items', 'result_files_to_df']
 
 
 RESULT_FILE_PREFIX = 'result'
-LOG_FILE = 'logfile.txt'
-PICKLE_FILE = 'items_dict.pkl'
 
 
-def fetch_items(drivers, items_dict, fetchfn,
-                max_items=1000000, save_every_n=100, max_trials=3):
+# This function should never raise an error
+# unless you ctrl-c
+def fetch_items(drivers, items, fetchfn,
+                max_items=1000000, save_every_n=100, max_trials=3,
+                base_dir=os.getcwd(), reset_dir=False):
     """
+    ===================================
+    READ CAREFULLY!!!
+    ===================================
+
     drivers: A list of selenium web drivers
-    items_dict: to-fetch-items dictionary.
-                values are number of trials.
-    fetch_fn: driver, item(a key of items_dict) -> pd.DataFrame
+    items: list of strings to fetch
+       (if reset_dir is False, items is simply ignored and items_dict picke file
+       is used for fetching items)
+    fetch_fn: driver, item -> pd.DataFrame
     max_trials: If fetching fails more than max_trials just skip it
-    Others are obvious.
+    max_items: you can pass lots of items and just part of them are fetched
+                so you can do the work later
+    save_every_n: save every n items
+    base_dir: folder to save results and an items_dict pickle file
+    reset_dir: if True, remove results and and items_dict pickle file
+         and items_dict pickle file is initiated with items
 
     search for files like RESULT_FILE_PREFIX +
     "2015-06-17 10:04:54.560384.csv" files
     """
-    # logging setup
-    logging.basicConfig(filename=LOG_FILE,
-                        format='%(asctime)s - %(levelname)s - %(message)s',
-                        level=logging.INFO)
-    logging.getLogger().addHandler(logging.StreamHandler())
+
+    PICKLE_FILE = os.path.join(base_dir, 'items_dict.pkl')
 
     def dict_to_list(items_dict):
         result = []
@@ -52,8 +57,41 @@ def fetch_items(drivers, items_dict, fetchfn,
                 count += 1
         return result
 
+    def load_items_dict():
+        with open(PICKLE_FILE, 'rb') as fport:
+            items_dict = pickle.load(fport)
+        print("Loading items_dict.pkl file ...")
+        print('total: %d' % len(items_dict))
+        print('failed: %d' % len([_ for _, v in items_dict.items() if v != -1]))
+        print('succeeded: %d', len([_ for _, v in items_dict.items() if v == -1]))
+        return items_dict
+
+
+    if reset_dir:
+        # remove all files related to reset them all
+        for rfile in os.listdir(base_dir):
+            if rfile.startswith(RESULT_FILE_PREFIX):
+                os.remove(rfile)
+        try:
+            os.remove(PICKLE_FILE)
+        except:
+            pass
+
+
+    if os.path.isfile(PICKLE_FILE):
+        items_dict = load_items_dict()
+    else:
+        # initiate items_dict with items
+        items_dict = {}
+        for item in items:
+            items_dict[item] = 0
+
+    # it is a bit silly to turn a list to dict and back to a list again
+    # but to keep consistency with other cases and to keep it simple
+    # I will just leave it as is
     items = dict_to_list(items_dict)
-    logging.info('{} items to fetch'.format(min(len(items), max_items)))
+
+    print('{} items to fetch'.format(min(len(items), max_items)))
 
     failure_string = npc.random_string(20)
 
@@ -75,19 +113,19 @@ def fetch_items(drivers, items_dict, fetchfn,
         nonlocal results, count
         status, item, df = result1
         if status == failure_string:
-            logging.warning("Failed To Fetch: " + str(item))
+            print("Failed To Fetch: " + str(item))
             items_dict[item] += 1
         else:
             items_dict[item] = -1
             results.append(df)
             if len(results)  == save_every_n:
                 count += save_every_n
-                logging.info('Fetched ' + str(count) + ' items')
+                print('Fetched ' + str(count) + ' items')
                 save_results()
                 results = []
 
     def save_results():
-        rfile = RESULT_FILE_PREFIX + str(datetime.now()) + '.csv'
+        rfile = os.path.join(base_dir, RESULT_FILE_PREFIX + str(datetime.now()) + '.csv')
         pd.concat(results).to_csv(rfile, index=False)
 
     for driver, chunk in zip(drivers, npc.nchunks(items, len(drivers))):
@@ -98,25 +136,18 @@ def fetch_items(drivers, items_dict, fetchfn,
     if results:
         save_results()
 
+    # Show failed items
+    print("Failed items to fetch")
+    for k, v in items_dict.items():
+        if v != -1:
+            print(k)
+
     # save items_dict for later in case you haven't finished fetching
     # and want to do it later.
     with open(PICKLE_FILE, 'wb') as f:
         pickle.dump(items_dict, f)
 
-
-def load_items_dict():
-    with open(PICKLE_FILE, 'rb') as fport:
-        items_dict = pickle.load(fport)
-    print('total: ', len(items_dict))
-    print('failed: ', len([_ for _, v in items_dict.items() if v != -1]))
-    print('succeeded: ', len([_ for _, v in items_dict.items() if v == -1]))
-    return items_dict
-
-
-def show_failed_items(items_dict):
-    for k, v in items_dict.items():
-        if v != -1:
-            print(k, v)
+    print("Done fetching")
 
 
 def result_files_to_df(path=os.getcwd()):
@@ -124,4 +155,5 @@ def result_files_to_df(path=os.getcwd()):
     for rfile in os.listdir(path):
         if rfile.startswith(RESULT_FILE_PREFIX) and rfile.endswith('.csv'):
             result_dfs.append(pd.read_csv(rfile))
+
     return pd.concat(result_dfs)
