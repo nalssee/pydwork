@@ -63,7 +63,7 @@ def fetch_items(drivers, items, fetchfn,
         print("Loading items_dict.pkl file ...")
         print('total: %d' % len(items_dict))
         print('failed: %d' % len([_ for _, v in items_dict.items() if v != -1]))
-        print('succeeded: %d', len([_ for _, v in items_dict.items() if v == -1]))
+        print('succeeded: %d' % len([_ for _, v in items_dict.items() if v == -1]))
         return items_dict
 
 
