@@ -7,7 +7,7 @@ import os
 import logging
 import pickle
 import pandas as pd
-import npc
+from . import npc
 from datetime import datetime
 
 
