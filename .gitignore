@@ -4,4 +4,5 @@ __pycache__
 /*.egg
 /dist/
 build/
+build/*/pydwork/
 
