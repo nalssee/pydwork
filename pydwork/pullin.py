@@ -138,9 +138,15 @@ def fetch_items(drivers, items, fetchfn,
 
     # Show failed items
     print("Failed items to fetch")
+    max_failed_items = 20
     for k, v in items_dict.items():
         if v != -1:
+            max_failed_items -= 1
             print(k)
+        if max_failed_items < 0:
+            print("More than %d items failed" % max_failed_items)
+            break
+
 
     # save items_dict for later in case you haven't finished fetching
     # and want to do it later.
