@@ -154,6 +154,6 @@ def result_files_to_df(path=os.getcwd()):
     result_dfs = []
     for rfile in os.listdir(path):
         if rfile.startswith(RESULT_FILE_PREFIX) and rfile.endswith('.csv'):
-            result_dfs.append(pd.read_csv(rfile))
+            result_dfs.append(pd.read_csv(os.path.join(path, rfile)))
 
     return pd.concat(result_dfs)
