@@ -85,6 +85,9 @@ def fetch_items(drivers, items, fetchfn,
         items_dict = {}
         for item in items:
             items_dict[item] = 0
+        print("Given items size: ", len(items))
+        print("After duplication removal: ", len(items_dict))
+
 
     # it is a bit silly to turn a list to dict and back to a list again
     # but to keep consistency with other cases and to keep it simple
@@ -143,7 +146,7 @@ def fetch_items(drivers, items, fetchfn,
         if v != -1:
             max_failed_items += 1
             print(k)
-        if max_failed_items > 20:
+        if max_failed_items >= 20:
             print("More than %d items failed" % max_failed_items)
             break
 
