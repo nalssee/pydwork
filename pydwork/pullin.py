@@ -23,7 +23,7 @@ RESULT_FILE_PREFIX = 'result'
 
 
 def fetch_items(drivers, items, fetchfn,
-                max_items=1000000, save_every_n=100, max_trials=10,
+                max_items=1000000, save_every_n=100, max_trials=5,
                 base_dir=os.getcwd(), reset_dir=False):
     """
     ===================================
@@ -151,6 +151,12 @@ def fetch_items(drivers, items, fetchfn,
         for succeeded_item in succeeded_items:
             # Only when it's successfully saved, you can say that it's FETCHED.
             items_dict[succeeded_item] = -1
+
+        # save items_dict for later in case you haven't finished fetching
+        # and want to do it later.
+        with open(PICKLE_FILE, 'wb') as f:
+            pickle.dump(items_dict, f)
+
         succeeded_items = []
         results = []
 
@@ -176,10 +182,6 @@ def fetch_items(drivers, items, fetchfn,
                 print("More than %d items failed" % max_failed_items)
                 break
 
-        # save items_dict for later in case you haven't finished fetching
-        # and want to do it later.
-        with open(PICKLE_FILE, 'wb') as f:
-            pickle.dump(items_dict, f)
         print("Fetching status")
         show_items_dict(items_dict)
         print("Done fetching")
