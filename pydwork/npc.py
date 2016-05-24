@@ -42,6 +42,7 @@ def npc(producers, consumer, parallel=False, max_qsize=100):
     ws = []
     for producer in producers:
         w = worker(target=insert, args=(producer,))
+        w.daemon = True
         ws.append(w)
         w.start()
 
