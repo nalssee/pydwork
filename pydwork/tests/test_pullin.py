@@ -33,7 +33,7 @@ class PullInTest(unittest.TestCase):
             d.quit()
 
         count = 0
-        while len(result_files_to_df().index) != 75 * 8 && count < 3:
+        while len(result_files_to_df().index) != 75 * 8 and count < 3:
             count += 1
             fetch_items(drivers, items, fetchfn, save_every_n=2)
             for d in drivers:

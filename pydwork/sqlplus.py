@@ -210,7 +210,7 @@ class SQLPlus:
             fport.write((','.join(colnames) + '\n').encode())
             # implicitly flatten
             for row in seq:
-                vals = [str(v) for v in row.get_values(colnames)]
+                vals = [str(v).replace(',', '') for v in row.get_values(colnames)]
                 fport.write((','.join(vals) + '\n').encode())
 
             # create table
@@ -228,7 +228,8 @@ class SQLPlus:
                     line_vals = line[:-1].decode().split(',')
                     self._cursor.execute(istmt, line_vals)
                 except:
-                    raise ValueError("Invalid line to save", line_vals)
+                    pass
+                    # raise ValueError("Invalid line to save", line_vals)
         self.tables.append(name)
 
     # Be careful so that you don't overwrite the file
@@ -262,6 +263,7 @@ class SQLPlus:
             except StopIteration:
                 print('Empty Sequence')
                 return
+                
 
             colnames = row0.columns
             # implicit gflat
