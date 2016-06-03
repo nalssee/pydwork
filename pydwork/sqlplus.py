@@ -28,6 +28,8 @@ import fileinput
 import re
 import sqlite3
 import tempfile
+import uuid
+
 from collections import Counter
 from contextlib import contextmanager
 from functools import wraps
@@ -167,6 +169,8 @@ class SQLPlus:
 
         'args' are going to be passed as arguments for the generator function
         """
+
+
         # for maintenance
         nrow = n
 
@@ -191,6 +195,7 @@ class SQLPlus:
             raise ValueError('Empty sequence')
 
         colnames = row0.columns
+
         # You can't save the iterator directly because
         # once you execute a table creation query,
         # then the query becomes the most recent query,
@@ -204,13 +209,24 @@ class SQLPlus:
         # So you save the iterator up in a temporary file
         # and then save the file to a database.
         # In the process column types are checked.
+
+        # This is the root of all evil
         with tempfile.TemporaryFile() as fport:
             # Write the iterator in a temporary file
             # encode it as binary.
+
+            def transform_value(val):
+                """If val contains a comma or newline it causes problems
+                So just remove them.
+                There might be some other safer methods but I don't think
+                newlines or commas are going to affect any data analysis.
+                """
+                return str(val).replace(',', ' ').replace('\n', ' ')
+
             fport.write((','.join(colnames) + '\n').encode())
             # implicitly flatten
             for row in seq:
-                vals = [str(v).replace(',', '') for v in row.get_values(colnames)]
+                vals = [transform_value(v) for v in row.get_values(colnames)]
                 fport.write((','.join(vals) + '\n').encode())
 
             # create table
@@ -263,7 +279,7 @@ class SQLPlus:
             except StopIteration:
                 print('Empty Sequence')
                 return
-                
+
 
             colnames = row0.columns
             # implicit gflat
