@@ -179,8 +179,15 @@ class SQLPlus:
             name = name or seq.__name__
             seq = seq(*args)
 
+        # tests empty sequence
+        row0, seq = _peek_first(seq)
+        if not row0:
+            print('\nEmpty Sequence, Nothing to Save')
+            return
+
         # implicitly gflat
         seq = gflat(seq)
+
         if nrow:
             seq = islice(seq, nrow)
 
@@ -189,10 +196,6 @@ class SQLPlus:
         if name is None:
             raise ValueError('name should be passed')
 
-        try:
-            row0, seq = _peek_first(seq)
-        except StopIteration:
-            raise ValueError('Empty sequence')
 
         colnames = row0.columns
 
@@ -274,12 +277,10 @@ class SQLPlus:
             if cols:
                 rows = pick(rows, cols)
 
-            try:
-                row0, rows = _peek_first(rows)
-            except StopIteration:
+            row0, rows = _peek_first(rows)
+            if not row0:
                 print('Empty Sequence')
                 return
-
 
             colnames = row0.columns
             # implicit gflat
@@ -317,6 +318,8 @@ def dbopen(dbfile):
     splus = SQLPlus(dbfile)
     try:
         yield splus
+    except:
+        pass
     finally:
         splus.conn.commit()
         splus.conn.close()
@@ -378,6 +381,7 @@ def gflat(seq):
             return [val]
 
     row0, seq = _peek_first(seq)
+
     colnames = list(row0.columns)
 
     for row in seq:
@@ -513,6 +517,10 @@ def disjoin(colnames):
     return dec
 
 
+
+
+
+
 def _gen_valid_column_names(columns):
     """generate valid column names automatically
 
@@ -571,9 +579,12 @@ def _peek_first(seq):
 
     'it' is untouched, first_item is pushed back to be exact
     """
-    seq = iter(seq)
-    first_item = next(seq)
-    return first_item, chain([first_item], seq)
+    try:
+        seq = iter(seq)
+        first_item = next(seq)
+        return first_item, chain([first_item], seq)
+    except:
+        return False, False
 
 
 def _create_statement(name, colnames):

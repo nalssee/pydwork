@@ -4,13 +4,13 @@ import unittest
 from itertools import groupby, islice
 
 import pandas as pd
-from pydwork.sqlplus import *
+
 
 TESTPATH = os.path.dirname(os.path.realpath(__file__))
 PYPATH = os.path.join(TESTPATH, '..', '..')
 sys.path.append(PYPATH)
 
-
+from pydwork.sqlplus import *
 
 def dpath(filename):
     return os.path.join(TESTPATH, 'data', filename)
@@ -323,5 +323,22 @@ class Testdbopen(unittest.TestCase):
                 c = round(r1.petallength + r1.petalwidth, 2)
                 d = round(r2.petal, 2)
                 self.assertEqual(c, d)
+
+    def test_save_empty_seq(self):
+        "Saving empty sequence should not raise exception"
+        with dbopen(':memory:') as conn:
+            def empty_seq():
+                for r in load_csv(dpath('iris.csv')):
+                    if float(r.SepalWidth) > 100:
+                        yield r
+
+            conn.save(empty_seq, name='empty')
+
+
+
+
+
+
+
 
 unittest.main()
