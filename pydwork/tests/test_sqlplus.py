@@ -1,10 +1,8 @@
+
 import os
 import sys
 import unittest
-from itertools import groupby, islice, chain
-
-import pandas as pd
-
+from itertools import islice
 
 TESTPATH = os.path.dirname(os.path.realpath(__file__))
 PYPATH = os.path.join(TESTPATH, '..', '..')
@@ -240,10 +238,11 @@ class Testdbopen(unittest.TestCase):
                     yield from rs
             conn.save(unsafe)
             for r in islice(conn.reel('unsafe'), 5):
-                self.assertEqual(r.columns, ['temp', 'sepallength', 'sepalwidth',
-                                             'petallength', 'petalwidth', 'species',
-                                             'first'
-                                             ])
+                self.assertEqual(r.columns, ['temp', 'sepallength',
+                                             'sepalwidth',
+                                             'petallength',
+                                             'petalwidth', 'species',
+                                             'first'])
 
             # no need to use del anymore here
             @disjoin('temp')
@@ -269,7 +268,8 @@ class Testdbopen(unittest.TestCase):
     def test_partial_loading(self):
         # You can save only some part of a sequence.
         with dbopen(':memory:') as conn:
-            conn.save(gby(read_csv('iris.csv'), 'Species'), n=78, name='setosa')
+            conn.save(gby(read_csv('iris.csv'), 'Species'),
+                      n=78, name='setosa')
             self.assertEqual(len(list(conn.reel('setosa'))), 78)
 
     def test_gflat2(self):
@@ -329,7 +329,8 @@ class Testdbopen(unittest.TestCase):
                         yield r
             conn.save(empty_seq, name='empty')
             tables = []
-            for table in conn.reel("select * from sqlite_master where type='table'"):
+            for table in conn.reel("""select * from sqlite_master
+            where type='table'"""):
                 tables.append(table)
             self.assertEqual(tables, [])
 
@@ -350,6 +351,7 @@ class TestSortl(unittest.TestCase):
 class TestWriteCSV(unittest.TestCase):
     def test_writecsv(self):
         rs = read_csv('iris.csv')
+
         def sample():
             for r in rs:
                 del(r.SepalWidth)

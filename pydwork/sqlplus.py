@@ -42,7 +42,7 @@ from itertools import chain, groupby, islice
 
 import pandas as pd
 
-__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'read_csv', 'write_csv', 'chunk',
+__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'read_csv', 'write_csv',
            'add_header', 'del_header', 'adjoin', 'disjoin', 'pick', 'todf',
            'sortl', 'set_workspace', 'WORKSPACE'
            ]

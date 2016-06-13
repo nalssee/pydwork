@@ -1,7 +1,6 @@
 """Concurrency and parallelism patterns
 """
 
-import math
 import random
 import string
 import inspect
@@ -10,9 +9,10 @@ import threading as th
 
 from queue import Queue
 from itertools import zip_longest
+from .util import nchunks
 
 
-__all__ = ['npc', 'nchunks', 'producers', 'grouper', 'random_string']
+__all__ = ['npc', 'producers', 'grouper', 'random_string']
 
 
 def npc(producers, consumer, parallel=False, max_qsize=100):
@@ -62,14 +62,6 @@ def random_string(nchars=20):
     """Generates a random string of lengh 'n' with alphabets and digits. """
     return ''.join(random.SystemRandom().choice(string.ascii_letters +
                    string.digits) for _ in range(nchars))
-
-
-def nchunks(xs, n):
-    """Yields n chunks about the same size. """
-    xs = list(xs)
-    chunksize = int(math.ceil(len(xs) / n))
-    for i in range(n):
-        yield xs[chunksize * i:chunksize * (i + 1)]
 
 
 # Excerpted from Python referece.
