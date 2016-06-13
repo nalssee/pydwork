@@ -6,7 +6,7 @@ sys.path.append(PYPATH)
 
 
 from pydwork.npc import *
-from pydwork.mypy import timeit
+from pydwork.util import timeit
 import unittest
 
 
