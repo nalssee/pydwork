@@ -32,8 +32,8 @@ def fetch_items(drivers, items, fetchfn,
 
     drivers: A list of selenium web drivers
     items: list of strings(of course it can be JSON) to fetch
-       (if reset_dir is False, items is simply ignored and items_dict picke file
-       is used for fetching items)
+       (if reset_dir is False, items is simply ignored and items_dict
+       picke file is used for fetching items)
     fetch_fn: driver, item -> pd.DataFrame
     max_trials: If fetching fails more than max_trials just skip it
     max_items: you can pass lots of items and just part of them are fetched
@@ -69,10 +69,11 @@ def fetch_items(drivers, items, fetchfn,
 
     def show_items_dict(items_dict):
         print('total: %d' % len(items_dict))
-        print('succeeded: %d' % len([_ for _, v in items_dict.items() if v == -1]))
-        print('unfetched: %d' % len([_ for _, v in items_dict.items() if v == 0]))
+        print('succeeded: %d'
+              % len([_ for _, v in items_dict.items() if v == -1]))
+        print('unfetched: %d'
+              % len([_ for _, v in items_dict.items() if v == 0]))
         print('failed: %d' % len([_ for _, v in items_dict.items() if v > 0]))
-
 
     if reset_dir:
         # remove all files related to reset them all
@@ -84,7 +85,6 @@ def fetch_items(drivers, items, fetchfn,
         except:
             pass
 
-
     if os.path.isfile(PICKLE_FILE):
         items_dict = load_items_dict()
     else:
@@ -95,7 +95,6 @@ def fetch_items(drivers, items, fetchfn,
             items_dict[item] = 0
         print("Given items size: ", len(items))
         print("After duplication removal: ", len(items_dict))
-
 
     # it is a bit silly to turn a list to dict and back to a list again
     # but to keep consistency with other cases and to keep it simple
@@ -139,14 +138,15 @@ def fetch_items(drivers, items, fetchfn,
         else:
             results.append(df)
             succeeded_items.append(item)
-            if len(results)  == save_every_n:
+            if len(results) == save_every_n:
                 count += save_every_n
                 print('Fetched ' + str(count) + ' items')
                 save_results()
 
     def save_results():
         nonlocal results, succeeded_items
-        rfile = os.path.join(base_dir, RESULT_FILE_PREFIX + str(datetime.now()) + '.csv')
+        rfile = os.path.join(base_dir,
+                             RESULT_FILE_PREFIX + str(datetime.now()) + '.csv')
         pd.concat(results).to_csv(rfile, index=False)
         for succeeded_item in succeeded_items:
             # Only when it's successfully saved, you can say that it's FETCHED.

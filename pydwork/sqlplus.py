@@ -29,7 +29,6 @@ import fileinput
 import re
 import sqlite3
 import tempfile
-import uuid
 # memory check
 import psutil
 import sys
@@ -142,7 +141,8 @@ class SQLPlus:
 
     def __init__(self, dbfile):
         # self._dbfile = os.path.join(WORKSPACE, dbfile)
-        self._dbfile = dbfile if dbfile == ':memory:' else os.path.join(WORKSPACE, dbfile)
+        self._dbfile = dbfile if dbfile == ':memory:' \
+            else os.path.join(WORKSPACE, dbfile)
         self.conn = sqlite3.connect(self._dbfile)
         self._cursor = self.conn.cursor()
         self.tables = self.list_tables()
@@ -182,7 +182,6 @@ class SQLPlus:
         'args' are going to be passed as arguments for the generator function
         """
 
-
         # for maintenance
         nrow = n
 
@@ -208,7 +207,6 @@ class SQLPlus:
             return
         if name is None:
             raise ValueError('name should be passed')
-
 
         colnames = row0.columns
 
@@ -302,8 +300,6 @@ class SQLPlus:
                                    columns=colnames))
                 if len(seq_rvals_list) > nrows:
                     print("...more rows...")
-
-
 
     def list_tables(self):
         """List of table names in the database
@@ -433,7 +429,8 @@ def chunk(seq, num):
 def add_header(filename, header):
     """Adds a header line to an existing file.
     """
-    for line in fileinput.input(os.path.join(WORKSPACE, filename), inplace=True):
+    for line in fileinput.input(os.path.join(WORKSPACE, filename),
+                                inplace=True):
         if fileinput.isfirstline():
             print(header)
         print(line, end='')
@@ -443,9 +440,10 @@ def del_header(filename, num=1):
     """Delete n lines from a file
     """
     for line_number, line in enumerate(
-    fileinput.input(os.path.join(WORKSPACE, filename), inplace=True)):
+            fileinput.input(os.path.join(WORKSPACE, filename), inplace=True)):
         if line_number >= num:
             print(line, end='')
+
 
 def convtype(val):
     "convert type if possible"
@@ -456,6 +454,7 @@ def convtype(val):
             return float(val)
         except:
             return val
+
 
 def read_csv(csv_file, header=None, line_fix=(lambda x: x)):
     """Loads well-formed csv file, 1 header line and the rest is data
@@ -579,11 +578,9 @@ def sortl(seq, key=None, reverse=False, n=None):
         f.close()
 
 
-
 def set_workspace(dir):
     global WORKSPACE
     WORKSPACE = dir
-
 
 
 def _build_keyfn(key):

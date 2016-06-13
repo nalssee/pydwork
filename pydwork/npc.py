@@ -11,8 +11,6 @@ import threading as th
 from queue import Queue
 from itertools import zip_longest
 
-import unittest
-
 
 __all__ = ['npc', 'nchunks', 'producers', 'grouper', 'random_string']
 
@@ -62,8 +60,8 @@ def npc(producers, consumer, parallel=False, max_qsize=100):
 
 def random_string(nchars=20):
     """Generates a random string of lengh 'n' with alphabets and digits. """
-    return ''.join(random.SystemRandom().choice(string.ascii_letters + string.digits)
-                    for _ in range(nchars))
+    return ''.join(random.SystemRandom().choice(string.ascii_letters +
+                   string.digits) for _ in range(nchars))
 
 
 def nchunks(xs, n):
@@ -101,8 +99,8 @@ def producers(fn):
 
     def wrapper(xs, n):
         result = []
-        gen = generator_from_generator if inspect.isgeneratorfunction(fn) \
-              else generator_from_fn
+        gen = generator_from_generator if inspect.isgeneratorfunction(fn)\
+            else generator_from_fn
         for chunk in nchunks(xs, n):
             result.append(gen(chunk))
         return result

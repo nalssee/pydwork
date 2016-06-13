@@ -1,4 +1,6 @@
-import contextlib, time
+import contextlib
+import time
+
 
 @contextlib.contextmanager
 def timeit():
