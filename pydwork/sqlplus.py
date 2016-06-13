@@ -141,7 +141,8 @@ class SQLPlus:
     """
 
     def __init__(self, dbfile):
-        self._dbfile = dbfile
+        # self._dbfile = os.path.join(WORKSPACE, dbfile)
+        self._dbfile = dbfile if dbfile == ':memory:' else os.path.join(WORKSPACE, dbfile)
         self.conn = sqlite3.connect(self._dbfile)
         self._cursor = self.conn.cursor()
         self.tables = self.list_tables()
