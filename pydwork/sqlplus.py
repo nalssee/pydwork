@@ -23,12 +23,18 @@ This program does it.
 What you need to know is in unit test code at test/*
 """
 
+import os
 import csv
 import fileinput
 import re
 import sqlite3
 import tempfile
 import uuid
+# memory check
+import psutil
+import sys
+import heapq
+
 
 from collections import Counter
 from contextlib import contextmanager
@@ -37,8 +43,10 @@ from itertools import chain, groupby, islice
 
 import pandas as pd
 
-__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'load_csv', 'chunk',
-           'add_header', 'del_header', 'adjoin', 'disjoin', 'pick', 'todf']
+__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'read_csv', 'write_csv', 'chunk',
+           'add_header', 'del_header', 'adjoin', 'disjoin', 'pick', 'todf',
+           'sortl', 'set_workspace', 'WORKSPACE'
+           ]
 
 
 # Some of the sqlite keywords are not allowed for column names
@@ -66,6 +74,9 @@ SQLITE_KEYWORDS = [
     "TRIGGER", "UNION", "UNIQUE", "UPDATE", "USING", "VACUUM", "VALUES",
     "VIEW", "VIRTUAL", "WHEN", "WHERE"
 ]
+
+
+WORKSPACE = ''
 
 
 # Most of the time you work with SQL rows.
@@ -180,8 +191,9 @@ class SQLPlus:
             seq = seq(*args)
 
         # tests empty sequence
-        row0, seq = _peek_first(seq)
-        if not row0:
+        try:
+            row0, seq = _peek_first(seq)
+        except:
             print('\nEmpty Sequence, Nothing to Save')
             return
 
@@ -217,20 +229,7 @@ class SQLPlus:
         with tempfile.TemporaryFile() as fport:
             # Write the iterator in a temporary file
             # encode it as binary.
-
-            def transform_value(val):
-                """If val contains a comma or newline it causes problems
-                So just remove them.
-                There might be some other safer methods but I don't think
-                newlines or commas are going to affect any data analysis.
-                """
-                return str(val).replace(',', ' ').replace('\n', ' ')
-
-            fport.write((','.join(colnames) + '\n').encode())
-            # implicitly flatten
-            for row in seq:
-                vals = [transform_value(v) for v in row.get_values(colnames)]
-                fport.write((','.join(vals) + '\n').encode())
+            _save_rows_to_tempfile(fport, seq, colnames)
 
             # create table
             istmt = _insert_statement(name, len(colnames))
@@ -276,10 +275,10 @@ class SQLPlus:
 
             if cols:
                 rows = pick(rows, cols)
-
-            row0, rows = _peek_first(rows)
-            if not row0:
-                print('Empty Sequence')
+            try:
+                row0, rows = _peek_first(rows)
+            except:
+                print('\nEmpty Sequence')
                 return
 
             colnames = row0.columns
@@ -288,7 +287,7 @@ class SQLPlus:
 
         if filename:
             # ignore n
-            with open(filename, 'w') as fout:
+            with open(os.path.join(WORKSPACE, filename), 'w') as fout:
                 fout.write(','.join(colnames) + '\n')
                 for rvals in seq_rvals:
                     fout.write(','.join([str(val) for val in rvals]) + '\n')
@@ -297,8 +296,13 @@ class SQLPlus:
             with pd.option_context("display.max_rows", nrows), \
                     pd.option_context("display.max_columns", 1000):
                 # make use of pandas DataFrame displaying
-                print(pd.DataFrame(list(islice(seq_rvals, nrows)),
+                seq_rvals_list = list(islice(seq_rvals, nrows + 1))
+                print(pd.DataFrame(seq_rvals_list[:nrows],
                                    columns=colnames))
+                if len(seq_rvals_list) > nrows:
+                    print("...more rows...")
+
+
 
     def list_tables(self):
         """List of table names in the database
@@ -318,8 +322,6 @@ def dbopen(dbfile):
     splus = SQLPlus(dbfile)
     try:
         yield splus
-    except:
-        pass
     finally:
         splus.conn.commit()
         splus.conn.close()
@@ -327,7 +329,7 @@ def dbopen(dbfile):
 
 # 'grouped row' refers to a Row object
 # with all-list properties
-def gby(seq, group, bind=True):
+def gby(seq, key, bind=True):
     """Group the iterator by columns
 
     Depends heavily on 'groupby' from itertools
@@ -351,8 +353,10 @@ def gby(seq, group, bind=True):
                 getattr(g_row, col).append(getattr(row1, col))
         return g_row
 
-    g_seq = groupby(seq, group if hasattr(group, "__call__")
-                    else (lambda x: [getattr(x, g) for g in _listify(group)]))
+    if not hasattr(key, '__call__'):
+        key = _build_keyfn(key)
+    g_seq = groupby(seq, key)
+
     if bind:
         first_group = list(next(g_seq)[1])
         colnames = first_group[0].columns
@@ -428,7 +432,7 @@ def chunk(seq, num):
 def add_header(filename, header):
     """Adds a header line to an existing file.
     """
-    for line in fileinput.input(filename, inplace=True):
+    for line in fileinput.input(os.path.join(WORKSPACE, filename), inplace=True):
         if fileinput.isfirstline():
             print(header)
         print(line, end='')
@@ -437,20 +441,30 @@ def add_header(filename, header):
 def del_header(filename, num=1):
     """Delete n lines from a file
     """
-    for line_number, line in enumerate(fileinput.input(filename,
-                                                       inplace=True)):
+    for line_number, line in enumerate(
+    fileinput.input(os.path.join(WORKSPACE, filename), inplace=True)):
         if line_number >= num:
             print(line, end='')
 
+def convtype(val):
+    "convert type if possible"
+    try:
+        return int(val)
+    except:
+        try:
+            return float(val)
+        except:
+            return val
 
-def load_csv(csv_file, header=None, line_fix=(lambda x: x)):
+def read_csv(csv_file, header=None, line_fix=(lambda x: x)):
     """Loads well-formed csv file, 1 header line and the rest is data
 
     returns an iterator
     All columns are string, no matter what.
     it's intentional. Types are guessed once it is saved in DB
     """
-    with open(csv_file) as fin:
+
+    with open(os.path.join(WORKSPACE, csv_file)) as fin:
         first_line = fin.readline()[:-1]
         header = header or first_line
         columns = _gen_valid_column_names(_listify(header))
@@ -465,8 +479,18 @@ def load_csv(csv_file, header=None, line_fix=(lambda x: x)):
                     raise ValueError("column number mismatch", columns, line)
             row1 = Row()
             for col, val in zip(columns, line):
-                setattr(row1, col, val)
+                setattr(row1, col, convtype(val))
             yield row1
+
+
+def write_csv(csv_file, seq):
+    row0, seq = _peek_first(seq)
+    colnames = row0.columns
+    with open(os.path.join(WORKSPACE, csv_file), 'w') as fout:
+        writer = csv.writer(fout)
+        writer.writerow(colnames)
+        for r in seq:
+            writer.writerow(r.get_values(colnames))
 
 
 def adjoin(colnames):
@@ -517,8 +541,94 @@ def disjoin(colnames):
     return dec
 
 
+def sortl(seq, key=None, reverse=False, n=None):
+    """
+    Sort large sequence, so large that the system memmory can't hold it
+    n(int): chunk size to sort
+    """
+    row0, seq = _peek_first(seq)
+    if not n:
+        rowsize = sys.getsizeof(row0)
+        available_memory = psutil.virtual_memory().available
+        # About 25% of the available memory
+        n = available_memory // (rowsize * 4)
+
+    if key and not hasattr(key, '__call__'):
+        key = _build_keyfn(key)
+
+    colnames = row0.columns
+
+    iters = []
+    fs = []
+
+    while True:
+        rs = sorted(islice(seq, n), key=key, reverse=reverse)
+        if not rs:
+            break
+        f = tempfile.TemporaryFile()
+        _save_rows_to_tempfile(f, rs, colnames)
+        f.seek(0)
+        iters.append(_load_rows_from_tempfile(f))
+        fs.append(f)
+    for r in heapq.merge(*iters, key=key, reverse=reverse):
+        yield r
+    # if you don't close the files,
+    # python raises warnings
+    for f in fs:
+        f.close()
 
 
+
+def set_workspace(dir):
+    global WORKSPACE
+    WORKSPACE = dir
+
+
+
+def _build_keyfn(key):
+    """
+    If key is not a function, but a string or a list of strings
+    that represents columns, turn it into a function
+    """
+    colnames = _listify(key)
+    if len(colnames) == 1:
+        return lambda r: getattr(r, colnames[0])
+    else:
+        return lambda r: [getattr(r, colname) for colname in colnames]
+
+
+def _save_rows_to_tempfile(f, rs, colnames):
+    def transform_value(val):
+        """If val contains a comma or newline it causes problems
+        So just remove them.
+        There might be some other safer methods but I don't think
+        newlines or commas are going to affect any data analysis.
+        """
+        return str(val).replace(',', ' ').replace('\n', ' ')
+
+    f.write((','.join(colnames) + '\n').encode())
+    # implicitly flatten
+    for r in rs:
+        vals = [transform_value(v) for v in r.get_values(colnames)]
+        f.write((','.join(vals) + '\n').encode())
+
+
+def _load_rows_from_tempfile(f):
+    def splitit(line):
+        # line[:-1] because last index indicates '\n'
+        return line[:-1].decode().split(',')
+    columns = splitit(f.readline())
+    n = len(columns)
+    for line in f:
+        r = Row()
+        vals = splitit(line)
+        if len(vals) != n:
+            # TODO: Error or pass that is the question
+            # there are too many wierd lines for my job
+            continue
+        for name, val in zip(columns, vals):
+            setattr(r, name, convtype(val))
+        yield r
 
 
 def _gen_valid_column_names(columns):
@@ -579,12 +689,9 @@ def _peek_first(seq):
 
     'it' is untouched, first_item is pushed back to be exact
     """
-    try:
-        seq = iter(seq)
-        first_item = next(seq)
-        return first_item, chain([first_item], seq)
-    except:
-        return False, False
+    seq = iter(seq)
+    first_item = next(seq)
+    return first_item, chain([first_item], seq)
 
 
 def _create_statement(name, colnames):

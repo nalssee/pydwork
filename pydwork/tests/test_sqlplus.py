@@ -1,7 +1,7 @@
 import os
 import sys
 import unittest
-from itertools import groupby, islice
+from itertools import groupby, islice, chain
 
 import pandas as pd
 
@@ -12,9 +12,7 @@ sys.path.append(PYPATH)
 
 from pydwork.sqlplus import *
 
-def dpath(filename):
-    return os.path.join(TESTPATH, 'data', filename)
-
+set_workspace(os.path.join(TESTPATH, 'data'))
 
 # This should work as a tutorial as well.
 print("\nNo need to read the following")
@@ -36,11 +34,10 @@ class Testdbopen(unittest.TestCase):
         with dbopen(':memory:') as conn:
             with self.assertRaises(ValueError):
                 # column number mismatch, notice pw is missing
-                next(load_csv(dpath('iris.csv'), header="no sl sw pl species"))
+                next(read_csv('iris.csv', header="no sl sw pl species"))
             # when it's loaded, it's just an iterator of objects
             # with string only properties. No type guessing is attempted.
-            conn.save(load_csv(dpath('iris.csv'),
-                               header="no sl sw pl pw species"), name="iris")
+            conn.save(read_csv('iris.csv', header="no sl sw pl pw species"), name="iris")
 
     def test_gby(self):
         """Just a dumb presentation to show how 'gby' works.
@@ -48,7 +45,7 @@ class Testdbopen(unittest.TestCase):
         with dbopen(':memory:') as conn:
             def first_char():
                 "make a new column with the first charactor of species."
-                for r in load_csv(dpath('iris.csv'), header="no sl sw pl pw species"):
+                for r in read_csv('iris.csv', header="no sl sw pl pw species"):
                     # Since r is just an object you can simply add new columns
                     # or delete columns as you'd do with objects.
 
@@ -108,7 +105,7 @@ class Testdbopen(unittest.TestCase):
         """Tests if applying gby and gflat subsequently yields the original
         """
         with dbopen(':memory:') as conn:
-            conn.save(load_csv(dpath("iris.csv"),
+            conn.save(read_csv("iris.csv",
                                header="no,sl,sw,pl,pw,sp"), name="iris")
             a = list(conn.reel("select * from iris order by sl"))
             b = list(gflat(gby(conn.reel("select * from iris order by sl"), 'sl')))
@@ -118,9 +115,9 @@ class Testdbopen(unittest.TestCase):
 
     def test_run_over_run(self):
         with dbopen(':memory:') as conn:
-            conn.save(load_csv(dpath("iris.csv"),
+            conn.save(read_csv("iris.csv",
                                header="no,sl,sw,pl,pw,sp"), name="iris1")
-            conn.save(load_csv(dpath("iris.csv"),
+            conn.save(read_csv("iris.csv",
                                header="no,sl,sw,pl,pw,sp"), name="iris2")
             a = conn.reel("select * from iris1 where sp='setosa'")
             b = conn.reel("select * from iris2 where sp='versicolor'")
@@ -137,7 +134,7 @@ class Testdbopen(unittest.TestCase):
         """tests column deletion
         """
         with dbopen(':memory:') as conn:
-            conn.save(load_csv(dpath('co2.csv')), name='co2')
+            conn.save(read_csv('co2.csv'), name='co2')
 
             def co2_less(*col):
                 """remove columns"""
@@ -160,11 +157,11 @@ class Testdbopen(unittest.TestCase):
     def test_saving_csv(self):
         import os
         with dbopen(':memory:') as conn:
-            iris = load_csv(dpath('iris.csv'), header="no sl sw pl pw sp")
+            iris = read_csv('iris.csv', header="no sl sw pl pw sp")
             conn.show(islice(gby(iris, "sp"), 2), filename='sample.csv')
             # each group contains 50 rows, hence 100
-            self.assertEqual(len(list(load_csv('sample.csv'))), 100)
-            os.remove('sample.csv')
+            self.assertEqual(len(list(read_csv('sample.csv'))), 100)
+
 
     def test_column_case(self):
         with dbopen(':memory:') as conn:
@@ -185,14 +182,14 @@ class Testdbopen(unittest.TestCase):
     def test_add_header(self):
         with dbopen(':memory:') as conn:
             with self.assertRaises(ValueError):
-                for r in load_csv(dpath('wierd.csv')):
+                for r in read_csv('wierd.csv'):
                     pass
             try:
-                add_header(dpath('wierd.csv'), 'a,b,c')
-                rows = list(load_csv(dpath('wierd.csv'),
+                add_header('wierd.csv', 'a,b,c')
+                rows = list(read_csv('wierd.csv',
                                      line_fix=lambda x: fillin(x, 3)))
             finally:
-                del_header(dpath('wierd.csv'))
+                del_header('wierd.csv')
 
             self.assertEqual(len(rows), 7)
             conn.save(rows, name='wierd')
@@ -204,31 +201,30 @@ class Testdbopen(unittest.TestCase):
     def test_column_generation(self):
         with dbopen(':memory:') as conn:
             try:
-                add_header(dpath('wierd.csv'), 'a,,b,c,c,a,')
-                row = next(load_csv(dpath('wierd.csv'),
+                add_header('wierd.csv', 'a,,b,c,c,a,')
+                row = next(read_csv('wierd.csv',
                                     line_fix=lambda x: fillin(x, 7)))
                 self.assertEqual(row.columns,
                                  ['a0', 'temp0', 'b', 'c0', 'c1', 'a1', 'temp1'])
             finally:
-                del_header(dpath('wierd.csv'))
+                del_header('wierd.csv')
 
             try:
                 # in and no are keywords
                 # no is ok
-                add_header(dpath('wierd.csv'), '_1, in, no, *-*a, a')
-                row = next(load_csv(dpath('wierd.csv'),
-                                    line_fix=lambda x: fillin(x, 5)))
+                add_header('wierd.csv', '_1, in, no, *-*a, a')
+                row = next(read_csv('wierd.csv', line_fix=lambda x: fillin(x, 5)))
                 self.assertEqual(row.columns,
                                  ['a__1', 'a_in', 'no', 'a0', 'a1'])
             finally:
-                del_header(dpath('wierd.csv'))
+                del_header('wierd.csv')
 
     def test_order_of_columns(self):
         with dbopen(':memory:') as conn:
-            row = next(load_csv(dpath('iris.csv')))
+            row = next(read_csv('iris.csv'))
             self.assertEqual(row.columns, ['temp', 'SepalLength', 'SepalWidth',
                                            'PetalLength', 'PetalWidth', 'Species'])
-            conn.save(load_csv(dpath('iris.csv')), 'iris')
+            conn.save(read_csv('iris.csv'), 'iris')
             row = next(conn.reel('iris'))
             self.assertEqual(row.columns, ['temp', 'sepallength', 'sepalwidth',
                                            'petallength', 'petalwidth', 'species'])
@@ -236,7 +232,7 @@ class Testdbopen(unittest.TestCase):
     def test_adjoin_disjoin(self):
         with dbopen(':memory:') as conn:
             def unsafe():
-                for rs in gby(load_csv(dpath('iris.csv')), 'Species', bind=False):
+                for rs in gby(read_csv('iris.csv'), 'Species', bind=False):
                     rs[0].first = 'yes'
                     rs[1].second = 'yes'
                     rs[2].third = 'yes'
@@ -253,7 +249,7 @@ class Testdbopen(unittest.TestCase):
             @disjoin('temp')
             @adjoin('first, second, third')
             def safe():
-                for rs in gby(load_csv(dpath('iris.csv')), 'Species', bind=False):
+                for rs in gby(read_csv('iris.csv'), 'Species', bind=False):
                     rs[0].first = 'yes'
                     rs[1].second = 'yes'
                     rs[2].third = 'yes'
@@ -273,14 +269,13 @@ class Testdbopen(unittest.TestCase):
     def test_partial_loading(self):
         # You can save only some part of a sequence.
         with dbopen(':memory:') as conn:
-            conn.save(gby(load_csv(dpath('iris.csv')),
-                          'Species'), n=78, name='setosa')
+            conn.save(gby(read_csv('iris.csv'), 'Species'), n=78, name='setosa')
             self.assertEqual(len(list(conn.reel('setosa'))), 78)
 
     def test_gflat2(self):
         with dbopen(':memory:') as conn:
             def foo():
-                for g in gby(load_csv(dpath('iris.csv')), 'Species'):
+                for g in gby(read_csv('iris.csv'), 'Species'):
                     r = Row()
                     # sometimes just a value
                     r.x = 10
@@ -293,14 +288,14 @@ class Testdbopen(unittest.TestCase):
 
     def test_df(self):
         with dbopen(':memory:') as conn:
-            conn.save(load_csv(dpath('iris.csv')), name='iris')
+            conn.save(read_csv('iris.csv'), name='iris')
             for g in gby(conn.reel('iris'), 'species'):
                 self.assertEqual(todf(g).shape, (50, 6))
 
     def test_gflat3(self):
         "Yield pandas data frames and they are flattened again"
         with dbopen(':memory:') as conn:
-            conn.save(load_csv(dpath('iris.csv')), name='iris')
+            conn.save(read_csv('iris.csv'), name='iris')
 
             # do not use adjoin or disjoin. it's crazy
             def length_plus_width():
@@ -326,19 +321,43 @@ class Testdbopen(unittest.TestCase):
 
     def test_save_empty_seq(self):
         "Saving empty sequence should not raise exception"
+
         with dbopen(':memory:') as conn:
             def empty_seq():
-                for r in load_csv(dpath('iris.csv')):
+                for r in read_csv('iris.csv'):
                     if float(r.SepalWidth) > 100:
                         yield r
-
             conn.save(empty_seq, name='empty')
+            tables = []
+            for table in conn.reel("select * from sqlite_master where type='table'"):
+                tables.append(table)
+            self.assertEqual(tables, [])
 
 
+class TestSortl(unittest.TestCase):
+    def test_sortl(self):
+        rs = read_csv('iris.csv')
+        rs0 = []
+        for r in sorted(rs, key=lambda r: r.SepalWidth):
+            rs0.append(r.SepalWidth)
+
+        rs1 = []
+        for r in sortl(read_csv('iris.csv'), key='SepalWidth', n=10):
+            rs1.append(r.SepalWidth)
+        self.assertEqual(rs0, rs1)
 
 
-
-
+class TestWriteCSV(unittest.TestCase):
+    def test_writecsv(self):
+        rs = read_csv('iris.csv')
+        def sample():
+            for r in rs:
+                del(r.SepalWidth)
+                del(r.SepalLength)
+                yield r
+        write_csv('sample2.csv', sample())
+        r0 = next(read_csv('sample2.csv'))
+        self.assertEqual(len(r0.columns), 4)
 
 
 unittest.main()

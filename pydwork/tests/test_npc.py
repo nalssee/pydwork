@@ -1,3 +1,10 @@
+import os, sys
+
+TESTPATH = os.path.dirname(os.path.realpath(__file__))
+PYPATH = os.path.join(TESTPATH, '..', '..')
+sys.path.append(PYPATH)
+
+
 from pydwork.npc import *
 from pydwork.mypy import timeit
 import unittest
