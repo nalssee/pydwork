@@ -40,9 +40,12 @@ from contextlib import contextmanager
 from functools import wraps
 from itertools import chain, groupby, islice
 
+from bs4 import BeautifulSoup
+
 import pandas as pd
 
 __all__ = ['dbopen', 'Row', 'gby', 'gflat', 'read_csv', 'write_csv',
+           'read_html_table',
            'add_header', 'del_header', 'adjoin', 'disjoin', 'pick', 'todf',
            'sortl', 'set_workspace', 'WORKSPACE'
            ]
@@ -483,6 +486,23 @@ def read_csv(csv_file, header=None, line_fix=(lambda x: x)):
             yield row1
 
 
+# Inflexible
+def read_html_table(html_file, css_selector='table'):
+    """Read simple well formed table
+    """
+    with open(os.path.join(WORKSPACE, html_file)) as fin:
+        soup = BeautifulSoup(fin, 'html.parser')
+        trs = soup.select(css_selector)[0].select('tr')
+        colnames = _gen_valid_column_names(
+            [x.text for x in trs[0].select('th')])
+        for tr in trs[1:]:
+            r = Row()
+            vals = [x.text for x in tr.select('td')]
+            for col, val in zip(colnames, vals):
+                setattr(r, col, convtype(val))
+            yield r
+
+
 def write_csv(csv_file, seq):
     row0, seq = _peek_first(seq)
     colnames = row0.columns
@@ -576,6 +596,26 @@ def sortl(seq, key=None, reverse=False, n=None):
     # python raises warnings
     for f in fs:
         f.close()
+
+# def ljoin(first, rest, key):
+#     """
+#     Args:
+#         first(iter)
+#         rest(list of iters)
+#         key(function, string, list of strings)
+#     Returns:
+#         iter
+#     """
+#     if not hasattr(key, '__call__'):
+#         key = _build_keyfn(key)
+#
+#     for r0 in sortl(first, key=key):
+#         val0 = key(r0)
+#         for seq0 in rest:
+#             dropwhile(lambda r: key(r) < val0, seq0)
+#             for r1 in seq0:
+#
+#
 
 
 def set_workspace(dir):

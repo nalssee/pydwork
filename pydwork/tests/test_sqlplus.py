@@ -362,4 +362,13 @@ class TestWriteCSV(unittest.TestCase):
         self.assertEqual(len(r0.columns), 4)
 
 
+class TestReadHTMLTable(unittest.TestCase):
+    def test_read_html_table(self):
+        write_csv('customers.csv', read_html_table('customers.html'))
+        write_csv('orders.csv', read_html_table('orders.html'))
+        self.assertEqual(len(list(read_html_table('customers.html'))), 91)
+        self.assertEqual(len(list(read_html_table('orders.html'))), 196)
+
+
+
 unittest.main()
