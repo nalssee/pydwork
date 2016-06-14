@@ -35,7 +35,8 @@ class Testdbopen(unittest.TestCase):
                 next(read_csv('iris.csv', header="no sl sw pl species"))
             # when it's loaded, it's just an iterator of objects
             # with string only properties. No type guessing is attempted.
-            conn.save(read_csv('iris.csv', header="no sl sw pl pw species"), name="iris")
+            conn.save(read_csv('iris.csv', header="no sl sw pl pw species"),
+                      name="iris")
 
     def test_gby(self):
         """Just a dumb presentation to show how 'gby' works.
@@ -81,7 +82,9 @@ class Testdbopen(unittest.TestCase):
             print("==========")
 
             r0, r1 = list(
-                conn.reel("select avg(sl) as slavg from top20_sl group by sp1"))
+                conn.reel("""select avg(sl) as slavg
+                from top20_sl group by sp1
+                """))
             self.assertEqual(round(r0.slavg, 3), 5.335)
             self.assertEqual(round(r1.slavg, 3), 7.235)
 
@@ -106,7 +109,8 @@ class Testdbopen(unittest.TestCase):
             conn.save(read_csv("iris.csv",
                                header="no,sl,sw,pl,pw,sp"), name="iris")
             a = list(conn.reel("select * from iris order by sl"))
-            b = list(gflat(gby(conn.reel("select * from iris order by sl"), 'sl')))
+            b = list(gflat(gby(conn.reel("select * from iris order by sl"),
+                     'sl')))
             for a1, b1 in zip(a, b):
                 self.assertEqual(a1.sl, b1.sl)
                 self.assertEqual(a1.pl, b1.pl)
@@ -121,7 +125,8 @@ class Testdbopen(unittest.TestCase):
             b = conn.reel("select * from iris2 where sp='versicolor'")
             self.assertEqual(next(a).sp, 'setosa')
             self.assertEqual(next(b).sp, 'versicolor')
-            # now you iterate over 'a' again and you may expect 'setosa' to show up
+            # now you iterate over 'a' again and you may expect 'setosa'
+            # to show up
             # but you'll see 'versicolor'
             # it doesn't matter you iterate over a or b
             # you simply iterate over the most recent query.
@@ -153,13 +158,11 @@ class Testdbopen(unittest.TestCase):
             conn.save(co2_less, args=('plant', 'conc'))
 
     def test_saving_csv(self):
-        import os
         with dbopen(':memory:') as conn:
             iris = read_csv('iris.csv', header="no sl sw pl pw sp")
             conn.show(islice(gby(iris, "sp"), 2), filename='sample.csv')
             # each group contains 50 rows, hence 100
             self.assertEqual(len(list(read_csv('sample.csv'))), 100)
-
 
     def test_column_case(self):
         with dbopen(':memory:') as conn:
@@ -197,35 +200,35 @@ class Testdbopen(unittest.TestCase):
             self.assertEqual(avals, [10, 20, 30])
 
     def test_column_generation(self):
-        with dbopen(':memory:') as conn:
-            try:
-                add_header('wierd.csv', 'a,,b,c,c,a,')
-                row = next(read_csv('wierd.csv',
-                                    line_fix=lambda x: fillin(x, 7)))
-                self.assertEqual(row.columns,
-                                 ['a0', 'temp0', 'b', 'c0', 'c1', 'a1', 'temp1'])
-            finally:
-                del_header('wierd.csv')
-
-            try:
-                # in and no are keywords
-                # no is ok
-                add_header('wierd.csv', '_1, in, no, *-*a, a')
-                row = next(read_csv('wierd.csv', line_fix=lambda x: fillin(x, 5)))
-                self.assertEqual(row.columns,
-                                 ['a__1', 'a_in', 'no', 'a0', 'a1'])
-            finally:
-                del_header('wierd.csv')
+        try:
+            add_header('wierd.csv', 'a,,b,c,c,a,')
+            row = next(read_csv('wierd.csv',
+                                line_fix=lambda x: fillin(x, 7)))
+            self.assertEqual(row.columns,
+                             ['a0', 'temp0', 'b', 'c0', 'c1', 'a1', 'temp1'])
+        finally:
+            del_header('wierd.csv')
+        try:
+            # in and no are keywords
+            # no is ok
+            add_header('wierd.csv', '_1, in, no, *-*a, a')
+            row = next(read_csv('wierd.csv', line_fix=lambda x: fillin(x, 5)))
+            self.assertEqual(row.columns,
+                             ['a__1', 'a_in', 'no', 'a0', 'a1'])
+        finally:
+            del_header('wierd.csv')
 
     def test_order_of_columns(self):
         with dbopen(':memory:') as conn:
             row = next(read_csv('iris.csv'))
-            self.assertEqual(row.columns, ['temp', 'SepalLength', 'SepalWidth',
-                                           'PetalLength', 'PetalWidth', 'Species'])
+            self.assertEqual(row.columns,
+                             ['temp', 'SepalLength', 'SepalWidth',
+                              'PetalLength', 'PetalWidth', 'Species'])
             conn.save(read_csv('iris.csv'), 'iris')
             row = next(conn.reel('iris'))
-            self.assertEqual(row.columns, ['temp', 'sepallength', 'sepalwidth',
-                                           'petallength', 'petalwidth', 'species'])
+            self.assertEqual(row.columns,
+                             ['temp', 'sepallength', 'sepalwidth',
+                              'petallength', 'petalwidth', 'species'])
 
     def test_adjoin_disjoin(self):
         with dbopen(':memory:') as conn:
@@ -357,18 +360,35 @@ class TestWriteCSV(unittest.TestCase):
                 del(r.SepalWidth)
                 del(r.SepalLength)
                 yield r
-        write_csv('sample2.csv', sample())
+        show(sample(), filename='sample2.csv')
         r0 = next(read_csv('sample2.csv'))
         self.assertEqual(len(r0.columns), 4)
 
 
 class TestReadHTMLTable(unittest.TestCase):
     def test_read_html_table(self):
-        write_csv('customers.csv', read_html_table('customers.html'))
-        write_csv('orders.csv', read_html_table('orders.html'))
+        show(read_html_table('customers.html'), filename='customers.csv')
+        show(read_html_table('orders.html'), filename='orders.csv')
         self.assertEqual(len(list(read_html_table('customers.html'))), 91)
         self.assertEqual(len(list(read_html_table('orders.html'))), 196)
 
+
+class TestLJoin(unittest.TestCase):
+    def test_ljoin1(self):
+        customers = read_html_table('customers.html')
+        orders = read_html_table('orders.html')
+        self.assertEqual(len(list(ljoin1(customers, orders, 'CustomerID'))),
+                         213)
+
+    def test_ljoin(self):
+        customers = read_html_table('customers.html')
+        orders0 = read_html_table('orders.html')
+        orders1 = read_html_table('orders.html')
+        orders2 = read_html_table('orders.html')
+
+        self.assertEqual(len(list(ljoin(customers,
+                                  [orders0, orders1, orders2], 'CustomerID'))),
+                         3951)
 
 
 unittest.main()

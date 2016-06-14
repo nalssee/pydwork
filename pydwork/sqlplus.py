@@ -38,14 +38,14 @@ import heapq
 from collections import Counter
 from contextlib import contextmanager
 from functools import wraps
-from itertools import chain, groupby, islice
+from itertools import chain, groupby, islice, dropwhile
 
 from bs4 import BeautifulSoup
 
 import pandas as pd
 
-__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'read_csv', 'write_csv',
-           'read_html_table',
+__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'read_csv',
+           'read_html_table', 'ljoin1', 'ljoin', 'show',
            'add_header', 'del_header', 'adjoin', 'disjoin', 'pick', 'todf',
            'sortl', 'set_workspace', 'WORKSPACE'
            ]
@@ -414,20 +414,6 @@ def pick(seq, cols):
     yield from (partial_row(row) for row in seq)
 
 
-#  Useful for building portfolios
-def chunk(seq, num):
-    """Makes num chunks from a seq, each about the same size.
-    """
-    size = len(list(seq)) / num
-    last = 0.0
-
-    i = 0
-    while last < len(seq):
-        yield i, seq[int(last):int(last + size)]
-        last += size
-        i += 1
-
-
 # Some files don't have a header
 def add_header(filename, header):
     """Adds a header line to an existing file.
@@ -503,14 +489,9 @@ def read_html_table(html_file, css_selector='table'):
             yield r
 
 
-def write_csv(csv_file, seq):
-    row0, seq = _peek_first(seq)
-    colnames = row0.columns
-    with open(os.path.join(WORKSPACE, csv_file), 'w') as fout:
-        writer = csv.writer(fout)
-        writer.writerow(colnames)
-        for r in seq:
-            writer.writerow(r.get_values(colnames))
+def show(seq, cols=None, n=30, filename=None):
+    with dbopen(':memory:') as c:
+        c.show(seq, n=n, cols=cols, filename=filename)
 
 
 def adjoin(colnames):
@@ -571,6 +552,7 @@ def sortl(seq, key=None, reverse=False, n=None):
         rowsize = sys.getsizeof(row0)
         available_memory = psutil.virtual_memory().available
         # About 25% of the available memory
+        # TODO: requires some sophistication
         n = available_memory // (rowsize * 4)
 
     if key and not hasattr(key, '__call__'):
@@ -597,30 +579,75 @@ def sortl(seq, key=None, reverse=False, n=None):
     for f in fs:
         f.close()
 
-# def ljoin(first, rest, key):
-#     """
-#     Args:
-#         first(iter)
-#         rest(list of iters)
-#         key(function, string, list of strings)
-#     Returns:
-#         iter
-#     """
-#     if not hasattr(key, '__call__'):
-#         key = _build_keyfn(key)
-#
-#     for r0 in sortl(first, key=key):
-#         val0 = key(r0)
-#         for seq0 in rest:
-#             dropwhile(lambda r: key(r) < val0, seq0)
-#             for r1 in seq0:
-#
-#
+
+def ljoin(first, rest, key):
+    """
+    """
+    for seq in rest:
+        first = ljoin1(first, seq, key)
+    yield from first
+
+
+# TODO: super ugly, clean up
+def ljoin1(first, second, key):
+    """
+    """
+    def merge(r0, r1):
+        r = Row()
+        for c in r1.columns:
+            setattr(r, c, getattr(r1, c))
+        for c in r0.columns:
+            setattr(r, c, getattr(r0, c))
+        return r
+
+    def add_null_columns(r0, columns):
+        r = Row()
+        for c in columns:
+            setattr(r, c, None)
+        for c in r0.columns:
+            setattr(r, c, getattr(r0, c))
+        return r
+
+    if not hasattr(key, '__call__'):
+        key = _build_keyfn(key)
+
+    second0, second = _peek_first(second)
+    second_columns = second0.columns
+
+    second = sortl(second, key=key)
+    val0 = None
+    rs0 = None
+    for r0 in sortl(first, key=key):
+        val1 = key(r0)
+        if val0 == val1:
+            yield from rs0
+        else:
+            val0 = val1
+            x, xs = _takewhile(lambda r: key(r) == val1,
+                               dropwhile(lambda r: key(r) < val1, second))
+            second = chain([x], second)
+            if xs:
+                rs0 = [merge(r0, r1) for r1 in xs]
+                yield from rs0
+            else:
+                yield add_null_columns(r0, second_columns)
 
 
 def set_workspace(dir):
     global WORKSPACE
     WORKSPACE = dir
+
+
+def _takewhile(predicate, iterable):
+    """A bit tricky
+    """
+    xs = []
+    for x in iterable:
+        if predicate(x):
+            xs.append(x)
+        else:
+            break
+    return x, xs
 
 
 def _build_keyfn(key):
