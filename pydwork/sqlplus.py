@@ -542,18 +542,17 @@ def disjoin(colnames):
     return dec
 
 
-def sortl(seq, key=None, reverse=False, n=None):
+# TODO: decide whether n or mem(memory usage ratio is better
+def sortl(seq, key=None, reverse=False, mem=0.3) :
     """
     Sort large sequence, so large that the system memmory can't hold it
     n(int): chunk size to sort
     """
     row0, seq = _peek_first(seq)
-    if not n:
-        rowsize = sys.getsizeof(row0)
-        available_memory = psutil.virtual_memory().available
-        # About 25% of the available memory
-        # TODO: requires some sophistication
-        n = available_memory // (rowsize * 4)
+
+    rowsize = sys.getsizeof(row0)
+    available_memory = psutil.virtual_memory().available
+    n = int((available_memory / rowsize) * mem)
 
     if key and not hasattr(key, '__call__'):
         key = _build_keyfn(key)
@@ -580,16 +579,16 @@ def sortl(seq, key=None, reverse=False, n=None):
         f.close()
 
 
-def ljoin(first, rest, key):
+def ljoin(first, rest, key, mem=0.3):
     """
     """
     for seq in rest:
-        first = ljoin1(first, seq, key)
+        first = ljoin1(first, seq, key, mem=mem)
     yield from first
 
 
 # TODO: super ugly, clean up
-def ljoin1(first, second, key):
+def ljoin1(first, second, key, mem=0.3):
     """
     """
     def merge(r0, r1):
@@ -614,10 +613,10 @@ def ljoin1(first, second, key):
     second0, second = _peek_first(second)
     second_columns = second0.columns
 
-    second = sortl(second, key=key)
+    second = sortl(second, key=key, mem=mem)
     val0 = None
     rs0 = None
-    for r0 in sortl(first, key=key):
+    for r0 in sortl(first, key=key, mem=mem):
         val1 = key(r0)
         if val0 == val1:
             yield from rs0

@@ -346,7 +346,7 @@ class TestSortl(unittest.TestCase):
             rs0.append(r.SepalWidth)
 
         rs1 = []
-        for r in sortl(read_csv('iris.csv'), key='SepalWidth', n=10):
+        for r in sortl(read_csv('iris.csv'), key='SepalWidth', mem=0.001):
             rs1.append(r.SepalWidth)
         self.assertEqual(rs0, rs1)
 
