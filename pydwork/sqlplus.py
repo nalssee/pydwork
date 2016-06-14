@@ -543,7 +543,7 @@ def disjoin(colnames):
 
 
 # TODO: decide whether n or mem(memory usage ratio is better
-def sortl(seq, key=None, reverse=False, mem=0.3) :
+def sortl(seq, key=None, reverse=False, mem=0.3):
     """
     Sort large sequence, so large that the system memmory can't hold it
     n(int): chunk size to sort
@@ -588,6 +588,8 @@ def ljoin(first, rest, key, mem=0.3):
 
 
 # TODO: super ugly, clean up
+# You may consider using npc library
+# I'd rather not now
 def ljoin1(first, second, key, mem=0.3):
     """
     """
