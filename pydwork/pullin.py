@@ -127,7 +127,11 @@ def fetch_items(drivers, items, fetchfn,
                     break
                 yield failure_string, item, ()
         print("Closing the driver...")
-        driver.close()
+        try:
+            # you may just want to just reqeusts
+            driver.close()
+        except:
+            pass
 
     def consumer(result1):
         nonlocal count
