@@ -269,11 +269,8 @@ class SQLPlus:
 
             if cols:
                 rows = select(rows, cols=cols)
-            try:
-                row0, rows = _peek_first(rows)
-            except:
-                print('\nEmpty Sequence')
-                return
+                
+            row0, rows = _peek_first(rows)
 
             colnames = row0.columns
             # implicit gflat
