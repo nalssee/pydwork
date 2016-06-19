@@ -292,7 +292,8 @@ class SQLPlus:
             # write file description
             if not os.path.isfile(os.path.join(WORKSPACE, filename)):
                 if desc:
-                    with open(os.path.join(filename[:-4] + '.desc'), 'w') as f:
+                    with open(os.path.join(WORKSPACE,
+                                           filename[:-4] + '.desc'), 'w') as f:
                         f.write(desc)
 
                 with open(os.path.join(WORKSPACE, filename), 'w') as fout:
@@ -471,7 +472,8 @@ def reel(csv_file, header=None, line_fix=(lambda x: x)):
     All columns are string, no matter what.
     it's intentional. Types are guessed once it is saved in DB
     """
-
+    if not csv_file.endswith('.csv'):
+        csv_file += '.csv'
     with open(os.path.join(WORKSPACE, csv_file)) as fin:
         first_line = fin.readline()[:-1]
         header = header or first_line
@@ -511,6 +513,8 @@ def read_html_table(html_file, css_selector='table'):
 def show(seq, cols=None, where=None,
          order=None, n=30, filename=None, desc=None):
     with dbopen(':memory:') as c:
+        if isinstance(seq, str):
+            seq = reel(seq)
         c.show(select(seq, where=where, order=order),
                n=n, cols=cols, filename=filename, desc=desc)
 
