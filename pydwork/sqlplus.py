@@ -292,7 +292,7 @@ class SQLPlus:
             # write file description
             if not os.path.isfile(os.path.join(WORKSPACE, filename)):
                 if desc:
-                    with open(os.path.join(filename[:-4] + '.desc')) as f:
+                    with open(os.path.join(filename[:-4] + '.desc'), 'w') as f:
                         f.write(desc)
 
                 with open(os.path.join(WORKSPACE, filename), 'w') as fout:
