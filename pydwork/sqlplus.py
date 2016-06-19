@@ -635,6 +635,8 @@ def ljoin(first, rest, key, mem=0.3):
 # TODO: super ugly, clean up
 # You may consider using npc library
 # I'd rather not now
+# this is a disaster!!
+# think again!!
 def ljoin1(first, second, key, mem=0.3):
     """
     """
