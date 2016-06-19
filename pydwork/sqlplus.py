@@ -190,12 +190,7 @@ class SQLPlus:
             name = name or seq.__name__
             seq = seq(*args)
 
-        # tests empty sequence
-        try:
-            row0, seq = _peek_first(seq)
-        except StopIteration:
-            print('\nEmpty Sequence, Nothing to Save')
-            return
+        row0, seq = _peek_first(seq)
 
         # implicitly gflat
         seq = gflat(seq)
