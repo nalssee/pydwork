@@ -293,7 +293,7 @@ class SQLPlus:
             if not os.path.isfile(os.path.join(WORKSPACE, filename)):
                 if desc:
                     with open(os.path.join(WORKSPACE,
-                                           filename[:-4] + '.desc'), 'w') as f:
+                                           filename[:-4] + '.txt'), 'w') as f:
                         f.write(desc)
 
                 with open(os.path.join(WORKSPACE, filename), 'w') as fout:
@@ -526,7 +526,7 @@ def drop(filename):
     if not filename.endswith('.csv'):
         filename = filename + '.csv'
     os.remove(os.path.join(WORKSPACE, filename))
-    descfile = os.path.join(filename[:-4] + '.desc')
+    descfile = os.path.join(filename[:-4] + '.txt')
     if os.path.isfile(descfile):
         os.remove(descfile)
 
