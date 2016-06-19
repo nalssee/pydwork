@@ -420,6 +420,9 @@ def select(seq, cols=None, where=None, order=None, mem=0.3):
 
     def id(x): return x
 
+    if isinstance(seq, str):
+        seq = reel(seq)
+
     if cols:
         cols = colsfn(cols)
     else:
