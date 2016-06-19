@@ -44,7 +44,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 
 __all__ = ['dbopen', 'Row', 'gby', 'gflat', 'reel',
-           'read_html_table', 'ljoin1', 'ljoin', 'show',
+           'read_html_table', 'ljoin1', 'ljoin', 'show', 'drop',
            'add_header', 'del_header', 'adjoin', 'disjoin', 'select', 'todf',
            'sortl', 'set_workspace']
 
