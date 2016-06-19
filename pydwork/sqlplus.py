@@ -193,7 +193,7 @@ class SQLPlus:
         # tests empty sequence
         try:
             row0, seq = _peek_first(seq)
-        except:
+        except StopIteration:
             print('\nEmpty Sequence, Nothing to Save')
             return
 
