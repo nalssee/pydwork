@@ -39,36 +39,10 @@ from bs4 import BeautifulSoup
 
 import pandas as pd
 
-__all__ = ['dbopen', 'Row', 'gby', 'gflat', 'reel',
+__all__ = ['dbopen', 'Row', 'gby', 'reel',
            'read_html_table', 'pick',
            'add_header', 'del_header', 'adjoin', 'disjoin',
-           'todf', 'set_workspace']
-
-# Some of the sqlite keywords are not allowed for column names
-# http://www.sqlite.org/sessions/lang_keywords.html
-SQLITE_KEYWORDS = [
-    "ABORT", "ACTION", "ADD", "AFTER", "ALL", "ALTER", "ANALYZE", "AND",
-    "AS", "ASC", "ATTACH", "AUTOINCREMENT", "BEFORE", "BEGIN", "BETWEEN",
-    "BY", "CASCADE", "CASE", "CAST", "CHECK", "COLLATE", "COLUMN", "COMMIT",
-    "CONFLICT", "CONSTRAINT", "CREATE", "CROSS", "CURRENT_DATE",
-    "CURRENT_TIME", "CURRENT_TIMESTAMP", "DATABASE", "DEFAULT", "DEFERRABLE",
-    "DEFERRED", "DELETE", "DESC", "DETACH", "DISTINCT", "DROP", "EACH", "ELSE",
-    "END", "ESCAPE", "EXCEPT", "EXCLUSIVE", "EXISTS", "EXPLAIN", "FAIL",
-    "FOR", "FOREIGN", "FROM", "FULL", "GLOB", "GROUP", "HAVING", "IF",
-    "IGNORE", "IMMEDIATE", "IN", "INDEX", "INDEXED", "INITIALLY", "INNER",
-    "INSERT", "INSTEAD", "INTERSECT", "INTO", "IS", "ISNULL", "JOIN", "KEY",
-    "LEFT", "LIKE", "LIMIT", "MATCH", "NATURAL",
-    # no is ok somehow
-    # no idea why
-    # "NO",
-    "NOT",
-    "NOTNULL", "NULL", "OF", "OFFSET", "ON", "OR", "ORDER", "OUTER", "PLAN",
-    "PRAGMA", "PRIMARY", "QUERY", "RAISE", "REFERENCES", "REGEXP", "REINDEX",
-    "RENAME", "REPLACE", "RESTRICT", "RIGHT", "ROLLBACK", "ROW", "SAVEPOINT",
-    "SELECT", "SET", "TABLE", "TEMP", "TEMPORARY", "THEN", "TO", "TRANSACTION",
-    "TRIGGER", "UNION", "UNIQUE", "UPDATE", "USING", "VACUUM", "VALUES",
-    "VIEW", "VIRTUAL", "WHEN", "WHERE"
-]
+           'todf', 'torows', 'set_workspace']
 
 
 WORKSPACE = ''
@@ -177,6 +151,20 @@ class SQLPlus:
 
         'args' are going to be passed as arguments for the generator function
         """
+        def save_rows_to_tempfile(f, rs, colnames):
+            def transform_value(val):
+                """If val contains a comma or newline it causes problems
+                So just remove them.
+                There might be some other safer methods but I don't think
+                newlines or commas are going to affect any data analysis.
+                """
+                return str(val).replace(',', ' ').replace('\n', ' ')
+
+            f.write((','.join(colnames) + '\n').encode())
+            # implicitly flatten
+            for r in rs:
+                vals = [transform_value(v) for v in r.get_values(colnames)]
+                f.write((','.join(vals) + '\n').encode())
 
         # for maintenance
         nrow = n
@@ -187,9 +175,6 @@ class SQLPlus:
             seq = seq(*args)
 
         row0, seq = _peek_first(seq)
-
-        # implicitly gflat
-        seq = gflat(seq)
 
         if nrow:
             seq = islice(seq, nrow)
@@ -219,7 +204,7 @@ class SQLPlus:
         with tempfile.TemporaryFile() as fport:
             # Write the iterator in a temporary file
             # encode it as binary.
-            _save_rows_to_tempfile(fport, seq, colnames)
+            save_rows_to_tempfile(fport, seq, colnames)
 
             # create table
             istmt = _insert_statement(name, len(colnames))
@@ -232,12 +217,8 @@ class SQLPlus:
 
             for line in fport:
                 # line[:-1] because last index indicates '\n'
-                try:
-                    line_vals = line[:-1].decode().split(',')
-                    self._cursor.execute(istmt, line_vals)
-                except:
-                    pass
-                    # raise ValueError("Invalid line to save", line_vals)
+                line_vals = line[:-1].decode().split(',')
+                self._cursor.execute(istmt, line_vals)
         self.tables.append(name)
 
     # Be careful so that you don't overwrite the file
@@ -265,13 +246,11 @@ class SQLPlus:
 
             if cols:
                 rows = pick(cols, rows)
-                # rows = pick(cols, rows)
 
             row0, rows = _peek_first(rows)
 
             colnames = row0.columns
-            # implicit gflat
-            seq_rvals = (r.get_values(colnames) for r in gflat(rows))
+            seq_rvals = (r.get_values(colnames) for r in rows)
 
         if filename:
 
@@ -343,71 +322,42 @@ def dbopen(dbfile):
 
 # 'grouped row' refers to a Row object
 # with all-list properties
-def gby(seq, key, bind=False):
+def gby(seq, key):
     """Group the iterator by columns
 
     Depends heavily on 'groupby' from itertools
 
     Args
         seq: an iterator
-        group: Either a function, or a comma(space) separated string,
+        key: Either a function, or a comma(space) separated string,
                or a list(tuple) of strings
                or [] to group them all
-        bind: True, for a grouped rows
-              False, for a list of rows
     """
-    def _grouped_row(rows, columns):
-        """Returns a grouped row, from a list of simple rows
-        """
-        g_row = Row()
-        for col in columns:
-            setattr(g_row, col, [])
-        for row1 in rows:
-            for col in columns:
-                getattr(g_row, col).append(getattr(row1, col))
-        return g_row
-
     if not hasattr(key, '__call__'):
         key = _build_keyfn(key)
     g_seq = groupby(seq, key)
 
-    if bind:
-        first_group = list(next(g_seq)[1])
-        colnames = first_group[0].columns
-
-        yield _grouped_row(first_group, colnames)
-        for _, rows in g_seq:
-            yield _grouped_row(rows, colnames)
-    else:
-        for _, rows in g_seq:
-            yield list(rows)
+    for _, rows in g_seq:
+        yield list(rows)
 
 
-def todf(g_row):
-    "A grouped row to a data from from pandas"
-    return pd.DataFrame({col: getattr(g_row, col) for col in g_row.columns})
+def todf(rows):
+    "a list of rows to a dataframe"
+    colnames = rows[0].columns
+    d = {}
+    for col in zip(colnames, *(r.get_values(colnames) for r in rows)):
+        d[col[0]] = col[1:]
+    return pd.DataFrame(d)
 
 
-def gflat(seq):
-    """Turn an iterator of grouped rows into an iterator of simple rows.
-    """
-    def tolist(val):
-        "if val is not a list then make it a list"
-        if isinstance(val, list) or isinstance(val, pd.core.series.Series):
-            return list(val)
-        else:
-            return [val]
-
-    row0, seq = _peek_first(seq)
-
-    colnames = list(row0.columns)
-
-    for row in seq:
-        for vals in zip(*(tolist(getattr(row, col)) for col in colnames)):
-            new_row = Row()
-            for col, val in zip(colnames, vals):
-                setattr(new_row, col, val)
-            yield new_row
+def torows(df):
+    "dataframe => rows"
+    colnames = df.columns.values
+    for vals in df.values.tolist():
+        r = Row()
+        for c, v in zip(colnames, vals):
+            setattr(r, c, v)
+        yield r
 
 
 def pick(cols, seq):
@@ -450,13 +400,16 @@ def convtype(val):
             return val
 
 
-def reel(csv_file, header=None, line_fix=(lambda x: x)):
+def reel(csv_file, header=None):
     """Loads well-formed csv file, 1 header line and the rest is data
 
     returns an iterator
-    All columns are string, no matter what.
-    it's intentional. Types are guessed once it is saved in DB
     """
+    def is_empty_line(line):
+        """Tests if a list of strings is empty for example ["", ""] or []
+        """
+        return [x for x in line if x.strip() != ""] == []
+
     if not csv_file.endswith('.csv'):
         csv_file += '.csv'
     with open(os.path.join(WORKSPACE, csv_file)) as fin:
@@ -464,14 +417,11 @@ def reel(csv_file, header=None, line_fix=(lambda x: x)):
         header = header or first_line
         columns = _gen_valid_column_names(_listify(header))
         ncol = len(columns)
-        for line in csv.reader(fin):
+        for line_no, line in enumerate(csv.reader(fin)):
             if len(line) != ncol:
-                if _is_empty_line(line):
+                if is_empty_line(line):
                     continue
-                line = line_fix(line)
-                # if it's still not valid
-                if len(line) != ncol:
-                    raise ValueError("column number mismatch", columns, line)
+                raise ValueError("%s at %s invalid line" % (csv_file, line_no))
             row1 = Row()
             for col, val in zip(columns, line):
                 setattr(row1, col, convtype(val))
@@ -549,6 +499,11 @@ def set_workspace(dir):
     WORKSPACE = dir
 
 
+def camelcase_to_underscore(name):
+    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
+
 def _build_keyfn(key):
     """
     If key is not a function, but a string or a list of strings
@@ -561,46 +516,41 @@ def _build_keyfn(key):
         return lambda r: [getattr(r, colname) for colname in colnames]
 
 
-def _save_rows_to_tempfile(f, rs, colnames):
-    def transform_value(val):
-        """If val contains a comma or newline it causes problems
-        So just remove them.
-        There might be some other safer methods but I don't think
-        newlines or commas are going to affect any data analysis.
-        """
-        return str(val).replace(',', ' ').replace('\n', ' ')
-
-    f.write((','.join(colnames) + '\n').encode())
-    # implicitly flatten
-    for r in rs:
-        vals = [transform_value(v) for v in r.get_values(colnames)]
-        f.write((','.join(vals) + '\n').encode())
-
-
-def _load_rows_from_tempfile(f):
-    def splitit(line):
-        # line[:-1] because last index indicates '\n'
-        return line[:-1].decode().split(',')
-    columns = splitit(f.readline())
-    n = len(columns)
-    for line in f:
-        r = Row()
-        vals = splitit(line)
-        if len(vals) != n:
-            # TODO: Error or pass that is the question
-            # there are too many wierd lines for my job
-            continue
-        for name, val in zip(columns, vals):
-            setattr(r, name, convtype(val))
-        yield r
-
-
 # TODO: unnecessarily complex
 def _gen_valid_column_names(columns):
     """generate valid column names automatically
 
     ['a', '_b', 'a', 'a1"*c', 'a1c'] => ['a0', 'a_b', 'a1', 'a1c0', 'a1c1']
+
+    uppercase => lowercase
     """
+    # Some of the sqlite keywords are not allowed for column names
+    # http://www.sqlite.org/sessions/lang_keywords.html
+    SQLITE_KEYWORDS = [
+        "ABORT", "ACTION", "ADD", "AFTER", "ALL", "ALTER", "ANALYZE", "AND",
+        "AS", "ASC", "ATTACH", "AUTOINCREMENT", "BEFORE", "BEGIN", "BETWEEN",
+        "BY", "CASCADE", "CASE", "CAST", "CHECK", "COLLATE", "COLUMN",
+        "COMMIT", "CONFLICT", "CONSTRAINT", "CREATE", "CROSS", "CURRENT_DATE",
+        "CURRENT_TIME", "CURRENT_TIMESTAMP", "DATABASE", "DEFAULT",
+        "DEFERRABLE", "DEFERRED", "DELETE", "DESC", "DETACH", "DISTINCT",
+        "DROP", "EACH", "ELSE",
+        "END", "ESCAPE", "EXCEPT", "EXCLUSIVE", "EXISTS", "EXPLAIN", "FAIL",
+        "FOR", "FOREIGN", "FROM", "FULL", "GLOB", "GROUP", "HAVING", "IF",
+        "IGNORE", "IMMEDIATE", "IN", "INDEX", "INDEXED", "INITIALLY", "INNER",
+        "INSERT", "INSTEAD", "INTERSECT", "INTO", "IS", "ISNULL", "JOIN",
+        "KEY", "LEFT", "LIKE", "LIMIT", "MATCH", "NATURAL",
+        # no is ok somehow
+        # no idea why
+        # "NO",
+        "NOT", "NOTNULL", "NULL", "OF", "OFFSET", "ON", "OR", "ORDER", "OUTER",
+        "PLAN", "PRAGMA", "PRIMARY", "QUERY", "RAISE", "REFERENCES",
+        "REGEXP", "REINDEX", "RENAME", "REPLACE", "RESTRICT", "RIGHT",
+        "ROLLBACK", "ROW", "SAVEPOINT", "SELECT", "SET", "TABLE", "TEMP",
+        "TEMPORARY", "THEN", "TO", "TRANSACTION",
+        "TRIGGER", "UNION", "UNIQUE", "UPDATE", "USING", "VACUUM", "VALUES",
+        "VIEW", "VIRTUAL", "WHEN", "WHERE"
+    ]
+
     temp_columns = []
     for col in columns:
         # save only alphanumeric and underscore
@@ -630,17 +580,6 @@ def _gen_valid_column_names(columns):
         else:
             result_columns.append(col)
     return [camelcase_to_underscore(x) for x in result_columns]
-
-
-def camelcase_to_underscore(name):
-    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
-    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
-
-
-def _is_empty_line(line):
-    """Tests if a list of strings is empty for example ["", ""] or []
-    """
-    return [x for x in line if x.strip() != ""] == []
 
 
 def _listify(colstr):

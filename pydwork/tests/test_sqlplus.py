@@ -57,19 +57,8 @@ class Testdbopen(unittest.TestCase):
             def top20_sl():
                 rows = conn.reel(
                     "select * from first_char order by sp1, sl desc")
-                for g in gby(rows, "sp1", bind=True):
-                    # g is again an object
-                    # just each property is a list.
-                    # And all properties are of the same length at this point
-
-                    # Say you add a column with 20 items
-                    # and the other columns have items larger than that.
-                    # Then if you save this iterator in DB,
-                    # the other columns are cut in at 20 as well.
-
-                    # Think what zip does. see gflat
-                    g.no = g.no[:20]
-                    yield g
+                for rs in gby(rows, "sp1"):
+                    yield from rs[:20]
             # If you are saving grouped objects,
             # they are flattened first
             conn.save(top20_sl)
@@ -90,30 +79,12 @@ class Testdbopen(unittest.TestCase):
 
             # gby with empty list group
             # All of the rows in a table is grouped.
-            for g in gby(conn.reel("select * from first_char"), [], bind=True):
+            for rs in gby(conn.reel("select * from first_char"), []):
                 # the entire data sample is 150
-                self.assertEqual(len(g.no), 150)
+                self.assertEqual(len(rs), 150)
 
             # list_tables, in alphabetical order
             self.assertEqual(conn.list_tables(), ['first_char', 'top20_sl'])
-
-            def empty_rows(query):
-                for g in gby(conn.reel(query), ["sl"], bind=True):
-                    if len(g.sl) > 10:
-                        yield g
-
-    def test_gflat(self):
-        """Tests if applying gby and gflat subsequently yields the original
-        """
-        with dbopen(':memory:') as conn:
-            conn.save(reel("iris.csv",
-                           header="no,sl,sw,pl,pw,sp"), name="iris")
-            a = list(conn.reel("select * from iris order by sl"))
-            b = list(gflat(gby(conn.reel("select * from iris order by sl"),
-                     'sl', bind=True)))
-            for a1, b1 in zip(a, b):
-                self.assertEqual(a1.sl, b1.sl)
-                self.assertEqual(a1.pl, b1.pl)
 
     def test_run_over_run(self):
         with dbopen(':memory:') as conn:
@@ -160,8 +131,11 @@ class Testdbopen(unittest.TestCase):
     def test_saving_csv(self):
         with dbopen(':memory:') as conn:
             iris = reel('iris.csv', header="no sl sw pl pw sp")
-            conn.show(islice(gby(iris, "sp", bind=True), 2),
-                      filename='sample.csv')
+
+            def first2group():
+                for rs in islice(gby(iris, 'sp'), 2):
+                    yield from rs
+            conn.show(first2group, filename='sample.csv')
             # each group contains 50 rows, hence 100
             self.assertEqual(len(list(reel('sample.csv'))), 100)
 
@@ -181,44 +155,6 @@ class Testdbopen(unittest.TestCase):
             self.assertEqual(rows[0].B, '')
             self.assertEqual(rows[0].b, 20.2)
 
-    def test_add_header(self):
-        with dbopen(':memory:') as conn:
-            with self.assertRaises(ValueError):
-                for r in reel('wierd.csv'):
-                    pass
-            try:
-                add_header('wierd.csv', 'a,b,c')
-                rows = list(reel('wierd.csv',
-                                 line_fix=lambda x: fillin(x, 3)))
-            finally:
-                del_header('wierd.csv')
-
-            self.assertEqual(len(rows), 7)
-            conn.save(rows, name='wierd')
-
-            avals = [r.a for r in conn.reel(
-                "select * from wierd order by a")][:3]
-            self.assertEqual(avals, [10, 20, 30])
-
-    def test_column_generation(self):
-        try:
-            add_header('wierd.csv', 'a,,b,c,c,a,')
-            row = next(reel('wierd.csv',
-                            line_fix=lambda x: fillin(x, 7)))
-            self.assertEqual(row.columns,
-                             ['a0', 'temp0', 'b', 'c0', 'c1', 'a1', 'temp1'])
-        finally:
-            del_header('wierd.csv')
-        try:
-            # in and no are keywords
-            # no is ok
-            add_header('wierd.csv', '_1, in, no, *-*a, a')
-            row = next(reel('wierd.csv', line_fix=lambda x: fillin(x, 5)))
-            self.assertEqual(row.columns,
-                             ['a__1', 'a_in', 'no', 'a0', 'a1'])
-        finally:
-            del_header('wierd.csv')
-
     def test_order_of_columns(self):
         with dbopen(':memory:') as conn:
             row = next(reel('iris.csv'))
@@ -234,7 +170,7 @@ class Testdbopen(unittest.TestCase):
     def test_adjoin_disjoin(self):
         with dbopen(':memory:') as conn:
             def unsafe():
-                for rs in gby(reel('iris.csv'), 'Species', bind=False):
+                for rs in gby(reel('iris.csv'), 'Species'):
                     rs[0].first = 'yes'
                     rs[1].second = 'yes'
                     rs[2].third = 'yes'
@@ -252,7 +188,7 @@ class Testdbopen(unittest.TestCase):
             @disjoin('temp')
             @adjoin('first, second, third')
             def safe():
-                for rs in gby(reel('iris.csv'), 'Species', bind=False):
+                for rs in gby(reel('iris.csv'), 'Species'):
                     rs[0].first = 'yes'
                     rs[1].second = 'yes'
                     rs[2].third = 'yes'
@@ -269,53 +205,32 @@ class Testdbopen(unittest.TestCase):
             self.assertEqual([r2.first, r2.second, r2.third], ['', 'yes', ''])
             self.assertEqual([r3.first, r3.second, r3.third], ['', '', 'yes'])
 
-    def test_partial_loading(self):
-        # You can save only some part of a sequence.
-        with dbopen(':memory:') as conn:
-            conn.save(gby(reel('iris.csv'), 'Species', bind=True),
-                      n=78, name='setosa')
-            self.assertEqual(len(list(conn.reel('setosa'))), 78)
-
-    def test_gflat2(self):
-        with dbopen(':memory:') as conn:
-            def foo():
-                for g in gby(reel('iris.csv'), 'species', bind=True):
-                    r = Row()
-                    # sometimes just a value
-                    r.x = 10
-                    # sometimes a list, instead of g.Species[0], just
-                    r.s = g.species
-                    yield r
-            conn.save(foo)
-            self.assertEqual([r.s for r in conn.reel('foo')],
-                             ['setosa', 'versicolor', 'virginica'])
-
-    def test_df(self):
+    def test_todf(self):
         with dbopen(':memory:') as conn:
             conn.save(reel('iris.csv'), name='iris')
-            for g in gby(conn.reel('iris'), 'species', bind=True):
-                self.assertEqual(todf(g).shape, (50, 6))
+            for rs in gby(conn.reel('iris'), 'species'):
+                self.assertEqual(todf(rs).shape, (50, 6))
 
-    def test_gflat3(self):
+    def test_torows(self):
         "Yield pandas data frames and they are flattened again"
         with dbopen(':memory:') as conn:
             conn.save(reel('iris.csv'), name='iris')
 
             # do not use adjoin or disjoin. it's crazy
             def length_plus_width():
-                for g in gby(conn.reel('iris'), 'species', bind=True):
-                    df = todf(g)
+                for rs in gby(conn.reel('iris'), 'species'):
+                    df = todf(rs)
                     df['sepal'] = df.sepal_length + df.sepal_width
                     df['petal'] = df.petal_length + df.petal_width
                     del df['sepal_length']
                     del df['sepal_width']
                     del df['petal_length']
                     del df['petal_width']
-                    yield df
+                    yield from torows(df)
 
             conn.save(length_plus_width)
-            iris_add = list(conn.reel('length_plus_width'))
-            for r1, r2 in zip(conn.reel('iris'), iris_add):
+            iris = list(conn.reel('iris'))
+            for r1, r2 in zip(iris, conn.reel('length_plus_width')):
                 a = round(r1.sepal_length + r1.sepal_width, 2)
                 b = round(r2.sepal, 2)
                 self.assertEqual(a, b)
