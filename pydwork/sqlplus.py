@@ -318,7 +318,7 @@ class SQLPlus:
             if not overwrite and \
                os.path.isfile(filename):
                 continue
-            self.show(table, n=None, filename=filename)
+            self.show(table, n=n, filename=filename)
 
 
 @contextmanager
