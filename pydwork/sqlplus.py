@@ -308,6 +308,7 @@ class SQLPlus:
         tables = [row[1] for row in query]
         return sorted(tables)
 
+    # TODO: summarize and drop are not covered in tests
     def summarize(self, n=1000, overwrite=True):
         summary_dir = os.path.join(WORKSPACE, 'summary')
         if not os.path.exists(summary_dir):
@@ -319,6 +320,13 @@ class SQLPlus:
                os.path.isfile(filename):
                 continue
             self.show(table, n=n, filename=filename)
+
+    def drop(self, table):
+        self.run('drop table if exists ?', args=(table,))
+        summary_dir = os.path.join(WORKSPACE, 'summary')
+        filename = os.path.join(summary_dir, table + '.csv')
+        if os.path.isfile(filename):
+            os.remove(filename)
 
 
 @contextmanager
