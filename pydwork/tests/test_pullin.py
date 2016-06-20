@@ -1,14 +1,15 @@
-import os, sys
+import os
+import sys
+from selenium import webdriver
+import unittest
+import pandas as pd
+
 
 TESTPATH = os.path.dirname(os.path.realpath(__file__))
 PYPATH = os.path.join(TESTPATH, '..', '..')
 sys.path.append(PYPATH)
 
 from pydwork.pullin import *
-from selenium import webdriver
-import unittest
-import time
-import pandas as pd
 
 
 class PullInTest(unittest.TestCase):
@@ -25,7 +26,9 @@ class PullInTest(unittest.TestCase):
             driver.get(item)
             box = driver.find_element_by_css_selector('ul.stripes_list')
             links = box.find_elements_by_css_selector("li > div > a")
-            return pd.DataFrame({'article_addr': [link.get_attribute("href") for link in links]})
+            return pd.DataFrame({'article_addr':
+                                 [link.get_attribute("href")
+                                  for link in links]})
 
         drivers = init_drivers(2, webdriver.PhantomJS)
 

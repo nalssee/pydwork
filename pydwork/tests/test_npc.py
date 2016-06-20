@@ -1,13 +1,13 @@
-import os, sys
+import os
+import sys
+import unittest
 
 TESTPATH = os.path.dirname(os.path.realpath(__file__))
 PYPATH = os.path.join(TESTPATH, '..', '..')
 sys.path.append(PYPATH)
 
-
 from pydwork.npc import *
 from pydwork.util import timeit
-import unittest
 
 
 class CnPUtilsTest(unittest.TestCase):
@@ -33,7 +33,8 @@ class CnPUtilsTest(unittest.TestCase):
         print('Parallel')
         with timeit():
             result = []
-            npc(fib_producers(input_vals, 2), lambda x: result.append(x), parallel=True)
+            npc(fib_producers(input_vals, 2), lambda x: result.append(x),
+                parallel=True)
             print(result)
             self.assertEqual(len(result), len(input_vals))
         print('\n')
