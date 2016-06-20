@@ -314,7 +314,7 @@ class SQLPlus:
             os.makedirs(summary_dir)
 
         for table in self.list_tables():
-            filename = os.path.join(summary_dir, table, '.csv')
+            filename = os.path.join(summary_dir, table + '.csv')
             if not overwrite and \
                os.path.isfile(filename):
                 continue
