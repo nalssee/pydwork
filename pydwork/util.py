@@ -15,6 +15,12 @@ def timeit():
 def nchunks(xs, n):
     """Yields n chunks about the same size. """
     xs = list(xs)
-    chunksize = int(math.ceil(len(xs) / n))
+    start = 0
     for i in range(n):
-        yield xs[chunksize * i:chunksize * (i + 1)]
+        if i + 1 == n:
+            # last chunk
+            yield xs[start:]
+        else:
+            chunksize = round(len(xs[start:]) / (n - i))
+            yield xs[start:start + chunksize]
+            start += chunksize

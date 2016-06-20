@@ -23,30 +23,26 @@ What you need to know is in unit test code at test/*
 """
 
 import os
+import sys
 import csv
 import fileinput
 import re
 import sqlite3
 import tempfile
-# memory check
-import psutil
-import sys
-import heapq
-
 
 from collections import Counter
 from contextlib import contextmanager
 from functools import wraps
-from itertools import chain, groupby, islice, dropwhile
+from itertools import chain, groupby, islice
 
 from bs4 import BeautifulSoup
 
 import pandas as pd
 
 __all__ = ['dbopen', 'Row', 'gby', 'gflat', 'reel',
-           'read_html_table', 'ljoin1', 'ljoin', 'show', 'drop',
-           'add_header', 'del_header', 'adjoin', 'disjoin', 'select', 'todf',
-           'sortl', 'set_workspace']
+           'read_html_table', 'pick',
+           'add_header', 'del_header', 'adjoin', 'disjoin',
+           'todf', 'set_workspace']
 
 # Some of the sqlite keywords are not allowed for column names
 # http://www.sqlite.org/sessions/lang_keywords.html
@@ -245,7 +241,7 @@ class SQLPlus:
         self.tables.append(name)
 
     # Be careful so that you don't overwrite the file
-    def show(self, query, args=(), filename=None, desc=None, n=30, cols=None):
+    def show(self, query, args=(), filename=None, n=30, cols=None):
         """Printing to a screen or saving to a file
 
         'query' can be either a SQL query string or an iterable.
@@ -268,8 +264,9 @@ class SQLPlus:
                 rows = rows(*args)
 
             if cols:
-                rows = select(rows, cols=cols)
-                
+                rows = pick(cols, rows)
+                # rows = pick(cols, rows)
+
             row0, rows = _peek_first(rows)
 
             colnames = row0.columns
@@ -277,20 +274,17 @@ class SQLPlus:
             seq_rvals = (r.get_values(colnames) for r in gflat(rows))
 
         if filename:
-            # ignore n
+
+            # practically infinite number
+            n = n or sys.maxsize
 
             if not filename.endswith('.csv'):
                 filename = filename + '.csv'
-            # write file description
-            if not os.path.isfile(os.path.join(WORKSPACE, filename)):
-                if desc:
-                    with open(os.path.join(WORKSPACE,
-                                           filename[:-4] + '.txt'), 'w') as f:
-                        f.write(desc)
 
+            if not os.path.isfile(os.path.join(WORKSPACE, filename)):
                 with open(os.path.join(WORKSPACE, filename), 'w') as fout:
                     fout.write(','.join(colnames) + '\n')
-                    for rvals in seq_rvals:
+                    for rvals in islice(seq_rvals, n):
                         fout.write(','.join([str(val) for val in rvals]) +
                                    '\n')
         else:
@@ -314,6 +308,18 @@ class SQLPlus:
         tables = [row[1] for row in query]
         return sorted(tables)
 
+    def summarize(self, n=1000, overwrite=True):
+        summary_dir = os.path.join(WORKSPACE, 'summary')
+        if not os.path.exists(summary_dir):
+            os.makedirs(summary_dir)
+
+        for table in self.list_tables():
+            filename = os.path.join(summary_dir, table, '.csv')
+            if not overwrite and \
+               os.path.isfile(filename):
+                continue
+            self.show(table, n=None, filename=filename)
+
 
 @contextmanager
 def dbopen(dbfile):
@@ -329,7 +335,7 @@ def dbopen(dbfile):
 
 # 'grouped row' refers to a Row object
 # with all-list properties
-def gby(seq, key, bind=True):
+def gby(seq, key, bind=False):
     """Group the iterator by columns
 
     Depends heavily on 'groupby' from itertools
@@ -396,37 +402,13 @@ def gflat(seq):
             yield new_row
 
 
-def select(seq, cols=None, where=None, order=None, mem=0.3):
-    def colsfn(cols):
-        if not hasattr(cols, '__call__'):
-            colnames = _listify(cols)
-
-            def fn(r):
-                newr = Row()
-                for c in colnames:
-                    setattr(newr, c, getattr(r, c))
-                return newr
-            return fn
-        else:
-            return cols
-
-    def id(x): return x
-
-    if isinstance(seq, str):
-        seq = reel(seq)
-
-    if cols:
-        cols = colsfn(cols)
-    else:
-        cols = id
-
-    if where:
-        seq = (cols(r) for r in seq if where(r))
-
-    if order:
-        yield from sortl((cols(r) for r in seq), key=order, mem=mem)
-    else:
-        yield from (cols(r) for r in seq)
+def pick(cols, seq):
+    cols = _listify(cols)
+    for r in seq:
+        r1 = Row()
+        for c in cols:
+            setattr(r1, c, getattr(r, c))
+        yield r1
 
 
 # Some files don't have a header
@@ -505,24 +487,6 @@ def read_html_table(html_file, css_selector='table'):
             yield r
 
 
-def show(seq, cols=None, where=None,
-         order=None, n=30, filename=None, desc=None):
-    with dbopen(':memory:') as c:
-        if isinstance(seq, str):
-            seq = reel(seq)
-        c.show(select(seq, where=where, order=order),
-               n=n, cols=cols, filename=filename, desc=desc)
-
-
-def drop(filename):
-    if not filename.endswith('.csv'):
-        filename = filename + '.csv'
-    os.remove(os.path.join(WORKSPACE, filename))
-    descfile = os.path.join(filename[:-4] + '.txt')
-    if os.path.isfile(descfile):
-        os.remove(descfile)
-
-
 def adjoin(colnames):
     """Decorator to ensure that the rows to have the columns for sure
     """
@@ -571,134 +535,10 @@ def disjoin(colnames):
     return dec
 
 
-# TODO: decide whether n or mem(memory usage ratio is better
-def sortl(seq, key=None, reverse=False, mem=0.3):
-    """
-    Sort large sequence, so large that the system memmory can't hold it
-    n(int): chunk size to sort
-    """
-    try:
-        row0, seq = _peek_first(seq)
-    except:
-        # stop earlier for empty sequence
-        # TODO: There must be a more elegant way.
-        yield from []
-        return
-
-    rowsize = sys.getsizeof(row0)
-    available_memory = psutil.virtual_memory().available
-    n = int((available_memory / rowsize) * mem)
-
-    if key and not hasattr(key, '__call__'):
-        key = _build_keyfn(key)
-
-    colnames = row0.columns
-
-    iters = []
-    fs = []
-
-    try:
-        while True:
-            rs = sorted(islice(seq, n), key=key, reverse=reverse)
-            if not rs:
-                break
-            f = tempfile.TemporaryFile()
-            _save_rows_to_tempfile(f, rs, colnames)
-            f.seek(0)
-            iters.append(_load_rows_from_tempfile(f))
-            fs.append(f)
-        for r in heapq.merge(*iters, key=key, reverse=reverse):
-            yield r
-        # if you don't close the files,
-        # python complains
-    finally:
-        for f in fs:
-            f.close()
-
-
-def ljoin(first, rest, key, mem=0.3):
-    """
-    """
-    for seq in rest:
-        first = ljoin1(first, seq, key, mem=mem)
-    yield from first
-
-
-# TODO: super ugly, clean up
-# You may consider using npc library
-# I'd rather not now
-# this is a disaster!!
-# think again!!
-def ljoin1(first, second, key, mem=0.3):
-    """
-    """
-    def merge(r0, r1):
-        # Maybe I am too timid not to modify r0
-        r = Row()
-        for c in r1.columns:
-            setattr(r, c, getattr(r1, c))
-        for c in r0.columns:
-            setattr(r, c, getattr(r0, c))
-        return r
-
-    def merge_null(r0, columns):
-        r = Row()
-        for c in columns:
-            setattr(r, c, None)
-        for c in r0.columns:
-            setattr(r, c, getattr(r0, c))
-        return r
-
-    if not hasattr(key, '__call__'):
-        key = _build_keyfn(key)
-
-    second0, second = _peek_first(second)
-    second_columns = second0.columns
-
-    second = sortl(second, key=key, mem=mem)
-    keyval0 = None
-    rs0 = None
-    for r0 in sortl(first, key=key, mem=mem):
-        keyval1 = key(r0)
-        if keyval0 == keyval1:
-            # same key value again
-            yield from rs0
-        else:
-            keyval0 = keyval1
-
-            second = dropwhile(lambda r: key(r) < keyval1, second)
-            xs, extra = _takewhile(lambda r: key(r) == keyval1, second)
-            # put extra back to second(rows)
-            second = chain([extra], second)
-
-            if xs:
-                rs0 = [merge(r0, r1) for r1 in xs]
-                yield from rs0
-            else:
-                yield merge_null(r0, second_columns)
-
-
 # Should I just export WORKSPACE variable directly?
 def set_workspace(dir):
     global WORKSPACE
     WORKSPACE = dir
-
-
-# itertools.dropwhile is just ok to use right away
-# but itertools.takewhile consumes one more element
-# so you need to put it back later
-def _takewhile(predicate, iterable):
-    """A bit tricky
-    """
-    xs = []
-    for x in iterable:
-        if predicate(x):
-            xs.append(x)
-        else:
-            break
-    # you have consumed one more element that doens't satisfy predicate
-    # so you return it together with the result you wanted
-    return xs, x
 
 
 def _build_keyfn(key):

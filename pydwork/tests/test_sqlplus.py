@@ -57,7 +57,7 @@ class Testdbopen(unittest.TestCase):
             def top20_sl():
                 rows = conn.reel(
                     "select * from first_char order by sp1, sl desc")
-                for g in gby(rows, "sp1"):
+                for g in gby(rows, "sp1", bind=True):
                     # g is again an object
                     # just each property is a list.
                     # And all properties are of the same length at this point
@@ -90,7 +90,7 @@ class Testdbopen(unittest.TestCase):
 
             # gby with empty list group
             # All of the rows in a table is grouped.
-            for g in gby(conn.reel("select * from first_char"), []):
+            for g in gby(conn.reel("select * from first_char"), [], bind=True):
                 # the entire data sample is 150
                 self.assertEqual(len(g.no), 150)
 
@@ -98,7 +98,7 @@ class Testdbopen(unittest.TestCase):
             self.assertEqual(conn.list_tables(), ['first_char', 'top20_sl'])
 
             def empty_rows(query):
-                for g in gby(conn.reel(query), ["sl"]):
+                for g in gby(conn.reel(query), ["sl"], bind=True):
                     if len(g.sl) > 10:
                         yield g
 
@@ -110,7 +110,7 @@ class Testdbopen(unittest.TestCase):
                            header="no,sl,sw,pl,pw,sp"), name="iris")
             a = list(conn.reel("select * from iris order by sl"))
             b = list(gflat(gby(conn.reel("select * from iris order by sl"),
-                     'sl')))
+                     'sl', bind=True)))
             for a1, b1 in zip(a, b):
                 self.assertEqual(a1.sl, b1.sl)
                 self.assertEqual(a1.pl, b1.pl)
@@ -160,7 +160,8 @@ class Testdbopen(unittest.TestCase):
     def test_saving_csv(self):
         with dbopen(':memory:') as conn:
             iris = reel('iris.csv', header="no sl sw pl pw sp")
-            conn.show(islice(gby(iris, "sp"), 2), filename='sample.csv')
+            conn.show(islice(gby(iris, "sp", bind=True), 2),
+                      filename='sample.csv')
             # each group contains 50 rows, hence 100
             self.assertEqual(len(list(reel('sample.csv'))), 100)
 
@@ -261,7 +262,7 @@ class Testdbopen(unittest.TestCase):
             conn.save(safe)
             with self.assertRaises(ValueError):
                 # temp doesn't exist
-                conn.save(select(safe(), cols="temp"))
+                conn.save(pick(['temp'], safe()))
 
             r1, r2, r3, *_ = safe()
             self.assertEqual([r1.first, r1.second, r1.third], ['yes', '', ''])
@@ -271,14 +272,14 @@ class Testdbopen(unittest.TestCase):
     def test_partial_loading(self):
         # You can save only some part of a sequence.
         with dbopen(':memory:') as conn:
-            conn.save(gby(reel('iris.csv'), 'Species'),
+            conn.save(gby(reel('iris.csv'), 'Species', bind=True),
                       n=78, name='setosa')
             self.assertEqual(len(list(conn.reel('setosa'))), 78)
 
     def test_gflat2(self):
         with dbopen(':memory:') as conn:
             def foo():
-                for g in gby(reel('iris.csv'), 'species'):
+                for g in gby(reel('iris.csv'), 'species', bind=True):
                     r = Row()
                     # sometimes just a value
                     r.x = 10
@@ -292,7 +293,7 @@ class Testdbopen(unittest.TestCase):
     def test_df(self):
         with dbopen(':memory:') as conn:
             conn.save(reel('iris.csv'), name='iris')
-            for g in gby(conn.reel('iris'), 'species'):
+            for g in gby(conn.reel('iris'), 'species', bind=True):
                 self.assertEqual(todf(g).shape, (50, 6))
 
     def test_gflat3(self):
@@ -302,7 +303,7 @@ class Testdbopen(unittest.TestCase):
 
             # do not use adjoin or disjoin. it's crazy
             def length_plus_width():
-                for g in gby(conn.reel('iris'), 'species'):
+                for g in gby(conn.reel('iris'), 'species', bind=True):
                     df = todf(g)
                     df['sepal'] = df.sepal_length + df.sepal_width
                     df['petal'] = df.petal_length + df.petal_width
@@ -321,88 +322,6 @@ class Testdbopen(unittest.TestCase):
                 c = round(r1.petal_length + r1.petal_width, 2)
                 d = round(r2.petal, 2)
                 self.assertEqual(c, d)
-
-    def test_save_empty_seq(self):
-        "Saving empty sequence should not raise exception"
-
-        with dbopen(':memory:') as conn:
-            def empty_seq():
-                for r in reel('iris.csv'):
-                    if float(r.SepalWidth) > 100:
-                        yield r
-            conn.save(empty_seq, name='empty')
-            tables = []
-            for table in conn.reel("""select * from sqlite_master
-            where type='table'"""):
-                tables.append(table)
-            self.assertEqual(tables, [])
-
-
-class TestSortl(unittest.TestCase):
-    def test_sortl(self):
-        rs = reel('iris.csv')
-        rs0 = []
-        for r in sorted(rs, key=lambda r: r.sepal_width):
-            rs0.append(r.sepal_width)
-
-        rs1 = []
-        for r in sortl(reel('iris.csv'), key='sepal_width', mem=0.001):
-            rs1.append(r.sepal_width)
-        self.assertEqual(rs0, rs1)
-
-
-class TestWriteCSV(unittest.TestCase):
-    def test_writecsv(self):
-        rs = reel('iris.csv')
-
-        def sample():
-            for r in rs:
-                del(r.sepal_width)
-                del(r.sepal_length)
-                yield r
-        show(sample(), filename='sample2.csv')
-        r0 = next(reel('sample2.csv'))
-        self.assertEqual(len(r0.columns), 4)
-
-
-class TestReadHTMLTable(unittest.TestCase):
-    def test_read_html_table(self):
-        show(read_html_table('customers.html'), filename='customers.csv')
-        show(read_html_table('orders.html'), filename='orders.csv')
-        self.assertEqual(len(list(read_html_table('customers.html'))), 91)
-        self.assertEqual(len(list(read_html_table('orders.html'))), 196)
-
-
-class TestLJoin(unittest.TestCase):
-    def test_ljoin1(self):
-        customers = read_html_table('customers.html')
-        orders = read_html_table('orders.html')
-        self.assertEqual(len(list(ljoin1(customers, orders, 'customer_id'))),
-                         213)
-
-    def test_ljoin(self):
-        customers = read_html_table('customers.html')
-        orders0 = read_html_table('orders.html')
-        orders1 = read_html_table('orders.html')
-        orders2 = read_html_table('orders.html')
-
-        self.assertEqual(len(list(ljoin(customers,
-                                  [orders0, orders1, orders2],
-                                  'customer_id'))),
-                         3951)
-
-
-class TestSelect(unittest.TestCase):
-    def test_select(self):
-        seq = select(reel('iris.csv'),
-                     where=lambda r: r.species == 'setosa',
-                     order='sepal_length')
-        self.assertEqual(next(seq).sepal_length, 4.3)
-
-        seq = select(reel('iris.csv'),
-                     where=lambda r: r.species == 'setosa',
-                     order=lambda r: -r.sepal_length)
-        self.assertEqual(next(seq).sepal_length, 5.8)
 
 
 unittest.main()
