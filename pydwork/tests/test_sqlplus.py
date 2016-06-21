@@ -155,6 +155,7 @@ class Testdbopen(unittest.TestCase):
             rows = list(conn.reel('foo1'))
 
             # now it's lower cased, since it is saved once
+            # see _create_statement
             with self.assertRaises(AttributeError):
                 rows[0].B
             self.assertEqual(rows[0].b, 20.2)
