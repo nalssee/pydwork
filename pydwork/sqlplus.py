@@ -499,7 +499,6 @@ def _build_keyfn(key):
         return lambda r: [getattr(r, colname) for colname in colnames]
 
 
-# TODO: unnecessarily complex
 def _gen_valid_column_names(columns):
     """generate valid column names automatically
 
@@ -541,9 +540,7 @@ def _gen_valid_column_names(columns):
         newcol = re.sub(r'[^\w]+', '', col)
         if newcol == '':
             newcol = 'temp'
-        elif not newcol[0].isalpha():
-            newcol = 'a_' + newcol
-        elif newcol.upper() in SQLITE_KEYWORDS:
+        elif not newcol[0].isalpha() or newcol.upper() in SQLITE_KEYWORDS:
             newcol = 'a_' + newcol
         temp_columns.append(newcol)
 
