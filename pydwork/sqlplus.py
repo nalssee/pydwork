@@ -48,10 +48,6 @@ __all__ = ['dbopen', 'Row', 'gby', 'reel',
 WORKSPACE = ''
 
 
-# Most of the time you work with SQL rows.
-# You append, delete, replace columns.
-# Or you combine rows with similar properties and think of them as a bunch.
-# And then later flatten'em if you want.
 class Row:
     """SQL row
 
@@ -66,43 +62,35 @@ class Row:
         del r.x
         """
         # To preserve orders
-        super().__setattr__('columns', [])
+        super().__setattr__('_columns', [])
+        super().__setattr__('_values', [])
+        super().__setattr__('_columns_set', set())
 
-    def get_values(self, columns):
-        """Returns a list of values
+    @property
+    def columns(self):
+        return self._columns
 
-        Args
-            columns: list of column name strings
-        """
-        return [getattr(self, c) for c in columns]
-
-    def __getattr__(self, name):
-        "if the attribute doesn't exist just return ''"
-        try:
-            val = super().__getattr__(name)
-        except AttributeError:
-            return ''
-        return val
+    @property
+    def values(self):
+        return self._values
 
     def __setattr__(self, name, value):
-        if name == 'columns':
-            raise AttributeError("'columns' not allowed")
-
-        if name not in self.columns:
+        # any performance boost? I don't know
+        if name not in self._columns_set:
             self.columns.append(name)
+            self.values.append(value)
+            self._columns_set.add(name)
         super().__setattr__(name, value)
 
     def __delattr__(self, name):
-        if name == 'columns':
-            raise AttributeError("'columns' not allowed")
-        try:
-            del self.columns[self.columns.index(name)]
-        except:
-            raise AttributeError("Does not exist", name)
+        self._columns_set.remove(name)
+        idx = self.columns.index(name)
+        del self.columns[idx]
+        del self.values[idx]
         super().__delattr__(name)
 
     def __str__(self):
-        return str(list(zip(self.columns, self.get_values(self.columns))))
+        return str(list(zip(self.columns, self.values)))
 
 
 class SQLPlus:
@@ -115,7 +103,6 @@ class SQLPlus:
             else os.path.join(WORKSPACE, dbfile)
         self.conn = sqlite3.connect(self._dbfile)
         self._cursor = self.conn.cursor()
-        self.tables = self.list_tables()
 
     # args can be a list, a tuple or a dictionary
     # <- fix it
@@ -123,8 +110,6 @@ class SQLPlus:
         """Simply executes sql statement and update tables attribute
         """
         self._cursor.execute(query, args)
-        # update tables
-        self.tables = self.list_tables()
 
     def reel(self, query, args=()):
         """Generates a sequence of rows from a query.
@@ -151,8 +136,8 @@ class SQLPlus:
 
         'args' are going to be passed as arguments for the generator function
         """
-        def save_rows_to_tempfile(f, rs, colnames):
-            def transform_value(val):
+        def save_rows_to_tempfile(f, rs):
+            def tval(val):
                 """If val contains a comma or newline it causes problems
                 So just remove them.
                 There might be some other safer methods but I don't think
@@ -160,13 +145,11 @@ class SQLPlus:
                 """
                 return str(val).replace(',', ' ').replace('\n', ' ')
 
-            f.write((','.join(colnames) + '\n').encode())
-            # implicitly flatten
             for r in rs:
-                vals = [transform_value(v) for v in r.get_values(colnames)]
+                vals = [tval(v) for v in r.values]
                 f.write((','.join(vals) + '\n').encode())
 
-        # for maintenance
+        # single letter variable is hard to find
         nrow = n
 
         # if 'it' is a generator function, it is executed to make an iterator
@@ -175,14 +158,14 @@ class SQLPlus:
             seq = seq(*args)
 
         row0, seq = _peek_first(seq)
+        seq = list(seq)
 
         if nrow:
             seq = islice(seq, nrow)
-
         if name in self.tables:
             return
         if name is None:
-            raise ValueError('name should be passed')
+            raise ValueError('table name required')
 
         colnames = row0.columns
 
@@ -204,7 +187,7 @@ class SQLPlus:
         with tempfile.TemporaryFile() as fport:
             # Write the iterator in a temporary file
             # encode it as binary.
-            save_rows_to_tempfile(fport, seq, colnames)
+            save_rows_to_tempfile(fport, seq)
 
             # create table
             istmt = _insert_statement(name, len(colnames))
@@ -212,14 +195,11 @@ class SQLPlus:
 
             # Now insertion to a DB
             fport.seek(0)
-            # read out the first line, header column
-            fport.readline()
 
             for line in fport:
                 # line[:-1] because last index indicates '\n'
                 line_vals = line[:-1].decode().split(',')
                 self._cursor.execute(istmt, line_vals)
-        self.tables.append(name)
 
     # Be careful so that you don't overwrite the file
     def show(self, query, args=(), filename=None, n=30, cols=None):
@@ -250,7 +230,7 @@ class SQLPlus:
             row0, rows = _peek_first(rows)
 
             colnames = row0.columns
-            seq_rvals = (r.get_values(colnames) for r in rows)
+            seq_rvals = (r.values for r in rows)
 
         if filename:
 
@@ -263,7 +243,7 @@ class SQLPlus:
             if not os.path.isfile(os.path.join(WORKSPACE, filename)):
                 with open(os.path.join(WORKSPACE, filename), 'w') as fout:
                     fout.write(','.join(colnames) + '\n')
-                    for rvals in islice(seq_rvals, n):
+                    for rvals in islice(seq_rvals, nrow):
                         fout.write(','.join([str(val) for val in rvals]) +
                                    '\n')
         else:
@@ -277,7 +257,8 @@ class SQLPlus:
                 if len(seq_rvals_list) > nrows:
                     print("...more rows...")
 
-    def list_tables(self):
+    @property
+    def tables(self):
         """List of table names in the database
         """
         query = self._cursor.execute("""
@@ -293,7 +274,7 @@ class SQLPlus:
         if not os.path.exists(summary_dir):
             os.makedirs(summary_dir)
 
-        for table in self.list_tables():
+        for table in self.tables:
             filename = os.path.join(summary_dir, table + '.csv')
             if not overwrite and \
                os.path.isfile(filename):
@@ -335,9 +316,7 @@ def gby(seq, key):
     """
     if not hasattr(key, '__call__'):
         key = _build_keyfn(key)
-    g_seq = groupby(seq, key)
-
-    for _, rows in g_seq:
+    for _, rows in groupby(seq, key):
         yield list(rows)
 
 
@@ -345,7 +324,7 @@ def todf(rows):
     "a list of rows to a dataframe"
     colnames = rows[0].columns
     d = {}
-    for col in zip(colnames, *(r.get_values(colnames) for r in rows)):
+    for col in zip(colnames, *(r.values for r in rows)):
         d[col[0]] = col[1:]
     return pd.DataFrame(d)
 
@@ -454,22 +433,21 @@ def read_html_table(html_file, css_selector='table'):
 def adjoin(colnames):
     """Decorator to ensure that the rows to have the columns for sure
     """
+    colnames = _listify(colnames)
+
     def dec(gen):
         "real decorator"
         @wraps(gen)
         def wrapper(*args, **kwargs):
             "if a column doesn't exist, append it"
             for row in gen(*args, **kwargs):
-                # row must be a Row instance,
-                # Do not use this for dataframes, it's really not necessary
-                assert isinstance(row, Row)
-                for col in _listify(colnames):
+                for col in colnames:
                     try:
                         # rearrange the order
                         val = getattr(row, col)
                         delattr(row, col)
                         setattr(row, col, val)
-                    except AttributeError:
+                    except:
                         setattr(row, col, '')
                 yield row
         return wrapper
@@ -479,16 +457,15 @@ def adjoin(colnames):
 def disjoin(colnames):
     """Decorator to ensure that the rows are missing
     """
+    colnames = _listify(colnames)
+
     def dec(gen):
         "real decorator"
         @wraps(gen)
         def wrapper(*args, **kwargs):
             "Delete a column"
             for row in gen(*args, **kwargs):
-                assert isinstance(row, Row)
-                # row must be a Row instance,
-                # Do not use this for dataframes, it's really not necessary
-                for col in _listify(colnames):
+                for col in colnames:
                     # whatever it is, just delete it
                     try:
                         delattr(row, col)

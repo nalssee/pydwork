@@ -57,10 +57,9 @@ class Testdbopen(unittest.TestCase):
             def top20_sl():
                 rows = conn.reel(
                     "select * from first_char order by sp1, sl desc")
-                for rs in gby(rows, "sp1"):
+                for rs in gby(rows, 'sp1'):
                     yield from rs[:20]
-            # If you are saving grouped objects,
-            # they are flattened first
+
             conn.save(top20_sl)
 
             print("\nYou should see the same two tables")
@@ -84,7 +83,7 @@ class Testdbopen(unittest.TestCase):
                 self.assertEqual(len(rs), 150)
 
             # list_tables, in alphabetical order
-            self.assertEqual(conn.list_tables(), ['first_char', 'top20_sl'])
+            self.assertEqual(conn.tables, ['first_char', 'top20_sl'])
 
     def test_run_over_run(self):
         with dbopen(':memory:') as conn:
@@ -143,16 +142,21 @@ class Testdbopen(unittest.TestCase):
         with dbopen(':memory:') as conn:
             conn.run("create table Foo (a int, B real)")
             conn.run("insert into foo values (10, 20.2)")
-            rows = list(conn.reel('fOO'))
+            # table name is case-insensitive
+            # but columns names are not
+            rows = list(conn.reel('fOo'))
 
-            self.assertEqual(rows[0].b, '')
+            with self.assertRaises(AttributeError):
+                rows[0].b
             self.assertEqual(rows[0].B, 20.2)
 
             # save it
             conn.save(conn.reel('foo'), name='foo1')
             rows = list(conn.reel('foo1'))
-            # now it's lower cased
-            self.assertEqual(rows[0].B, '')
+
+            # now it's lower cased, since it is saved once
+            with self.assertRaises(AttributeError):
+                rows[0].B
             self.assertEqual(rows[0].b, 20.2)
 
     def test_order_of_columns(self):
@@ -170,40 +174,31 @@ class Testdbopen(unittest.TestCase):
     def test_adjoin_disjoin(self):
         with dbopen(':memory:') as conn:
             def unsafe():
-                for rs in gby(reel('iris.csv'), 'Species'):
+                for rs in gby(reel('iris.csv'), 'species'):
                     rs[0].first = 'yes'
-                    rs[1].second = 'yes'
-                    rs[2].third = 'yes'
-                    del rs[2].temp
                     yield from rs
-            conn.save(unsafe)
-            for r in islice(conn.reel('unsafe'), 5):
-                self.assertEqual(r.columns, ['temp', 'sepal_length',
-                                             'sepal_width',
-                                             'petal_length',
-                                             'petal_width', 'species',
-                                             'first'])
+            with self.assertRaises(Exception):
+                conn.save(unsafe)
 
             # no need to use del anymore here
-            @disjoin('temp')
+            @disjoin('sepal_length, sepal_width, temp')
             @adjoin('first, second, third')
             def safe():
-                for rs in gby(reel('iris.csv'), 'Species'):
+                for rs in gby(reel('iris.csv'), 'species'):
                     rs[0].first = 'yes'
                     rs[1].second = 'yes'
-                    rs[2].third = 'yes'
                     yield from rs
 
             # No error
             conn.save(safe)
-            with self.assertRaises(ValueError):
-                # temp doesn't exist
-                conn.save(pick(['temp'], safe()))
 
-            r1, r2, r3, *_ = safe()
+            r1, r2, *rs = safe()
+            self.assertEqual(r1.columns, r2.columns)
+            for r in rs:
+                self.assertEqual(r1.columns, r.columns)
+
             self.assertEqual([r1.first, r1.second, r1.third], ['yes', '', ''])
             self.assertEqual([r2.first, r2.second, r2.third], ['', 'yes', ''])
-            self.assertEqual([r3.first, r3.second, r3.third], ['', '', 'yes'])
 
     def test_todf(self):
         with dbopen(':memory:') as conn:
