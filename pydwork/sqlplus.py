@@ -286,7 +286,7 @@ class SQLPlus:
 
         if isinstance(query, str):
             seq_rvals = self._cursor.execute(
-                _select_statement(query, cols), args)
+                _select_statement(query, cols or '*'), args)
             colnames = [c[0] for c in seq_rvals.description]
 
         # then query is an iterator of rows, or a list of rows
@@ -853,18 +853,17 @@ def _is_oneword(query):
     return len(query.strip().split(' ')) == 1
 
 
-def _select_statement(query, cols=None):
+def _select_statement(query, cols='*'):
     """
     If query is just one word, then it is transformed to a select stmt
     or leave it
 
     Args:
         query (str)
-        cols (None or str or List[str])
+        cols (str or List[str])
     Returns:
         str
     """
-    cols = cols or '*'
     if _is_oneword(query):
         return "select %s from %s" % (', '.join(_listify(cols)), query)
     return query
