@@ -41,7 +41,7 @@ import pandas as pd
 
 __all__ = ['dbopen', 'Row', 'gby', 'reel',
            'read_html_table', 'pick',
-           'add_header', 'del_header', 'adjoin', 'disjoin',
+           'prepend_header', 'adjoin', 'disjoin',
            'todf', 'torows',
            'set_workspace', 'get_workspace']
 
@@ -156,7 +156,7 @@ class SQLPlus:
         # single letter variable is hard to find
         nrows = n
 
-        # if 'it' is a generator function, it is executed to make an iterator
+        # if 'seq' is a generator function, it is executed to make an iterator
         if hasattr(seq, '__call__'):
             name = name or seq.__name__
             seq = seq(*args)
@@ -296,17 +296,20 @@ class SQLPlus:
             self.show(table, n=n, filename=filename, overwrite=overwrite)
 
     def drop(self, table):
+        "drop table if exists"
         # you can't use '?' for table name
         # '?' is for data insertion
         self.run('drop table if exists %s' % (table,))
         summary_dir = os.path.join(WORKSPACE, 'summary')
         filename = os.path.join(summary_dir, table + '.csv')
         if os.path.isfile(filename):
+            # remove summary file as well if exists
             os.remove(filename)
 
         self.tables = self._list_tables()
 
     def count(self, seq):
+        "count the size of a sequence"
         if isinstance(seq, str):
             seq = self._cursor.execute(_select_statement(seq))
         if hasattr(seq, '__call__'):
@@ -342,6 +345,7 @@ def gby(seq, key):
     if not hasattr(key, '__call__'):
         key = _build_keyfn(key)
     for _, rows in groupby(seq, key):
+        # to list or not to list
         yield list(rows)
 
 
@@ -379,24 +383,26 @@ def pick(cols, seq):
         yield r1
 
 
-# Some files don't have a header
-def add_header(filename, header):
-    """Adds a header line to an existing file.
+def prepend_header(filename, header=None, drop=1):
     """
-    for line in fileinput.input(os.path.join(WORKSPACE, filename),
-                                inplace=True):
-        if fileinput.isfirstline():
-            print(header)
-        print(line, end='')
-
-
-def del_header(filename, num=1):
-    """Delete n lines from a file
+    drop n lines and prepend header
     """
-    for line_number, line in enumerate(
+    for no, line in enumerate(
             fileinput.input(os.path.join(WORKSPACE, filename), inplace=True)):
-        if line_number >= num:
+        # it's meaningless to set drop to -1, -2, ...
+        if no == 0 and drop == 0:
+            if header:
+                print(header)
             print(line, end='')
+        # replace
+        elif no + 1 == drop:
+            if header:
+                print(header)
+        elif no >= drop:
+            print(line, end='')
+        else:
+            # no + 1 < drop
+            continue
 
 
 def convtype(val):
@@ -431,7 +437,9 @@ def reel(csv_file, header=None):
             if len(line) != ncol:
                 if is_empty_line(line):
                     continue
-                raise ValueError("%s at %s invalid line" % (csv_file, line_no))
+                # You've read a line alread, so line_no + 1
+                raise ValueError("%s at %s invalid line" %
+                                 (csv_file, line_no + 1))
             row1 = Row()
             for col, val in zip(columns, line):
                 setattr(row1, col, convtype(val))
@@ -513,7 +521,7 @@ def get_workspace():
     return WORKSPACE
 
 
-def camelcase_to_underscore(name):
+def camel2snake(name):
     s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
 
@@ -561,23 +569,28 @@ def _gen_valid_column_names(columns):
         "ROLLBACK", "ROW", "SAVEPOINT", "SELECT", "SET", "TABLE", "TEMP",
         "TEMPORARY", "THEN", "TO", "TRANSACTION",
         "TRIGGER", "UNION", "UNIQUE", "UPDATE", "USING", "VACUUM", "VALUES",
-        "VIEW", "VIRTUAL", "WHEN", "WHERE"
+        "VIEW", "VIRTUAL", "WHEN", "WHERE",
+
+        # These are not sqlite keywords but attribute names of Row class
+        'COLUMNS', 'VALUES',
+
     ]
 
+    DEFAULT_COLUMN_NAME = 'col'
     temp_columns = []
     for col in columns:
         # save only alphanumeric and underscore
         # and remove all the others
-        newcol = re.sub(r'[^\w]+', '', col)
+        newcol = camel2snake(re.sub(r'[^\w]+', '', col))
         if newcol == '':
-            newcol = 'temp'
+            newcol = DEFAULT_COLUMN_NAME
         elif not newcol[0].isalpha() or newcol.upper() in SQLITE_KEYWORDS:
             newcol = 'a_' + newcol
         temp_columns.append(newcol)
 
     # no duplicates
     if len(temp_columns) == len(set(temp_columns)):
-        return [camelcase_to_underscore(x) for x in temp_columns]
+        return temp_columns
 
     # Tag numbers to column-names starting from 0 if there are duplicates
     cnt = {col: n for col, n in Counter(temp_columns).items() if n > 1}
@@ -590,7 +603,7 @@ def _gen_valid_column_names(columns):
             cnt[col] -= 1
         else:
             result_columns.append(col)
-    return [camelcase_to_underscore(x) for x in result_columns]
+    return result_columns
 
 
 def _listify(colstr):

@@ -153,12 +153,12 @@ class Testdbopen(unittest.TestCase):
         with dbopen(':memory:') as conn:
             row = next(reel('iris.csv'))
             self.assertEqual(row.columns,
-                             ['temp', 'sepal_length', 'sepal_width',
+                             ['col', 'sepal_length', 'sepal_width',
                               'petal_length', 'petal_width', 'species'])
             conn.save(reel('iris.csv'), 'iris')
             row = next(conn.reel('iris'))
             self.assertEqual(row.columns,
-                             ['temp', 'sepal_length', 'sepal_width',
+                             ['col', 'sepal_length', 'sepal_width',
                               'petal_length', 'petal_width', 'species'])
 
     def test_adjoin_disjoin(self):
@@ -171,7 +171,7 @@ class Testdbopen(unittest.TestCase):
                 conn.save(unsafe)
 
             # no need to use del anymore here
-            @disjoin('sepal_length, sepal_width, temp')
+            @disjoin('sepal_length, sepal_width, col')
             @adjoin('first, second, third')
             def safe():
                 for rs in gby(reel('iris.csv'), 'species'):
@@ -422,5 +422,37 @@ class TestRow(unittest.TestCase):
 
         self.assertEqual(r1.columns, ['x', 'z'])
         self.assertEqual(r1.values, [10, 39.2])
+
+
+class TestMisc(unittest.TestCase):
+    def test_prepend_header(self):
+        with dbopen(':memory:') as c:
+            c.write(reel('iris'), 'iris2.csv')
+            prepend_header('iris2.csv', 'cnt, sl, sw, pl, pw, sp', drop=20)
+            first = next(reel('iris2.csv'))
+            self.assertEqual(first.cnt, 20)
+
+            c.write(reel('iris'), 'iris2.csv')
+            prepend_header('iris2.csv', 'cnt, sl, sw, pl, pw, sp')
+            first = next(reel('iris2.csv'))
+            self.assertEqual(first.cnt, 1)
+
+            c.write(reel('iris'), 'iris2.csv')
+            prepend_header('iris2.csv', 'cnt, sl, sw, pl, pw, sp', drop=0)
+            first = next(reel('iris2.csv'))
+            self.assertEqual(first.cnt, 'col')
+            self.assertEqual(first.sl, 'sepal_length')
+
+            c.write(reel('iris'), 'iris2.csv')
+            # simply drop the first 5 lines, and do nothing else
+            prepend_header('iris2.csv', header=None, drop=5)
+            # don't drop any and just write the header
+            prepend_header('iris2.csv', header='cnt, sl, sw, pl, pw, sp',
+                           drop=0)
+            first = next(reel('iris2.csv'))
+            self.assertEqual(first.cnt, 5)
+
+            os.remove(os.path.join(get_workspace(), 'iris2.csv'))
+
 
 unittest.main()
