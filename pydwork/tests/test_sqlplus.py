@@ -140,25 +140,13 @@ class Testdbopen(unittest.TestCase):
             os.remove(os.path.join(get_workspace(), 'sample.csv'))
 
     def test_column_case(self):
+        # every query execution is lower cased
         with dbopen(':memory:') as conn:
             conn.run("create table Foo (a int, B real)")
             conn.run("insert into foo values (10, 20.2)")
             # table name is case-insensitive
-            # but columns names are not
+
             rows = list(conn.reel('fOo'))
-
-            with self.assertRaises(AttributeError):
-                rows[0].b
-            self.assertEqual(rows[0].B, 20.2)
-
-            # save it
-            conn.save(conn.reel('foo'), name='foo1')
-            rows = list(conn.reel('foo1'))
-
-            # now it's lower cased, since it is saved once
-            # see _create_statement
-            with self.assertRaises(AttributeError):
-                rows[0].B
             self.assertEqual(rows[0].b, 20.2)
 
     def test_order_of_columns(self):
@@ -318,6 +306,8 @@ class CustomersAndOrders(unittest.TestCase):
 
             """)
 
+            self.assertEqual(len(c.tables), 3)
+
             def nones():
                 for r in c.reel('customers1'):
                     if r.order_id is None:
@@ -407,6 +397,45 @@ class CustomersAndOrders(unittest.TestCase):
 
             for a, b in zip(orders1(), list(c.reel(query))):
                 self.assertEqual(a.customer_id, b.customer_id)
+
+
+class TestRow(unittest.TestCase):
+    def test_row(self):
+        r1 = Row()
+        self.assertEqual(r1.columns, [])
+        self.assertEqual(r1.values, [])
+
+        r1.x = 10
+        r1.y = 'abc'
+        r1.z = 39.2
+
+        self.assertEqual(r1.columns, ['x', 'y', 'z'])
+        self.assertEqual(r1.values, [10, 'abc', 39.2])
+
+        with self.assertRaises(AttributeError):
+            r1.a
+
+        with self.assertRaises(KeyError):
+            del r1.a
+
+        del r1.y
+
+        self.assertEqual(r1.columns, ['x', 'z'])
+        self.assertEqual(r1.values, [10, 39.2])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 unittest.main()

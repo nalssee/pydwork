@@ -107,10 +107,10 @@ class SQLPlus:
         self.tables = self._list_tables()
 
     # args can be a list, a tuple or a dictionary
-    # <- fix it
     def run(self, query, args=()):
         """Simply executes sql statement and update tables attribute
         """
+        query = query.lower()
         self._cursor.execute(query, args)
 
         self.tables = self._list_tables()
@@ -120,7 +120,7 @@ class SQLPlus:
 
         Query can be a select statement or table name.
         """
-        query = _select_statement(query)
+        query = _select_statement(query.lower())
         if query.strip().partition(' ')[0].upper() != "SELECT":
             raise ValueError("use 'run' for ", query)
         qrows = self._cursor.execute(query, args)
@@ -283,7 +283,7 @@ class SQLPlus:
         select * from sqlite_master
         where type='table'
         """)
-        tables = [row[1] for row in query]
+        tables = [row[1].lower() for row in query]
         return sorted(tables)
 
     def summarize(self, n=1000, overwrite=True):
@@ -306,7 +306,6 @@ class SQLPlus:
 
         self.tables = self._list_tables()
 
-    # <- wrong
     def count(self, seq):
         if isinstance(seq, str):
             seq = self._cursor.execute(_select_statement(seq))
