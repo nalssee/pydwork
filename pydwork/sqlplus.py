@@ -42,7 +42,8 @@ import pandas as pd
 __all__ = ['dbopen', 'Row', 'gby', 'reel',
            'read_html_table', 'pick',
            'add_header', 'del_header', 'adjoin', 'disjoin',
-           'todf', 'torows', 'set_workspace']
+           'todf', 'torows',
+           'set_workspace', 'get_workspace']
 
 
 WORKSPACE = ''
@@ -103,6 +104,7 @@ class SQLPlus:
             else os.path.join(WORKSPACE, dbfile)
         self.conn = sqlite3.connect(self._dbfile)
         self._cursor = self.conn.cursor()
+        self.tables = self._list_tables()
 
     # args can be a list, a tuple or a dictionary
     # <- fix it
@@ -110,6 +112,8 @@ class SQLPlus:
         """Simply executes sql statement and update tables attribute
         """
         self._cursor.execute(query, args)
+
+        self.tables = self._list_tables()
 
     def reel(self, query, args=()):
         """Generates a sequence of rows from a query.
@@ -150,7 +154,7 @@ class SQLPlus:
                 f.write((','.join(vals) + '\n').encode())
 
         # single letter variable is hard to find
-        nrow = n
+        nrows = n
 
         # if 'it' is a generator function, it is executed to make an iterator
         if hasattr(seq, '__call__'):
@@ -158,10 +162,10 @@ class SQLPlus:
             seq = seq(*args)
 
         row0, seq = _peek_first(seq)
-        seq = list(seq)
 
-        if nrow:
-            seq = islice(seq, nrow)
+        if nrows:
+            seq = islice(seq, nrows)
+
         if name in self.tables:
             return
         if name is None:
@@ -201,8 +205,11 @@ class SQLPlus:
                 line_vals = line[:-1].decode().split(',')
                 self._cursor.execute(istmt, line_vals)
 
+        self.tables = self._list_tables()
+
     # Be careful so that you don't overwrite the file
-    def show(self, query, args=(), filename=None, n=30, cols=None):
+    def show(self, query, args=(), n=30, cols=None,
+             filename=None, overwrite=True):
         """Printing to a screen or saving to a file
 
         'query' can be either a SQL query string or an iterable.
@@ -232,20 +239,24 @@ class SQLPlus:
             colnames = row0.columns
             seq_rvals = (r.values for r in rows)
 
+        # write to a file
         if filename:
-
             # practically infinite number
-            n = n or sys.maxsize
+            nrows = nrows or sys.maxsize
 
             if not filename.endswith('.csv'):
                 filename = filename + '.csv'
 
-            if not os.path.isfile(os.path.join(WORKSPACE, filename)):
-                with open(os.path.join(WORKSPACE, filename), 'w') as fout:
-                    fout.write(','.join(colnames) + '\n')
-                    for rvals in islice(seq_rvals, nrow):
-                        fout.write(','.join([str(val) for val in rvals]) +
-                                   '\n')
+            if os.path.isfile(os.path.join(WORKSPACE, filename)) \
+               and not overwrite:
+                return
+
+            with open(os.path.join(WORKSPACE, filename), 'w') as fout:
+                fout.write(','.join(colnames) + '\n')
+                for rvals in islice(seq_rvals, nrows):
+                    fout.write(','.join([str(val) for val in rvals]) +
+                               '\n')
+        # write to stdout
         else:
             # show practically all rows, columns.
             with pd.option_context("display.max_rows", nrows), \
@@ -257,8 +268,15 @@ class SQLPlus:
                 if len(seq_rvals_list) > nrows:
                     print("...more rows...")
 
-    @property
-    def tables(self):
+    # Simpler version of show (when you write it to a file)
+    # so you make less mistakes.
+    def write(self, query, filename=None, args=()):
+        if isinstance(query, str) and \
+           _is_oneword(query) and filename is None:
+            filename = query
+        self.show(query, filename=filename, args=args, n=None, overwrite=True)
+
+    def _list_tables(self):
         """List of table names in the database
         """
         query = self._cursor.execute("""
@@ -268,7 +286,6 @@ class SQLPlus:
         tables = [row[1] for row in query]
         return sorted(tables)
 
-    # TODO: summarize and drop are not covered in tests
     def summarize(self, n=1000, overwrite=True):
         summary_dir = os.path.join(WORKSPACE, 'summary')
         if not os.path.exists(summary_dir):
@@ -276,17 +293,26 @@ class SQLPlus:
 
         for table in self.tables:
             filename = os.path.join(summary_dir, table + '.csv')
-            if not overwrite and \
-               os.path.isfile(filename):
-                continue
-            self.show(table, n=n, filename=filename)
+            self.show(table, n=n, filename=filename, overwrite=overwrite)
 
     def drop(self, table):
-        self.run('drop table if exists ?', args=(table,))
+        # you can't use '?' for table name
+        # '?' is for data insertion
+        self.run('drop table if exists %s' % (table,))
         summary_dir = os.path.join(WORKSPACE, 'summary')
         filename = os.path.join(summary_dir, table + '.csv')
         if os.path.isfile(filename):
             os.remove(filename)
+
+        self.tables = self._list_tables()
+
+    # <- wrong
+    def count(self, seq):
+        if isinstance(seq, str):
+            seq = self._cursor.execute(_select_statement(seq))
+        if hasattr(seq, '__call__'):
+            seq = seq()
+        return sum(1 for _ in seq)
 
 
 @contextmanager
@@ -417,6 +443,8 @@ def reel(csv_file, header=None):
 def read_html_table(html_file, css_selector='table'):
     """Read simple well formed table
     """
+    if not html_file.endswith('.html'):
+        html_file += '.html'
     with open(os.path.join(WORKSPACE, html_file)) as fin:
         soup = BeautifulSoup(fin, 'html.parser')
         trs = soup.select(css_selector)[0].select('tr')
@@ -480,6 +508,10 @@ def disjoin(colnames):
 def set_workspace(dir):
     global WORKSPACE
     WORKSPACE = dir
+
+
+def get_workspace():
+    return WORKSPACE
 
 
 def camelcase_to_underscore(name):
@@ -599,11 +631,15 @@ def _insert_statement(name, ncol):
     return "insert into %s values (%s)" % (name, qmarks)
 
 
+def _is_oneword(query):
+    return len(query.strip().split(' ')) == 1
+
+
 def _select_statement(query, cols=None):
     """If query is just one word, then it is transformed to a select stmt
     or leave it
     """
     cols = cols or '*'
-    if len(query.strip().split(' ')) == 1:
+    if _is_oneword(query):
         return "select %s from %s" % (', '.join(_listify(cols)), query)
     return query

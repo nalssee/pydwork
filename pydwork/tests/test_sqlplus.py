@@ -134,9 +134,10 @@ class Testdbopen(unittest.TestCase):
             def first2group():
                 for rs in islice(gby(iris, 'sp'), 2):
                     yield from rs
-            conn.show(first2group, filename='sample.csv')
+            conn.show(first2group, filename='sample.csv', n=None)
             # each group contains 50 rows, hence 100
             self.assertEqual(len(list(reel('sample.csv'))), 100)
+            os.remove(os.path.join(get_workspace(), 'sample.csv'))
 
     def test_column_case(self):
         with dbopen(':memory:') as conn:
@@ -233,6 +234,179 @@ class Testdbopen(unittest.TestCase):
                 c = round(r1.petal_length + r1.petal_width, 2)
                 d = round(r2.petal, 2)
                 self.assertEqual(c, d)
+
+
+class CustomersAndOrders(unittest.TestCase):
+    def setUp(self):
+        with dbopen('customers_and_orders.db') as c:
+            c.save(read_html_table('customers'), 'customers')
+            c.save(read_html_table('orders'), 'orders')
+
+    def tearDown(self):
+        import shutil
+        summary_dir = os.path.join(get_workspace(), 'summary')
+        if os.path.isdir(summary_dir):
+            shutil.rmtree(summary_dir)
+        os.remove(os.path.join(get_workspace(), 'customers_and_orders.db'))
+
+    def test_read_html_table(self):
+        with dbopen('customers_and_orders.db') as c:
+            customers = list(c.reel('customers'))
+            orders = list(c.reel('orders'))
+            self.assertEqual(customers[0].columns,
+                             ['customer_id', 'customer_name',
+                              'contact_name', 'address', 'city',
+                              'postal_code', 'country'])
+
+            self.assertEqual(len(customers), 91)
+            self.assertEqual(orders[0].columns,
+                             ['order_id', 'customer_id', 'employee_id',
+                              'order_date', 'shipper_id'])
+            self.assertEqual(len(orders), 196)
+
+            c.summarize(n=17)
+            self.assertEqual(len(list(reel('summary/customers'))), 17)
+            self.assertEqual(len(list(reel('summary/orders'))), 17)
+
+    def test_drop_it(self):
+        with dbopen('customers_and_orders.db') as c:
+            def int_postal_code():
+                for r in c.reel('customers'):
+                    if isinstance(r.postal_code, int):
+                        yield r
+
+            def nonint_postal_code():
+                for r in c.reel('customers'):
+                    if not isinstance(r.postal_code, int):
+                        yield r
+
+            self.assertEqual(len(list(int_postal_code())), 66)
+            self.assertEqual(len(list(nonint_postal_code())), 25)
+
+            c.save(int_postal_code)
+            c.save(nonint_postal_code)
+            self.assertEqual(len(c.tables), 4)
+
+            c.summarize()
+            summary_dir = os.path.join(get_workspace(), 'summary')
+
+            f1 = os.path.join(summary_dir, 'int_postal_code.csv')
+            self.assertTrue(os.path.isfile(f1))
+            f2 = os.path.join(summary_dir, 'nonint_postal_code.csv')
+            self.assertTrue(os.path.isfile(f2))
+
+            c.drop('int_postal_code')
+            self.assertEqual(len(c.tables), 3)
+            self.assertFalse(os.path.isfile(f1))
+
+            c.drop('nonint_postal_code')
+            self.assertEqual(len(c.tables), 2)
+            self.assertFalse(os.path.isfile(f2))
+
+            # must not raise exception
+            c.drop('int_postal_code')
+
+    def test_left_join(self):
+        with dbopen('customers_and_orders.db') as c:
+            c.run("""
+            create table customers1 as
+            select a.*, b.order_id, b.employee_id, b.order_date, b.shipper_id
+            from customers a
+
+            left join orders b
+            on a.customer_id = b.customer_id
+
+            """)
+
+            def nones():
+                for r in c.reel('customers1'):
+                    if r.order_id is None:
+                        yield r
+
+            self.assertEqual(c.count(nones), 17)
+            self.assertEqual(c.count(nones()), 17)
+
+            c.save(nones)
+            # # once you have it, you can call count as follows
+            self.assertEqual(c.count('nones'), c.count("""
+            select * from
+            customers1
+            where order_id is null
+            """))
+
+    def test_gby(self):
+        with dbopen('customers_and_orders.db') as c:
+            with self.assertRaises(AttributeError):
+                # country does not exists in select columns
+                for rs in gby(c.reel("""
+                select customer_name, postal_code
+                from customers
+                order by country
+                """), 'country'):
+                    pass
+
+            total = 0
+            for rs in gby(c.reel("""
+            select customer_name, postal_code, country
+            from customers
+            order by country
+            """), 'country'):
+                df = todf(rs)
+                total += df.shape[0]
+
+            self.assertEqual(total, c.count('customers'))
+
+            def major_markets(n):
+                """
+                find major n countries with lots of customers
+                """
+                def country_counts():
+                    for rs in gby(c.reel("""
+                    select *
+                    from customers
+                    order by country
+                    """), 'country'):
+                        r = Row()
+                        r.country = rs[0].country
+                        r.count = len(rs)
+                        yield r
+                c.save(country_counts)
+
+                countries = []
+
+                for r in islice(c.reel("""
+                select * from country_counts
+                order by count desc
+                """), n):
+                    countries.append(r.country)
+                return countries
+
+            self.assertEqual(major_markets(5),
+                             ['USA', 'France', 'Germany', 'Brazil', 'UK'])
+
+    def test_todf_torows(self):
+        with dbopen('customers_and_orders.db') as c:
+            query = """
+            select *
+            from orders
+            order by employee_id, order_date
+            """
+
+            def orders1():
+                for rs in gby(c.reel(query), 'employee_id'):
+                    yield from torows(todf(rs))
+
+            self.assertEqual(c.count(orders1), 196)
+
+            with self.assertRaises(AssertionError):
+                for a, b in zip(orders1(), c.reel(query)):
+                    self.assertEqual(a.customer_id, b.customer_id)
+
+            for a, b in zip(list(orders1()), c.reel(query)):
+                self.assertEqual(a.customer_id, b.customer_id)
+
+            for a, b in zip(orders1(), list(c.reel(query))):
+                self.assertEqual(a.customer_id, b.customer_id)
 
 
 unittest.main()
