@@ -671,14 +671,22 @@ def get_workspace():
 
 
 def camel2snake(name):
+    """
+    Args:
+        name (str): camelCase
+    Returns:
+        str: snake_case
+    """
     s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
 
 
 def _build_keyfn(key):
     """
-    If key is not a function, but a string or a list of strings
-    that represents columns, turn it into a function
+    Args:
+        key (str or List[str]): column names
+    Returns:
+        FN[Row -> type]
     """
     colnames = _listify(key)
     if len(colnames) == 1:
@@ -688,11 +696,22 @@ def _build_keyfn(key):
 
 
 def _gen_valid_column_names(columns):
-    """generate valid column names automatically
+    """
+    Generate valid column names from arbitrary ones
 
-    ['a', '_b', 'a', 'a1"*c', 'a1c'] => ['a0', 'a_b', 'a1', 'a1c0', 'a1c1']
+    Note:
+        Every column name is lowercased
 
-    uppercase => lowercase
+    Args:
+        columns (List[str])
+
+    Returns:
+        List[str]
+
+    Example:
+        >>> _gen_valid_column_names(['a', '_b', 'a', 'a1"*c', 'a1c'])
+        ['a0', 'a_b', 'a1', 'a1c0', 'a1c1']
+
     """
     # Some of the sqlite keywords are not allowed for column names
     # http://www.sqlite.org/sessions/lang_keywords.html
@@ -756,7 +775,21 @@ def _gen_valid_column_names(columns):
 
 
 def _listify(colstr):
-    """If s is a comma or space separated string turn it into a list"""
+    """
+    A comma or space separated string a list of strings
+
+    Args:
+        colstr (str)
+    Returns:
+        List[str]
+
+    Example:
+        >>> _listify('a b c')
+        ['a', 'b', 'c']
+
+        >>> _listify('a, b, c')
+        ['a', 'b', 'c']
+    """
     if isinstance(colstr, str):
         if ',' in colstr:
             return [x.strip() for x in colstr.split(',')]
@@ -767,9 +800,13 @@ def _listify(colstr):
 
 
 def _peek_first(seq):
-    """Returns a tuple (first_item, it)
-
-    'it' is untouched, first_item is pushed back to be exact
+    """
+    Note:
+        peeked first item is pushed back to the sequence
+    Args:
+        seq (Iter[type])
+    Returns:
+        Tuple(type, Iter[type])
     """
     seq = iter(seq)
     first_item = next(seq)
@@ -777,28 +814,58 @@ def _peek_first(seq):
 
 
 def _create_statement(name, colnames):
-    """create table if not exists foo (...)
+    """
+    create table if not exists foo (...)
 
-    Every type is numeric.
-    Table name and column names are all lower case.
+    Note:
+        Every type is numeric.
+        Table name and column names are all lower cased
+    Args:
+        name (str): table name
+        colnames (List[str])
+    Returns:
+        str
     """
     schema = ', '.join([col.lower() + ' ' + 'numeric' for col in colnames])
     return "create table if not exists %s (%s)" % (name.lower(), schema)
 
 
 def _insert_statement(name, ncol):
-    "insert into foo values (?, ?, ?, ...)"
+    """
+    insert into foo values (?, ?, ?, ...)
+
+    Note:
+        Column name is lower cased
+    Args:
+        name (str): table name
+        ncol (int)
+    Returns:
+        str
+    """
     qmarks = ', '.join(['?'] * ncol)
-    return "insert into %s values (%s)" % (name, qmarks)
+    return "insert into %s values (%s)" % (name.lower(), qmarks)
 
 
 def _is_oneword(query):
+    """
+    Args:
+        query (str)
+    Returns:
+        bool
+    """
     return len(query.strip().split(' ')) == 1
 
 
 def _select_statement(query, cols=None):
-    """If query is just one word, then it is transformed to a select stmt
+    """
+    If query is just one word, then it is transformed to a select stmt
     or leave it
+
+    Args:
+        query (str)
+        cols (str or List[str])
+    Returns:
+        str
     """
     cols = cols or '*'
     if _is_oneword(query):
