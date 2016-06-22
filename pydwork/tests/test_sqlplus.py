@@ -423,19 +423,4 @@ class TestRow(unittest.TestCase):
         self.assertEqual(r1.columns, ['x', 'z'])
         self.assertEqual(r1.values, [10, 39.2])
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 unittest.main()
