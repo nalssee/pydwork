@@ -426,9 +426,7 @@ def dbopen(dbfile):
 
 
 def gby(seq, key):
-    """Group the iterator by columns
-
-    Depends heavily on 'groupby' from itertools
+    """Group the iterator by a key
 
     Args
         seq (iter)
@@ -715,7 +713,7 @@ def _gen_valid_column_names(columns):
     """
     # Some of the sqlite keywords are not allowed for column names
     # http://www.sqlite.org/sessions/lang_keywords.html
-    SQLITE_KEYWORDS = [
+    SQLITE_KEYWORDS = {
         "ABORT", "ACTION", "ADD", "AFTER", "ALL", "ALTER", "ANALYZE", "AND",
         "AS", "ASC", "ATTACH", "AUTOINCREMENT", "BEFORE", "BEGIN", "BETWEEN",
         "BY", "CASCADE", "CASE", "CAST", "CHECK", "COLLATE", "COLUMN",
@@ -741,8 +739,7 @@ def _gen_valid_column_names(columns):
 
         # These are not sqlite keywords but attribute names of Row class
         'COLUMNS', 'VALUES',
-
-    ]
+    }
 
     DEFAULT_COLUMN_NAME = 'col'
     temp_columns = []
@@ -863,7 +860,7 @@ def _select_statement(query, cols=None):
 
     Args:
         query (str)
-        cols (str or List[str])
+        cols (None or str or List[str])
     Returns:
         str
     """
