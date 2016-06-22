@@ -1,4 +1,7 @@
 # pydwork
-Python data work snippets
+Python tools for data analysis and collection
 
-Only sqlplus.py works at this moment.
+npc.py: parallelism and concurrency
+pullin.py: web data scraping
+sqlplus.py: data wrangling (some functional additions to sqlite3)
+util.py: utils
