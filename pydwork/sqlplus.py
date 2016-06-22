@@ -1,25 +1,57 @@
 """
-'sqlite3' based SQL utils
+SQLite3 based utils for statistical analysis
 
-Say if you want to group rows and do some complex jobs,
-afaik, you can't simply do it with SQL.
+Emperical data analysis task is largely composed of two parts,
+wrangling data(cleaning up so you can easily handle it)
+and applying statistical methodologies to data.
 
-And if the data size is so humongous that your system can't load
-all up in the memory, you can't easily use pandas either.
+Python is really great for data analysis, since you have
+widely used, reliable tools like Pandas, Numpy, Scipy, ...
+
+Pandas is said-to-be a really great for wrangling data.
+But it wasn't a very smooth process for me to learn Pandas.
+And you have to load all the data in the system memory.
+So you have to figure out a way around when you need to
+handle very large data sets.
+
+If you focus only on data wragling, SQL is an amazingly great
+tool. Performance, flexibility, reliablity, ease of use, it will
+never disappoint you.
+
+But there's one problem in SQL for data analysis. It doesn't
+integrate with python functions out of box. And it doesn't provide
+sophisticated statistical functions.
+
+Say you want to group stock returns every year
+,do some linear regressions with variables of your interests,
+and sum up the coefficients from the task.
+If you have to do the work using plain SQL,
+your life won't be happy anymore.
+
+It would be great if you can integrate Python with SQL.
+It is what I'm trying to do here.
 
 This program is not a sophisticated, full-fledged automation system.
-I'd rather say this is just a mental framework
-as for data wrangling.
+I'd rather say it's just a mental framework.
 
-It was a little clunkier experience to learn pandas.
-And I find basic Python syntax is good enough for most of data wrangling jobs.
-And also, SQL is a language as wonderful as Python.
-If you already know SQL and python, all you need to think about is
-how you combine them both.
+Use SQL to clean up data and group them by certain criteria,
+apply statical tools to each group using Python(statmodels, numpy and so on)
+and sum up the results.
 
-This program does it.
+If you have some basic SQL and Python knowledge,
+(You don't have to be an expert)
+I believe this is better that using Pandas for some people.
+For me, it is.
 
-What you need to know is in unit test code at test/*
+
+As for docstring:
+    GF[int->int]: generator function type that yields int
+                  and takes int as arg, parameters are optional
+    FN[str->str]: Ordinary function type
+    iter: types.GeneratorType
+    Iter[str]: iterator of strings
+    file: file object
+
 """
 
 import os
@@ -50,18 +82,16 @@ WORKSPACE = ''
 
 
 class Row:
-    """SQL row
+    """
+    Basically the same as sqlite3.Row
+    it's just that using sqlite3.Row is a bit clunkier.
+    r['col'] = 34
+    I prefer r.col = 34
 
-    Pretty much nothing, but essential part of this program.
+    And it's better to keep the order of columns
     """
 
     def __init__(self):
-        """Example:
-
-        r = Row()
-        r.x = 10; r.y = 20
-        del r.x
-        """
         # To preserve orders
         super().__setattr__('_columns', [])
         super().__setattr__('_values', [])
@@ -69,10 +99,12 @@ class Row:
 
     @property
     def columns(self):
+        "List[str]: column names"
         return self._columns
 
     @property
     def values(self):
+        "List[type]"
         return self._values
 
     def __setattr__(self, name, value):
@@ -95,10 +127,16 @@ class Row:
 
 
 class SQLPlus:
-    """SQLPlus object works like a sql cursor.
+    """
+    Attributes:
+        tables (List[str]): list of all tables in the DB
     """
 
     def __init__(self, dbfile):
+        """
+        Args:
+            dbfile (str): db filename or ':memory:'
+        """
         # self._dbfile = os.path.join(WORKSPACE, dbfile)
         self._dbfile = dbfile if dbfile == ':memory:' \
             else os.path.join(WORKSPACE, dbfile)
@@ -109,6 +147,10 @@ class SQLPlus:
     # args can be a list, a tuple or a dictionary
     def run(self, query, args=()):
         """Simply executes sql statement and update tables attribute
+
+        Args:
+            query (str): SQL query string
+            args (List[any] or Tuple[any]): args for SQL query
         """
         query = query.lower()
         self._cursor.execute(query, args)
@@ -118,7 +160,11 @@ class SQLPlus:
     def reel(self, query, args=()):
         """Generates a sequence of rows from a query.
 
-        Query can be a select statement or table name.
+        Args:
+            query (str): select statement or table name
+
+        Yields:
+            Row
         """
         query = _select_statement(query.lower())
         if query.strip().partition(' ')[0].upper() != "SELECT":
@@ -134,18 +180,32 @@ class SQLPlus:
     def save(self, seq, name=None, args=(), n=None):
         """create a table from an iterator.
 
-        seq is an iterator or a generator function.
-        if seq is a generator function and 'name' is not given,
-        the function name is going to be the table name.
+        Note:
+            if seq is a generator function and 'name' is not given,
+            the function name is going to be the table name.
 
-        'args' are going to be passed as arguments for the generator function
+        Args:
+            seq (iter or GF[* -> Row])
+            name (str): table name in DB
+            args (List[type]): args for seq (GF)
+            n (int): number of rows to save
         """
         def save_rows_to_tempfile(f, rs):
+            """
+            Args:
+                f (file)
+                rs (Iter[Row])
+            """
             def tval(val):
                 """If val contains a comma or newline it causes problems
                 So just remove them.
                 There might be some other safer methods but I don't think
                 newlines or commas are going to affect any data analysis.
+
+                Args:
+                    val (type)
+                Returns:
+                    str
                 """
                 return str(val).replace(',', ' ').replace('\n', ' ')
 
@@ -212,8 +272,13 @@ class SQLPlus:
              filename=None, overwrite=True):
         """Printing to a screen or saving to a file
 
-        'query' can be either a SQL query string or an iterable.
-        'n' is a maximun number of rows to show up,
+        Args:
+            query (str or Iter[Row] or GF)
+            args (List[type] or Tuple[type]): args for query (GF)
+            n (int): maximum number of lines to show
+            cols (str or List[str]): columns to show
+            filename (str): filename to save
+            overwrite (bool): if true overwrite a file
         """
         # so that you can easily maintain code
         # Searching nrows is easier than searching n in editors
@@ -271,6 +336,12 @@ class SQLPlus:
     # Simpler version of show (when you write it to a file)
     # so you make less mistakes.
     def write(self, query, filename=None, args=()):
+        """
+        Args:
+            query (str or Iter[Row] or GF)
+            args (List[type] or Tuple[type]): args for query (GF)
+            filename (str): filename to save
+        """
         if isinstance(query, str) and \
            _is_oneword(query) and filename is None:
             filename = query
@@ -278,6 +349,9 @@ class SQLPlus:
 
     def _list_tables(self):
         """List of table names in the database
+
+        Returns:
+            List[str]
         """
         query = self._cursor.execute("""
         select * from sqlite_master
@@ -287,6 +361,11 @@ class SQLPlus:
         return sorted(tables)
 
     def summarize(self, n=1000, overwrite=True):
+        """
+        Args:
+            n (int)
+            overwrite (bool)
+        """
         summary_dir = os.path.join(WORKSPACE, 'summary')
         if not os.path.exists(summary_dir):
             os.makedirs(summary_dir)
@@ -296,7 +375,12 @@ class SQLPlus:
             self.show(table, n=n, filename=filename, overwrite=overwrite)
 
     def drop(self, table):
-        "drop table if exists"
+        """
+        drop table if exists
+
+        Args:
+            table (str)
+        """
         # you can't use '?' for table name
         # '?' is for data insertion
         self.run('drop table if exists %s' % (table,))
@@ -309,7 +393,14 @@ class SQLPlus:
         self.tables = self._list_tables()
 
     def count(self, seq):
-        "count the size of a sequence"
+        """
+        count the size of a sequence
+
+        Args:
+            seq (str or GF or iter)
+        Returns:
+            int
+        """
         if isinstance(seq, str):
             seq = self._cursor.execute(_select_statement(seq))
         if hasattr(seq, '__call__'):
@@ -320,6 +411,11 @@ class SQLPlus:
 @contextmanager
 def dbopen(dbfile):
     """Connects to SQL database(sqlite)
+
+    Args:
+        dbfile (str)
+    Yields:
+        SQLPlus
     """
     splus = SQLPlus(dbfile)
     try:
@@ -329,18 +425,16 @@ def dbopen(dbfile):
         splus.conn.close()
 
 
-# 'grouped row' refers to a Row object
-# with all-list properties
 def gby(seq, key):
     """Group the iterator by columns
 
     Depends heavily on 'groupby' from itertools
 
     Args
-        seq: an iterator
-        key: Either a function, or a comma(space) separated string,
-               or a list(tuple) of strings
-               or [] to group them all
+        seq (iter)
+        key (FN[Row -> type] or List[str] or str): if [], group them all
+    Yields:
+        List[Row]
     """
     if not hasattr(key, '__call__'):
         key = _build_keyfn(key)
@@ -350,7 +444,12 @@ def gby(seq, key):
 
 
 def todf(rows):
-    "a list of rows to a dataframe"
+    """
+    Args:
+        List[Row]
+    Returns:
+        pd.DataFrame
+    """
     colnames = rows[0].columns
     d = {}
     for col in zip(colnames, *(r.values for r in rows)):
@@ -365,7 +464,12 @@ def todf(rows):
 # you will use this function to use with yield from
 # so there's no point in returning a list of rows
 def torows(df):
-    "dataframe => rows"
+    """
+    Args:
+        df (pd.DataFrame)
+    Yields:
+        Row
+    """
     colnames = df.columns.values
     for vals in df.values.tolist():
         r = Row()
@@ -375,6 +479,13 @@ def torows(df):
 
 
 def pick(cols, seq):
+    """
+    Args:
+        cols (str or List[str])
+        seq (Iter[Row])
+    Yields:
+        Row
+    """
     cols = _listify(cols)
     for r in seq:
         r1 = Row()
@@ -386,6 +497,11 @@ def pick(cols, seq):
 def prepend_header(filename, header=None, drop=1):
     """
     drop n lines and prepend header
+
+    Args:
+        filename (str)
+        header (str)
+        drop (int)
     """
     for no, line in enumerate(
             fileinput.input(os.path.join(WORKSPACE, filename), inplace=True)):
@@ -406,7 +522,13 @@ def prepend_header(filename, header=None, drop=1):
 
 
 def convtype(val):
-    "convert type if possible"
+    """convert type if possible
+
+    Args:
+        val (str)
+    Returns:
+        int or float or str
+    """
     try:
         return int(val)
     except:
@@ -419,7 +541,11 @@ def convtype(val):
 def reel(csv_file, header=None):
     """Loads well-formed csv file, 1 header line and the rest is data
 
-    returns an iterator
+    Args:
+        csv_file (str)
+        header (str)
+    Yields:
+        Row
     """
     def is_empty_line(line):
         """Tests if a list of strings is empty for example ["", ""] or []
@@ -449,6 +575,11 @@ def reel(csv_file, header=None):
 # Inflexible, experimental
 def reel_html_table(html_file, css_selector='table'):
     """Read simple well formed table
+    Args:
+        html_file (str)
+        css_selector (str)
+    Yields:
+        Row
     """
     if not html_file.endswith('.html'):
         html_file += '.html'
@@ -467,6 +598,11 @@ def reel_html_table(html_file, css_selector='table'):
 
 def adjoin(colnames):
     """Decorator to ensure that the rows to have the columns for sure
+
+    Args:
+        colnames (str or List[str])
+    Returns:
+        FN
     """
     colnames = _listify(colnames)
 
@@ -491,6 +627,11 @@ def adjoin(colnames):
 
 def disjoin(colnames):
     """Decorator to ensure that the rows are missing
+
+    Args:
+        colnames (str or List[str])
+    Returns:
+        FN
     """
     colnames = _listify(colnames)
 
@@ -513,11 +654,19 @@ def disjoin(colnames):
 
 # Should I just export WORKSPACE variable directly?
 def set_workspace(dir):
+    """
+    Args:
+        dir (str)
+    """
     global WORKSPACE
     WORKSPACE = dir
 
 
 def get_workspace():
+    """
+    Returns:
+        str
+    """
     return WORKSPACE
 
 
