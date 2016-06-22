@@ -227,8 +227,8 @@ class Testdbopen(unittest.TestCase):
 class CustomersAndOrders(unittest.TestCase):
     def setUp(self):
         with dbopen('customers_and_orders.db') as c:
-            c.save(read_html_table('customers'), 'customers')
-            c.save(read_html_table('orders'), 'orders')
+            c.save(reel_html_table('customers'), 'customers')
+            c.save(reel_html_table('orders'), 'orders')
 
     def tearDown(self):
         import shutil
@@ -237,7 +237,7 @@ class CustomersAndOrders(unittest.TestCase):
             shutil.rmtree(summary_dir)
         os.remove(os.path.join(get_workspace(), 'customers_and_orders.db'))
 
-    def test_read_html_table(self):
+    def test_reel_html_table(self):
         with dbopen('customers_and_orders.db') as c:
             customers = list(c.reel('customers'))
             orders = list(c.reel('orders'))

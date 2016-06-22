@@ -40,7 +40,7 @@ from bs4 import BeautifulSoup
 import pandas as pd
 
 __all__ = ['dbopen', 'Row', 'gby', 'reel',
-           'read_html_table', 'pick',
+           'reel_html_table', 'pick',
            'prepend_header', 'adjoin', 'disjoin',
            'todf', 'torows',
            'set_workspace', 'get_workspace']
@@ -447,7 +447,7 @@ def reel(csv_file, header=None):
 
 
 # Inflexible, experimental
-def read_html_table(html_file, css_selector='table'):
+def reel_html_table(html_file, css_selector='table'):
     """Read simple well formed table
     """
     if not html_file.endswith('.html'):
