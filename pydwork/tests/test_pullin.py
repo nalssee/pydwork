@@ -22,7 +22,7 @@ class PullInTest(unittest.TestCase):
                 drivers.append(client())
             return drivers
 
-        def fetchfn(driver, item):
+        def fetch1(driver, item):
             driver.get(item)
             box = driver.find_element_by_css_selector('ul.stripes_list')
             links = box.find_elements_by_css_selector("li > div > a")
@@ -31,26 +31,16 @@ class PullInTest(unittest.TestCase):
                                   for link in links]})
 
         drivers = init_drivers(2, webdriver.PhantomJS)
+        # drivers = init_drivers(2, webdriver.Firefox)
 
         base_addr = "http://seekingalpha.com/articles?page="
 
         items = [base_addr + str(i) for i in range(1, 9)]
 
-        # Normally reset_dir should be False
-        fetch_items(drivers, items, fetchfn, save_every_n=2, reset_dir=True)
-        for d in drivers:
-            d.quit()
-
-        count = 0
-        while len(result_files_to_df().index) != 75 * 8 and count < 3:
-            count += 1
-            fetch_items(drivers, items, fetchfn, save_every_n=2)
-            for d in drivers:
-                d.quit()
+        fetch(drivers, items, fetch1, save_every_n=2)
 
         # seeking alpha show 75 articles per page
-        self.assertEqual(len(result_files_to_df().index), 75 * 8)
+        self.assertEqual(result_files_to_df().shape, (75 * 8, 1))
 
 
-if __name__ == '__main__':
-    unittest.main()
+unittest.main()

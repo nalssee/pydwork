@@ -21,62 +21,58 @@ You'll learn about the sites you want to scrap through experience.
 import os
 import pickle
 import pandas as pd
+import re
 
 from datetime import datetime
-from collections import OrderedDict
 from . import npc
 
-__all__ = ['fetch_items', 'result_files_to_df']
+
+__all__ = ['fetch', 'result_files_to_df']
 
 
 RESULT_FILE_PREFIX = 'result'
+RESULTS_DIR = os.path.join(os.getcwd(), 'results')
+if not os.path.isdir(RESULTS_DIR):
+    print('Created', RESULTS_DIR)
+    os.makedirs(RESULTS_DIR)
 
-print(os.getcwd())
 
-def fetch_items(drivers, items, fetchfn,
-                max_items=1000000, save_every_n=100, max_trials=10,
-                base_dir=os.getcwd(), reset_dir=False):
+def fetch(drivers, items_list, fetch1,
+          max_items=1000000, save_every_n=100, max_trials=10):
     """
-    ===================================
-    READ CAREFULLY!!!
-    ===================================
+    Args:
+        drivers (Type): A list of selenium web drivers, or requests.get
+        items_list (List[str]): list of strings(of course it can be JSON)
+            to fetch if there is a 'items' file in the RESULTS_DIR folder
+            the list will be merged to it
 
-    drivers: A list of selenium web drivers
-    items: list of strings(of course it can be JSON) to fetch
-       (if reset_dir is False, items is simply ignored and items_dict
-       picke file is used for fetching items)
-    fetch_fn: driver, item -> pd.DataFrame
-    max_trials: If fetching fails more than max_trials just skip it
-    max_items: you can pass lots of items and just part of them are fetched
-                so you can do the work later
-    save_every_n: save every n items
-    base_dir: folder to save results and an items_dict pickle file
-    reset_dir: if True, remove results and and items_dict pickle file
-         and items_dict pickle file is initiated with items
+            'items' file is a dumped pickle file of a dictionary as followes:
+                {'item1': -1, 'item2': 0, 'item3': 2}
+                Each number means the number of trials of fetching
+                -1 represents success
 
-    search for files like RESULT_FILE_PREFIX +
-    "2015-06-17 10:04:54.560384.csv" files
+        fetch1 (FN[driver, item (str) -> pd.DataFrame]): fetch just one
+            item and returns a data frame. An item may contain a list of
+            results you want
+        max_trials (int): If fetching fails more than max_trials just skip it
+        max_items (int): you can pass lots of items and just part of them
+            are fetched so you can do the work later
+        save_every_n: save every n items
     """
 
-    PICKLE_FILE = os.path.join(base_dir, 'items_dict.pkl')
+    ITEMS_FILE = os.path.join(RESULTS_DIR, 'items')
 
-    def dict_to_list(items_dict):
-        result = []
-        count = 0
-        for item, ntrial in items_dict.items():
-            if count >= max_items:
-                return result
-            if ntrial >= 0 and ntrial <= max_trials:
-                result.append((item, ntrial))
-                count += 1
-        return result
-
-    def load_items_dict():
-        with open(PICKLE_FILE, 'rb') as fport:
+    def load_items_file():
+        with open(ITEMS_FILE, 'rb') as fport:
             items_dict = pickle.load(fport)
-        print("Loading items_dict.pkl file ...")
-        show_items_dict(items_dict)
         return items_dict
+
+    def dict_to_csv(items_dict):
+        with open(os.path.join(RESULTS_DIR, 'items.csv'), 'w') as f:
+            f.write('item,trials\n')
+            for i, n in [x for x in sorted(items_dict.items(),
+                         key=lambda x: x[1], reverse=True)]:
+                f.write('%s,%s\n' % (i, n))
 
     def show_items_dict(items_dict):
         print('total: %d' % len(items_dict))
@@ -86,33 +82,20 @@ def fetch_items(drivers, items, fetchfn,
               % len([_ for _, v in items_dict.items() if v == 0]))
         print('failed: %d' % len([_ for _, v in items_dict.items() if v > 0]))
 
-    if reset_dir:
-        # remove all files related to reset them all
-        for rfile in os.listdir(base_dir):
-            if rfile.startswith(RESULT_FILE_PREFIX):
-                os.remove(rfile)
-        try:
-            os.remove(PICKLE_FILE)
-        except:
-            pass
+    items_dict = load_items_file() if os.path.isfile(ITEMS_FILE) else {}
 
-    if os.path.isfile(PICKLE_FILE):
-        items_dict = load_items_dict()
-    else:
-        # initiate items_dict with items
-        items_dict = OrderedDict()
-        for item in items:
-            # if duplication is detected, something must have gone wrong
+    # merge items list to items_dict
+    for item in items_list:
+        if item not in items_dict:
             items_dict[item] = 0
-        print("Given items size: ", len(items))
-        print("After duplication removal: ", len(items_dict))
 
-    # it is a bit silly to turn a list to dict and back to a list again
-    # but to keep consistency with other cases and to keep it simple
-    # I will just leave it as is
-    items = dict_to_list(items_dict)
+    show_items_dict(items_dict)
 
-    print('{} items to fetch'.format(min(len(items), max_items)))
+    # filter items to fetch
+    items_to_fetch_list = [i for i, n in sorted(list(items_dict.items()),
+                           key=lambda x: x[1]) if n >= 0][:max_items]
+
+    print('%d items to fetch' % len(items_to_fetch_list))
 
     failure_string = npc.random_string(20)
 
@@ -124,9 +107,9 @@ def fetch_items(drivers, items, fetchfn,
 
     def make_producer(driver, items):
         subsequent_failures = 0
-        for item, ntrials in items:
+        for item in items:
             try:
-                df = fetchfn(driver, item)
+                df = fetch1(driver, item)
                 subsequent_failures = 0
                 yield "", item, df
             except Exception as e:
@@ -139,7 +122,7 @@ def fetch_items(drivers, items, fetchfn,
                 yield failure_string, item, ()
         print("Closing the driver...")
         try:
-            # you may just want to just reqeusts
+            # In case you use requests.get, it doesn't have 'close'
             driver.close()
         except:
             pass
@@ -160,16 +143,17 @@ def fetch_items(drivers, items, fetchfn,
 
     def save_results():
         nonlocal results, succeeded_items
-        rfile = os.path.join(base_dir,
-                             RESULT_FILE_PREFIX + str(datetime.now()) + '.csv')
+        rfile = os.path.join(RESULTS_DIR, _gen_result_file_name())
+
         pd.concat(results).to_csv(rfile, index=False)
         for succeeded_item in succeeded_items:
-            # Only when it's successfully saved, you can say that it's FETCHED.
             items_dict[succeeded_item] = -1
+        # empty the bins
         succeeded_items = []
         results = []
 
-    for driver, chunk in zip(drivers, npc.nchunks(items, len(drivers))):
+    for driver, chunk in zip(drivers,
+                             npc.nchunks(items_to_fetch_list, len(drivers))):
         producers.append(make_producer(driver, chunk))
 
     # TODO: not working as intended, No idea what's wrong
@@ -180,31 +164,31 @@ def fetch_items(drivers, items, fetchfn,
         if results:
             save_results()
 
-        # Show failed items
-        print("Items failed to fetch:")
-        max_failed_items = 0
-        for k, v in items_dict.items():
-            if v > 0:
-                max_failed_items += 1
-                print(k)
-            if max_failed_items >= 20:
-                print("More than %d items failed" % max_failed_items)
-                break
+        dict_to_csv(items_dict)
 
         # save items_dict for later in case you haven't finished fetching
         # and want to do it later.
-        with open(PICKLE_FILE, 'wb') as f:
+        with open(ITEMS_FILE, 'wb') as f:
             pickle.dump(items_dict, f)
         print("Fetching status")
         show_items_dict(items_dict)
         print("Done fetching")
 
 
-def result_files_to_df(path=os.getcwd()):
+def result_files_to_df():
     result_dfs = []
-    for rfile in os.listdir(path):
+    for rfile in os.listdir(RESULTS_DIR):
         if rfile.startswith(RESULT_FILE_PREFIX) and rfile.endswith('.csv'):
-            print(rfile)
-            result_dfs.append(pd.read_csv(os.path.join(path, rfile)))
-
+            result_dfs.append(pd.read_csv(os.path.join(RESULTS_DIR, rfile)))
     return pd.concat(result_dfs)
+
+
+def _gen_result_file_name():
+    """Generate a result file name(csv)
+
+    Returns:
+        str
+    """
+    return RESULT_FILE_PREFIX + \
+        re.sub(r'[^\w]+', '-', str(datetime.now())) + \
+        '.csv'
