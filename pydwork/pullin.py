@@ -24,7 +24,8 @@ import pandas as pd
 import re
 
 from datetime import datetime
-from . import npc
+from .npc import npc
+from .util import nchunks, random_string
 
 
 __all__ = ['fetch', 'result_files_to_df']
@@ -97,7 +98,7 @@ def fetch(drivers, items_list, fetch1,
 
     print('%d items to fetch' % len(items_to_fetch_list))
 
-    failure_string = npc.random_string(20)
+    failure_string = random_string(20)
 
     # counts how many items have been fetched
     count = 0
@@ -153,13 +154,13 @@ def fetch(drivers, items_list, fetch1,
         results = []
 
     for driver, chunk in zip(drivers,
-                             npc.nchunks(items_to_fetch_list, len(drivers))):
+                             nchunks(items_to_fetch_list, len(drivers))):
         producers.append(make_producer(driver, chunk))
 
     # TODO: not working as intended, No idea what's wrong
     # Don't ever ctrl-c while running
     try:
-        npc.npc(producers, consumer)
+        npc(producers, consumer)
     finally:
         if results:
             save_results()

@@ -20,8 +20,6 @@ class CnPUtilsTest(unittest.TestCase):
             else:
                 return fib(n - 1) + fib(n - 2)
 
-        fib_producers = producers(fib)
-
         print('It takes a few seconds', end='\n\n')
         input_vals = [34] * 4
 
@@ -33,7 +31,7 @@ class CnPUtilsTest(unittest.TestCase):
         print('Parallel')
         with timeit():
             result = []
-            npc(fib_producers(input_vals, 2), lambda x: result.append(x),
+            npc(make_producers(fib, input_vals, 2), lambda x: result.append(x),
                 parallel=True)
             print(result)
             self.assertEqual(len(result), len(input_vals))
@@ -42,7 +40,7 @@ class CnPUtilsTest(unittest.TestCase):
         print('Threading')
         with timeit():
             result = []
-            npc(fib_producers(input_vals, 2), lambda x: result.append(x))
+            npc(make_producers(fib, input_vals, 2), lambda x: result.append(x))
             print(result)
             self.assertEqual(len(result), len(input_vals))
 
