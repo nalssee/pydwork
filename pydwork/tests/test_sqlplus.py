@@ -415,7 +415,7 @@ class TestRow(unittest.TestCase):
         with self.assertRaises(AttributeError):
             r1.a
 
-        with self.assertRaises(KeyError):
+        with self.assertRaises(ValueError):
             del r1.a
 
         del r1.y

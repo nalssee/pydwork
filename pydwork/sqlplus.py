@@ -81,7 +81,7 @@ __all__ = ['dbopen', 'Row', 'gby', 'reel',
 WORKSPACE = ''
 
 
-class Row:
+class Row(dict):
     """
     Basically the same as sqlite3.Row
     it's just that using sqlite3.Row is a bit clunkier.
@@ -92,10 +92,8 @@ class Row:
     """
 
     def __init__(self):
-        # To preserve orders
         super().__setattr__('_columns', [])
         super().__setattr__('_values', [])
-        super().__setattr__('_columns_set', set())
 
     @property
     def columns(self):
@@ -108,15 +106,12 @@ class Row:
         return self._values
 
     def __setattr__(self, name, value):
-        # any performance boost? I don't know
-        if name not in self._columns_set:
+        if name not in self:
             self.columns.append(name)
             self.values.append(value)
-            self._columns_set.add(name)
         super().__setattr__(name, value)
 
     def __delattr__(self, name):
-        self._columns_set.remove(name)
         idx = self.columns.index(name)
         del self.columns[idx]
         del self.values[idx]
