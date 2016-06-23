@@ -81,7 +81,7 @@ __all__ = ['dbopen', 'Row', 'gby', 'reel',
 WORKSPACE = ''
 
 
-class Row(dict):
+class Row:
     """
     Basically the same as sqlite3.Row
     it's just that using sqlite3.Row is a bit clunkier.
@@ -106,9 +106,13 @@ class Row(dict):
         return self._values
 
     def __setattr__(self, name, value):
-        if name not in self:
+        if name not in self.__dict__:
             self.columns.append(name)
             self.values.append(value)
+        else:
+            # Updating the attribute value of a row
+            idx = self.columns.index(name)
+            self.values[idx] = value
         super().__setattr__(name, value)
 
     def __delattr__(self, name):
@@ -166,6 +170,11 @@ class SQLPlus:
             raise ValueError("use 'run' for ", query)
         qrows = self._cursor.execute(query, args)
         columns = [c[0] for c in qrows.description]
+
+        # there can't be duplicates in column names
+        if len(columns) != len(set(columns)):
+            raise ValueError('duplicates in columns names')
+
         for qrow in qrows:
             row = Row()
             for col, val in zip(columns, qrow):

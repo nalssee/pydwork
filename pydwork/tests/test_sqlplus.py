@@ -423,6 +423,10 @@ class TestRow(unittest.TestCase):
         self.assertEqual(r1.columns, ['x', 'z'])
         self.assertEqual(r1.values, [10, 39.2])
 
+        r1.x *= 10
+        r1.z = r1.x - r1.z
+        self.assertEqual(r1.values, [r1.x, r1.z])
+
 
 class TestMisc(unittest.TestCase):
     def test_prepend_header(self):
@@ -454,5 +458,23 @@ class TestMisc(unittest.TestCase):
 
             os.remove(os.path.join(get_workspace(), 'iris2.csv'))
 
+    def test_duplicates(self):
+        with dbopen(':memory:') as c:
+            c.save(reel('iris'), name='iris')
+
+            with self.assertRaises(ValueError):
+                # there can't be duplicates
+                next(c.reel("""
+                select species, sepal_length, sepal_length
+                from iris
+                """))
+
+            r1 = next(c.reel("""
+                      select species, sepal_length,
+                      sepal_length as sepal_length10
+                      from iris
+                      """))
+            r1.sepal_length10 = r1.sepal_length * 10
+            self.assertEqual(r1.values, ['setosa', 5.1, 51.0])
 
 unittest.main()
