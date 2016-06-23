@@ -493,8 +493,7 @@ def pick(cols, seq):
 
 
 def prepend_header(filename, header=None, drop=1):
-    """
-    drop n lines and prepend header
+    """Drop n lines and prepend header
 
     Args:
         filename (str)
@@ -520,7 +519,7 @@ def prepend_header(filename, header=None, drop=1):
 
 
 def convtype(val):
-    """convert type if possible
+    """Convert type if possible
 
     Args:
         val (str)
@@ -572,7 +571,8 @@ def reel(csv_file, header=None):
 
 # Inflexible, experimental
 def reel_html_table(html_file, css_selector='table'):
-    """Read simple well formed table
+    """Read a simple well formed table
+
     Args:
         html_file (str)
         css_selector (str)
@@ -624,7 +624,7 @@ def adjoin(colnames):
 
 
 def disjoin(colnames):
-    """Decorator to ensure that the rows are missing
+    """Decorator to ensure that the rows NOT to have the columns for sure.
 
     Args:
         colnames (str or List[str])
@@ -694,18 +694,14 @@ def _build_keyfn(key):
 
 
 def _gen_valid_column_names(columns):
-    """
-    Generate valid column names from arbitrary ones
+    """Generate valid column names from arbitrary ones
 
     Note:
         Every column name is lowercased
-
     Args:
         columns (List[str])
-
     Returns:
         List[str]
-
     Example:
         >>> _gen_valid_column_names(['a', '_b', 'a', 'a1"*c', 'a1c'])
         ['a0', 'a_b', 'a1', 'a1c0', 'a1c1']
@@ -772,8 +768,7 @@ def _gen_valid_column_names(columns):
 
 
 def _listify(colstr):
-    """
-    A comma or space separated string a list of strings
+    """A comma or space separated string to a list of strings
 
     Args:
         colstr (str)
@@ -811,8 +806,7 @@ def _peek_first(seq):
 
 
 def _create_statement(name, colnames):
-    """
-    create table if not exists foo (...)
+    """create table if not exists foo (...)
 
     Note:
         Every type is numeric.
@@ -828,8 +822,7 @@ def _create_statement(name, colnames):
 
 
 def _insert_statement(name, ncol):
-    """
-    insert into foo values (?, ?, ?, ...)
+    """insert into foo values (?, ?, ?, ...)
 
     Note:
         Column name is lower cased
@@ -854,9 +847,8 @@ def _is_oneword(query):
 
 
 def _select_statement(query, cols='*'):
-    """
-    If query is just one word, then it is transformed to a select stmt
-    or leave it
+    """If query is just one word, turn it to a select stmt
+    or just leave it
 
     Args:
         query (str)

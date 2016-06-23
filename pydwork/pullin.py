@@ -1,26 +1,37 @@
-""" Web scraping framework using selenium
-Most of the time I had to use selenium (with firefox or phantomjs)
-not 'requests'
+"""Web scraping tool
 
-Printing is better than log file because
+It is highly unlikely to download 100,000 pages without a single failure
+So you have to split them into small pieces and save each of them
+as soon as it's done.
+
+And of course you have to record failures and successes
+so you can try again later.
+If you fail in more than say 10 times, probably the page is broken,
+which means you also have to record the number of trials
+
+
+Most of the time I had to use selenium (with firefox or phantomjs).
+But you can also use 'requests'
+
+Printing the process out to stdout is better than log files because
 web scraping can't be fully automatic.
 You'll learn about the sites you want to scrap through experience.
-So, instant printing to stdout is convinient if not noble.
 """
-
 
 import os
 import pickle
 import pandas as pd
-from . import npc
+
 from datetime import datetime
 from collections import OrderedDict
+from . import npc
 
 __all__ = ['fetch_items', 'result_files_to_df']
 
 
 RESULT_FILE_PREFIX = 'result'
 
+print(os.getcwd())
 
 def fetch_items(drivers, items, fetchfn,
                 max_items=1000000, save_every_n=100, max_trials=10,
