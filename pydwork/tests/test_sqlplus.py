@@ -236,6 +236,13 @@ class CustomersAndOrders(unittest.TestCase):
             shutil.rmtree(summary_dir)
         os.remove(os.path.join(get_workspace(), 'customers_and_orders.db'))
 
+    def test_multiple_connections(self):
+        with dbopen('customers_and_orders.db') as c1:
+            with dbopen(':memory:') as c2:
+                c2.save(c1.reel('customers'), 'customers')
+                for r1, r2 in zip(c1.reel('customers'), c2.reel('customers')):
+                    self.assertEqual(r1.address, r2.address)
+
     def test_reel_html_table(self):
         with dbopen('customers_and_orders.db') as c:
             customers = list(c.reel('customers'))
@@ -475,17 +482,6 @@ class TestMisc(unittest.TestCase):
                       """))
             r1.sepal_length10 = r1.sepal_length * 10
             self.assertEqual(r1.values, ['setosa', 5.1, 51.0])
-
-
-class MultipleConnections(unittest.TestCase):
-    def test_multiple_connections(self):
-        import tempfile
-        import sqlite3
-
-        with tempfile.NamedTemporaryFile() as f:
-            print('filename', f.name)
-            conn = sqlite3.connect(f.name)
-            conn.close()
 
 
 unittest.main()

@@ -253,6 +253,12 @@ class SQLPlus:
             filename (str): filename to save
             overwrite (bool): if true overwrite a file
         """
+        def tval(val):
+            if isinstance(val, str):
+                return '"' + val + '"'
+            else:
+                return str(val)
+
         # so that you can easily maintain code
         # Searching nrows is easier than searching n in editors
         nrows = n
@@ -292,7 +298,7 @@ class SQLPlus:
             with open(os.path.join(WORKSPACE, filename), 'w') as fout:
                 fout.write(','.join(colnames) + '\n')
                 for rvals in islice(seq_rvals, nrows):
-                    fout.write(','.join([str(val) for val in rvals]) +
+                    fout.write(','.join([tval(val) for val in rvals]) +
                                '\n')
         # write to stdout
         else:
@@ -834,6 +840,7 @@ def _select_statement(query, cols='*'):
     return query
 
 
+# The following 2 helpers are used in 'SQLPlus.save'
 def _reel(cursor, table_name, column_names):
     q = _select_statement(table_name, column_names)
     for srow in cursor.execute(q):
