@@ -1,6 +1,11 @@
 """
 SQLite3 based utils for statistical analysis
 
+--------------------------------------------------------------
+What this program does is just reeling off rows from db(SQLite3)
+and saving them back to db
+--------------------------------------------------------------
+
 Emperical data analysis task is largely composed of two parts,
 wrangling data(cleaning up so you can easily handle it)
 and applying statistical methodologies to data.
@@ -184,7 +189,7 @@ class SQLPlus:
     def save(self, seq, name=None, args=(), n=None):
         """create a table from an iterator.
 
-        Note:
+        Note:<%=  %>
             if seq is a generator function and 'name' is not given,
             the function name is going to be the table name.
 
@@ -194,29 +199,6 @@ class SQLPlus:
             args (List[type]): args for seq (GF)
             n (int): number of rows to save
         """
-        def save_rows_to_tempfile(f, rs):
-            """
-            Args:
-                f (file)
-                rs (Iter[Row])
-            """
-            def tval(val):
-                """If val contains a comma or newline it causes problems
-                So just remove them.
-                There might be some other safer methods but I don't think
-                newlines or commas are going to affect any data analysis.
-
-                Args:
-                    val (type)
-                Returns:
-                    str
-                """
-                return str(val).replace(',', ' ').replace('\n', ' ')
-
-            for r in rs:
-                vals = [tval(v) for v in r.values]
-                f.write((','.join(vals) + '\n').encode())
-
         # single letter variable is hard to find
         nrows = n
 
@@ -225,49 +207,36 @@ class SQLPlus:
             name = name or seq.__name__
             seq = seq(*args)
 
-        row0, seq = _peek_first(seq)
-
-        if nrows:
-            seq = islice(seq, nrows)
-
         if name in self.tables:
             return
         if name is None:
             raise ValueError('table name required')
 
+        if nrows:
+            seq = islice(seq, nrows)
+
+        row0, seq = _peek_first(seq)
         colnames = row0.columns
 
         # You can't save the iterator directly because
         # once you execute a table creation query,
-        # then the query becomes the most recent query,
-        # not the query for the iterator.
-        # Which means, if you iterate over the iterator,
-        # it iterates over the table creation query.
+        # then the query in action is changed to the most recent query,
+        # not the query for the iterator anymore.
 
         # You can see the example at test/sqlplus_test.py
         # 'test_run_over_run'
 
-        # So you save the iterator up in a temporary file
-        # and then save the file to a database.
-        # In the process column types are checked.
-
-        # This is the root of all evil
-        with tempfile.TemporaryFile() as fport:
-            # Write the iterator in a temporary file
-            # encode it as binary.
-            save_rows_to_tempfile(fport, seq)
-
-            # create table
-            istmt = _insert_statement(name, len(colnames))
-            self._cursor.execute(_create_statement(name, colnames))
-
-            # Now insertion to a DB
-            fport.seek(0)
-
-            for line in fport:
-                # line[:-1] because last index indicates '\n'
-                line_vals = line[:-1].decode().split(',')
-                self._cursor.execute(istmt, line_vals)
+        # So you save the iterator up in another query and reel off it
+        with tempfile.NamedTemporaryFile() as f:
+            try:
+                conn = sqlite3.connect(f.name)
+                cursor = conn.cursor()
+                _save(cursor, seq, name, colnames)
+                _save(self._cursor, _reel(cursor, name, colnames),
+                      name, colnames)
+            finally:
+                conn.commit()
+                conn.close()
 
         self.tables = self._list_tables()
 
@@ -863,3 +832,19 @@ def _select_statement(query, cols='*'):
     if _is_oneword(query):
         return "select %s from %s" % (', '.join(_listify(cols)), query)
     return query
+
+
+def _reel(cursor, table_name, column_names):
+    q = _select_statement(table_name, column_names)
+    for srow in cursor.execute(q):
+        row = Row()
+        for c, v in zip(column_names, srow):
+            setattr(row, c, v)
+        yield row
+
+
+def _save(cursor, rows, table_name, column_names):
+    cursor.execute(_create_statement(table_name, column_names))
+    istmt = _insert_statement(table_name, len(column_names))
+    for r in rows:
+        cursor.execute(istmt, r.values)

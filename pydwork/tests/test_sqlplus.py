@@ -1,4 +1,3 @@
-
 import os
 import sys
 import unittest
@@ -476,5 +475,17 @@ class TestMisc(unittest.TestCase):
                       """))
             r1.sepal_length10 = r1.sepal_length * 10
             self.assertEqual(r1.values, ['setosa', 5.1, 51.0])
+
+
+class MultipleConnections(unittest.TestCase):
+    def test_multiple_connections(self):
+        import tempfile
+        import sqlite3
+
+        with tempfile.NamedTemporaryFile() as f:
+            print('filename', f.name)
+            conn = sqlite3.connect(f.name)
+            conn.close()
+
 
 unittest.main()
