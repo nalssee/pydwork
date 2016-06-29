@@ -231,7 +231,7 @@ class SQLPlus:
             try:
                 conn = sqlite3.connect(f.name)
                 cursor = conn.cursor()
-                _save(cursor, seq, name, colnames)
+                _save(cursor, (r.values for r in seq), name, colnames)
                 _save(self._cursor, _reel(cursor, name, colnames),
                       name, colnames)
             finally:
@@ -843,15 +843,12 @@ def _select_statement(query, cols='*'):
 # The following 2 helpers are used in 'SQLPlus.save'
 def _reel(cursor, table_name, column_names):
     q = _select_statement(table_name, column_names)
-    for srow in cursor.execute(q):
-        row = Row()
-        for c, v in zip(column_names, srow):
-            setattr(row, c, v)
-        yield row
+    yield from cursor.execute(q)
 
 
-def _save(cursor, rows, table_name, column_names):
+# srows: sqlite3 rows
+def _save(cursor, srows, table_name, column_names):
     cursor.execute(_create_statement(table_name, column_names))
     istmt = _insert_statement(table_name, len(column_names))
-    for r in rows:
-        cursor.execute(istmt, r.values)
+    for r in srows:
+        cursor.execute(istmt, r)
