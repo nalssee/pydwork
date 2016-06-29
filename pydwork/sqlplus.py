@@ -172,7 +172,7 @@ class SQLPlus:
         """
         query = _select_statement(query.lower())
         if query.strip().partition(' ')[0].upper() != "SELECT":
-            raise ValueError("use 'run' for ", query)
+            raise ValueError("use SQLPlus.run instead of SQLPlus.reel")
         qrows = self._cursor.execute(query, args)
         columns = [c[0] for c in qrows.description]
 
@@ -228,15 +228,13 @@ class SQLPlus:
 
         # So you save the iterator up in another query and reel off it
         with tempfile.NamedTemporaryFile() as f:
-            try:
-                conn = sqlite3.connect(f.name)
-                cursor = conn.cursor()
-                _save(cursor, (r.values for r in seq), name, colnames)
-                _save(self._cursor, _reel(cursor, name, colnames),
-                      name, colnames)
-            finally:
-                conn.commit()
-                conn.close()
+            conn = sqlite3.connect(f.name)
+            cursor = conn.cursor()
+            _sqlite3_save(cursor, (r.values for r in seq), name, colnames)
+            _sqlite3_save(self._cursor, _sqlite3_reel(cursor, name, colnames),
+                          name, colnames)
+            # no need to commit and close the connection,
+            # it's going to be erased anyway
 
         self.tables = self._list_tables()
 
@@ -253,7 +251,8 @@ class SQLPlus:
             filename (str): filename to save
             overwrite (bool): if true overwrite a file
         """
-        def tval(val):
+        def quote(val):
+            "quote it if it's a string, if not stringify it"
             if isinstance(val, str):
                 return '"' + val + '"'
             else:
@@ -298,14 +297,16 @@ class SQLPlus:
             with open(os.path.join(WORKSPACE, filename), 'w') as fout:
                 fout.write(','.join(colnames) + '\n')
                 for rvals in islice(seq_rvals, nrows):
-                    fout.write(','.join([tval(val) for val in rvals]) +
+                    fout.write(','.join([quote(val) for val in rvals]) +
                                '\n')
         # write to stdout
         else:
-            # show practically all rows, columns.
+            # show practically all columns.
             with pd.option_context("display.max_rows", nrows), \
                     pd.option_context("display.max_columns", 1000):
                 # make use of pandas DataFrame displaying
+                # islice 1 more rows than required
+                # to see if there are more rows left
                 seq_rvals_list = list(islice(seq_rvals, nrows + 1))
                 print(pd.DataFrame(seq_rvals_list[:nrows],
                                    columns=colnames))
@@ -841,13 +842,15 @@ def _select_statement(query, cols='*'):
 
 
 # The following 2 helpers are used in 'SQLPlus.save'
-def _reel(cursor, table_name, column_names):
+# just reel out sqlite3 rows and save sqlite3 rows
+# not the rows from this script.
+def _sqlite3_reel(cursor, table_name, column_names):
     q = _select_statement(table_name, column_names)
     yield from cursor.execute(q)
 
 
 # srows: sqlite3 rows
-def _save(cursor, srows, table_name, column_names):
+def _sqlite3_save(cursor, srows, table_name, column_names):
     cursor.execute(_create_statement(table_name, column_names))
     istmt = _insert_statement(table_name, len(column_names))
     for r in srows:
