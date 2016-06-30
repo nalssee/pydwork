@@ -141,10 +141,9 @@ class SQLPlus:
         Args:
             dbfile (str): db filename or ':memory:'
         """
-        # self._dbfile = os.path.join(WORKSPACE, dbfile)
-        self._dbfile = dbfile if dbfile == ':memory:' \
-            else os.path.join(WORKSPACE, dbfile)
-        self.conn = sqlite3.connect(self._dbfile)
+        if dbfile != ':memory:':
+            dbfile = os.path.join(WORKSPACE, dbfile)
+        self.conn = sqlite3.connect(dbfile)
         self._cursor = self.conn.cursor()
         self.tables = self._list_tables()
 
@@ -158,7 +157,6 @@ class SQLPlus:
         """
         query = query.lower()
         self._cursor.execute(query, args)
-
         self.tables = self._list_tables()
 
     def reel(self, query, args=()):
@@ -525,6 +523,8 @@ def reel(csv_file, header=None):
         Row
     """
     def is_empty_line(line):
+        # Performance is not so important
+        # since this function is invoked only when the line is really wierd
         """Tests if a list of strings is empty for example ["", ""] or []
         """
         return [x for x in line if x.strip() != ""] == []
