@@ -184,7 +184,7 @@ class SQLPlus:
                 setattr(row, col, val)
             yield row
 
-    def save(self, seq, name=None, args=(), n=None):
+    def save(self, seq, name=None, args=(), n=None, overwrite=False):
         """create a table from an iterator.
 
         Note:<%=  %>
@@ -205,10 +205,14 @@ class SQLPlus:
             name = name or seq.__name__
             seq = seq(*args)
 
-        if name in self.tables:
-            return
         if name is None:
             raise ValueError('table name required')
+
+        if overwrite:
+            self.run('drop table if exists %s' % name)
+
+        if name in self.tables:
+            return
 
         if nrows:
             seq = islice(seq, nrows)
@@ -352,38 +356,24 @@ class SQLPlus:
             filename = os.path.join(summary_dir, table + '.csv')
             self.show(table, n=n, filename=filename, overwrite=overwrite)
 
-    def drop(self, table):
+    def drop(self, tables):
         """
         drop table if exists
 
         Args:
-            table (str)
+            tables (str or List[str])
         """
         # you can't use '?' for table name
         # '?' is for data insertion
-        self.run('drop table if exists %s' % (table,))
+        tables = _listify(tables)
         summary_dir = os.path.join(WORKSPACE, 'summary')
-        filename = os.path.join(summary_dir, table + '.csv')
-        if os.path.isfile(filename):
-            # remove summary file as well if exists
-            os.remove(filename)
-
+        for table in tables:
+            self.run('drop table if exists %s' % table)
+            filename = os.path.join(summary_dir, table + '.csv')
+            if os.path.isfile(filename):
+                # remove summary file as well if exists
+                os.remove(filename)
         self.tables = self._list_tables()
-
-    def count(self, seq):
-        """
-        count the size of a sequence
-
-        Args:
-            seq (str or GF or iter)
-        Returns:
-            int
-        """
-        if isinstance(seq, str):
-            seq = self._cursor.execute(_select_statement(seq))
-        if hasattr(seq, '__call__'):
-            seq = seq()
-        return sum(1 for _ in seq)
 
 
 @contextmanager
