@@ -25,6 +25,14 @@ def fillin(line, n):
     return line
 
 
+def count(conn, table):
+    if isinstance(table, str):
+        return sum(1 for _ in conn.reel(table))
+    else:
+        # seq
+        return sum(1 for _ in table)
+
+
 class Testdbopen(unittest.TestCase):
 
     def test_loading(self):
@@ -319,16 +327,7 @@ class CustomersAndOrders(unittest.TestCase):
                     if r.order_id is None:
                         yield r
 
-            self.assertEqual(c.count(nones), 17)
-            self.assertEqual(c.count(nones()), 17)
-
-            c.save(nones)
-            # # once you have it, you can call count as follows
-            self.assertEqual(c.count('nones'), c.count("""
-            select * from
-            customers1
-            where order_id is null
-            """))
+            self.assertEqual(count(c, nones()), 17)
 
     def test_gby(self):
         with dbopen('customers_and_orders.db') as c:
@@ -350,7 +349,7 @@ class CustomersAndOrders(unittest.TestCase):
                 df = todf(rs)
                 total += df.shape[0]
 
-            self.assertEqual(total, c.count('customers'))
+            self.assertEqual(total, count(c, 'customers'))
 
             def major_markets(n):
                 """
@@ -392,7 +391,7 @@ class CustomersAndOrders(unittest.TestCase):
                 for rs in gby(c.reel(query), 'employee_id'):
                     yield from torows(todf(rs))
 
-            self.assertEqual(c.count(orders1), 196)
+            self.assertEqual(count(c, orders1()), 196)
 
             with self.assertRaises(AssertionError):
                 for a, b in zip(orders1(), c.reel(query)):
