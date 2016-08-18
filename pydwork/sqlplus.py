@@ -159,7 +159,7 @@ class SQLPlus:
         self._cursor.execute(query, args)
         self.tables = self._list_tables()
 
-    def reel(self, query, args=()):
+    def reel(self, query, args=(), group=False):
         """Generates a sequence of rows from a query.
 
         Args:
@@ -178,11 +178,17 @@ class SQLPlus:
         if len(columns) != len(set(columns)):
             raise ValueError('duplicates in columns names')
 
-        for qrow in qrows:
-            row = Row()
-            for col, val in zip(columns, qrow):
-                setattr(row, col, val)
-            yield row
+        def rows():
+            for qrow in qrows:
+                row = Row()
+                for col, val in zip(columns, qrow):
+                    setattr(row, col, val)
+                yield row
+
+        if group:
+            yield from gby(rows(), group)
+        else:
+            yield from rows()
 
     def save(self, seq, name=None, args=(), n=None, overwrite=False):
         """create a table from an iterator.
@@ -503,7 +509,7 @@ def convtype(val):
             return val
 
 
-def reel(csv_file, header=None):
+def reel(csv_file, header=None, group=False):
     """Loads well-formed csv file, 1 header line and the rest is data
 
     Args:
@@ -526,21 +532,28 @@ def reel(csv_file, header=None):
         header = header or first_line
         columns = _gen_valid_column_names(_listify(header))
         ncol = len(columns)
-        for line_no, line in enumerate(csv.reader(fin)):
-            if len(line) != ncol:
-                if is_empty_line(line):
-                    continue
-                # You've read a line alread, so line_no + 1
-                raise ValueError("%s at %s invalid line" %
-                                 (csv_file, line_no + 1))
-            row1 = Row()
-            for col, val in zip(columns, line):
-                setattr(row1, col, convtype(val))
-            yield row1
+
+        def rows():
+            for line_no, line in enumerate(csv.reader(fin)):
+                if len(line) != ncol:
+                    if is_empty_line(line):
+                        continue
+                    # You've read a line alread, so line_no + 1
+                    raise ValueError("%s at %s invalid line" %
+                                     (csv_file, line_no + 1))
+                row1 = Row()
+                for col, val in zip(columns, line):
+                    setattr(row1, col, convtype(val))
+                yield row1
+
+        if group:
+            yield from gby(rows(), group)
+        else:
+            yield from rows()
 
 
 # Inflexible, experimental
-def reel_html_table(html_file, css_selector='table'):
+def reel_html_table(html_file, css_selector='table', group=False):
     """Read a simple well formed table
 
     Args:
@@ -556,12 +569,19 @@ def reel_html_table(html_file, css_selector='table'):
         trs = soup.select(css_selector)[0].select('tr')
         colnames = _gen_valid_column_names(
             [x.text for x in trs[0].select('th')])
-        for tr in trs[1:]:
-            r = Row()
-            vals = [x.text for x in tr.select('td')]
-            for col, val in zip(colnames, vals):
-                setattr(r, col, convtype(val))
-            yield r
+
+        def rows():
+            for tr in trs[1:]:
+                r = Row()
+                vals = [x.text for x in tr.select('td')]
+                for col, val in zip(colnames, vals):
+                    setattr(r, col, convtype(val))
+                yield r
+
+        if group:
+            yield from gby(rows(), group)
+        else:
+            yield from rows()
 
 
 def adjoin(colnames):

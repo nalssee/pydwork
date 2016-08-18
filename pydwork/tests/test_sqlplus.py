@@ -171,7 +171,7 @@ class Testdbopen(unittest.TestCase):
     def test_adjoin_disjoin(self):
         with dbopen(':memory:') as conn:
             def unsafe():
-                for rs in gby(reel('iris.csv'), 'species'):
+                for rs in reel('iris.csv', group='species'):
                     rs[0].first = 'yes'
                     yield from rs
             with self.assertRaises(Exception):
@@ -201,6 +201,9 @@ class Testdbopen(unittest.TestCase):
         with dbopen(':memory:') as conn:
             conn.save(reel('iris.csv'), name='iris')
             for rs in gby(conn.reel('iris'), 'species'):
+                self.assertEqual(todf(rs).shape, (50, 6))
+            # you can pass group in reel, choose whatever you like
+            for rs in conn.reel('iris', group='species'):
                 self.assertEqual(todf(rs).shape, (50, 6))
 
     def test_torows(self):
@@ -356,11 +359,11 @@ class CustomersAndOrders(unittest.TestCase):
                 find major n countries with lots of customers
                 """
                 def country_counts():
-                    for rs in gby(c.reel("""
+                    for rs in c.reel("""
                     select *
                     from customers
                     order by country
-                    """), 'country'):
+                    """, group='country'):
                         r = Row()
                         r.country = rs[0].country
                         r.count = len(rs)
