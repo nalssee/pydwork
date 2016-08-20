@@ -76,7 +76,7 @@ from bs4 import BeautifulSoup
 
 import pandas as pd
 
-__all__ = ['dbopen', 'Row', 'gby', 'reel',
+__all__ = ['dbopen', 'Row', 'Rows', 'gby', 'reel',
            'reel_html_table', 'pick',
            'prepend_header', 'adjoin', 'disjoin',
            'todf', 'torows',
@@ -128,6 +128,41 @@ class Row:
 
     def __str__(self):
         return str(list(zip(self.columns, self.values)))
+
+
+class Rows(list):
+    """
+    A shallow wrapper of a list of Row instances
+    """
+    def __init__(self, data):
+        super().__init__(list(data))
+
+    def add(self, col, fn):
+        for r in self:
+            setattr(r, col, fn(r))
+        return self
+
+    def order(self, key, reverse=None):
+        key = _build_keyfn(key)
+        self.sort(key=key, reverse=reverse)
+        return self
+
+    def filter(self, pred):
+        pred = _build_keyfn(pred)
+        return Rows([r for r in self if pred(r)])
+
+    def group(self, key):
+        # it is illogical to return an instance of Rows
+        result = []
+        for rs in gby(self, key):
+            result.append(rs)
+        return result
+
+    def show(self, n=30, cols=None, filename=None, overwrite=True):
+        # borrow 'show' from sqlplus
+        with dbopen(':memory:') as c:
+            c.show(self, n=n, cols=cols,
+                   filename=filename, overwrite=overwrite)
 
 
 class SQLPlus:
@@ -408,8 +443,7 @@ def gby(seq, key):
     Yields:
         List[Row]
     """
-    if not hasattr(key, '__call__'):
-        key = _build_keyfn(key)
+    key = _build_keyfn(key)
     for _, rows in groupby(seq, key):
         # to list or not to list
         yield list(rows)
@@ -509,6 +543,7 @@ def convtype(val):
             return val
 
 
+# consider changing the name to reel_csv
 def reel(csv_file, header=None, group=False):
     """Loads well-formed csv file, 1 header line and the rest is data
 
@@ -676,6 +711,10 @@ def _build_keyfn(key):
     Returns:
         FN[Row -> type]
     """
+    # if the key is a function, just return it
+    if hasattr(key, '__call__'):
+        return key
+
     colnames = _listify(key)
     if len(colnames) == 1:
         return lambda r: getattr(r, colnames[0])

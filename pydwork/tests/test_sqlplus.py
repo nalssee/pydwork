@@ -486,4 +486,20 @@ class TestMisc(unittest.TestCase):
             self.assertEqual(r1.values, ['setosa', 5.1, 51.0])
 
 
+class TestRows(unittest.TestCase):
+    def test_rows(self):
+        iris = Rows(reel('iris'))
+        # order is destructive
+        iris.order('sepal_length, sepal_width', reverse=True)
+        self.assertEqual(iris[0].col, 132)
+        self.assertEqual(iris[1].col, 118)
+        self.assertEqual(iris[2].col, 136)
+
+        col1 = iris.filter(lambda r: r.species == 'versicolor')[0].col
+        self.assertEqual(col1, 51)
+        # filter is non-destructive
+        self.assertEqual(iris[0].col, 132)
+
+        self.assertEqual(len(iris.group('species')[0]), 12)
+
 unittest.main()
