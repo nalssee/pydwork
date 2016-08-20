@@ -502,4 +502,10 @@ class TestRows(unittest.TestCase):
 
         self.assertEqual(len(iris.group('species')[0]), 12)
 
+        # just because..
+        sum = 0
+        for rs in iris.group('species'):
+            sum += len(rs)
+        self.assertEqual(sum, 150)
+
 unittest.main()
