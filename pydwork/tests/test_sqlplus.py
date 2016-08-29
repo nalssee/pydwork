@@ -442,12 +442,12 @@ class TestMisc(unittest.TestCase):
             c.write(reel('iris'), 'iris2.csv')
             prepend_header('iris2.csv', 'cnt, sl, sw, pl, pw, sp', drop=20)
             first = next(reel('iris2.csv'))
-            self.assertEqual(first.cnt, 20)
+            self.assertEqual(first.cnt, '20')
 
             c.write(reel('iris'), 'iris2.csv')
             prepend_header('iris2.csv', 'cnt, sl, sw, pl, pw, sp')
             first = next(reel('iris2.csv'))
-            self.assertEqual(first.cnt, 1)
+            self.assertEqual(first.cnt, '1')
 
             c.write(reel('iris'), 'iris2.csv')
             prepend_header('iris2.csv', 'cnt, sl, sw, pl, pw, sp', drop=0)
@@ -462,7 +462,7 @@ class TestMisc(unittest.TestCase):
             prepend_header('iris2.csv', header='cnt, sl, sw, pl, pw, sp',
                            drop=0)
             first = next(reel('iris2.csv'))
-            self.assertEqual(first.cnt, 5)
+            self.assertEqual(first.cnt, '5')
 
             os.remove(os.path.join(get_workspace(), 'iris2.csv'))
 
@@ -491,14 +491,14 @@ class TestRows(unittest.TestCase):
         iris = Rows(reel('iris'))
         # order is destructive
         iris.order('sepal_length, sepal_width', reverse=True)
-        self.assertEqual(iris[0].col, 132)
-        self.assertEqual(iris[1].col, 118)
-        self.assertEqual(iris[2].col, 136)
+        self.assertEqual(iris[0].col, '132')
+        self.assertEqual(iris[1].col, '118')
+        self.assertEqual(iris[2].col, '136')
 
         col1 = iris.filter(lambda r: r.species == 'versicolor')[0].col
-        self.assertEqual(col1, 51)
+        self.assertEqual(col1, '51')
         # filter is non-destructive
-        self.assertEqual(iris[0].col, 132)
+        self.assertEqual(iris[0].col, '132')
 
         self.assertEqual(len(iris.group('species')[0]), 12)
 

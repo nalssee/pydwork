@@ -203,7 +203,7 @@ class SQLPlus:
         Yields:
             Row
         """
-        query = _select_statement(query.lower())
+        query = _select_statement(query)
         if query.strip().partition(' ')[0].upper() != "SELECT":
             raise ValueError("use SQLPlus.run instead of SQLPlus.reel")
         qrows = self._cursor.execute(query, args)
@@ -526,24 +526,8 @@ def prepend_header(filename, header=None, drop=1):
             continue
 
 
-def convtype(val):
-    """Convert type if possible
-
-    Args:
-        val (str)
-    Returns:
-        int or float or str
-    """
-    try:
-        return int(val)
-    except:
-        try:
-            return float(val)
-        except:
-            return val
-
-
 # consider changing the name to reel_csv
+# EVERY COLUMN IS A STRING!!!
 def reel(csv_file, header=None, group=False):
     """Loads well-formed csv file, 1 header line and the rest is data
 
@@ -578,7 +562,7 @@ def reel(csv_file, header=None, group=False):
                                      (csv_file, line_no + 1))
                 row1 = Row()
                 for col, val in zip(columns, line):
-                    setattr(row1, col, convtype(val))
+                    setattr(row1, col, val)
                 yield row1
 
         if group:
@@ -610,7 +594,7 @@ def reel_html_table(html_file, css_selector='table', group=False):
                 r = Row()
                 vals = [x.text for x in tr.select('td')]
                 for col, val in zip(colnames, vals):
-                    setattr(r, col, convtype(val))
+                    setattr(r, col, val)
                 yield r
 
         if group:
