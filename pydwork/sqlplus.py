@@ -203,10 +203,7 @@ class SQLPlus:
         Yields:
             Row
         """
-        query = _select_statement(query)
-        if query.strip().partition(' ')[0].upper() != "SELECT":
-            raise ValueError("use SQLPlus.run instead of SQLPlus.reel")
-        qrows = self._cursor.execute(query, args)
+        qrows = self._cursor.execute(_select_statement(query), args)
         columns = [c[0] for c in qrows.description]
 
         # there can't be duplicates in column names
