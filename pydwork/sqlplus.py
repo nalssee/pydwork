@@ -205,7 +205,6 @@ class SQLPlus:
         """
         qrows = self._cursor.execute(_select_statement(query), args)
         columns = [c[0] for c in qrows.description]
-        print(len(list(qrows))        )
         # there can't be duplicates in column names
         if len(columns) != len(set(columns)):
             raise ValueError('duplicates in columns names')
