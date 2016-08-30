@@ -159,10 +159,7 @@ class Rows(list):
         return result
 
     def show(self, n=30, cols=None, filename=None, overwrite=True):
-        # borrow 'show' from sqlplus
-        with dbopen(':memory:') as c:
-            c.show(self, n=n, cols=cols,
-                   filename=filename, overwrite=overwrite)
+        _show(self, n=n, cols=cols, filename=filename, overwrite=overwrite)
 
 
 class SQLPlus:
@@ -209,17 +206,10 @@ class SQLPlus:
         if len(columns) != len(set(columns)):
             raise ValueError('duplicates in columns names')
 
-        def rows():
-            for qrow in qrows:
-                row = Row()
-                for col, val in zip(columns, qrow):
-                    setattr(row, col, val)
-                yield row
-
         if group:
-            yield from gby(rows(), group)
+            yield from gby(_build_rows(qrows, columns), group)
         else:
-            yield from rows()
+            yield from _build_rows(qrows, columns)
 
     def save(self, seq, name=None, args=(), n=None, overwrite=False):
         """create a table from an iterator.
@@ -290,21 +280,14 @@ class SQLPlus:
             filename (str): filename to save
             overwrite (bool): if true overwrite a file
         """
-        def quote(val):
-            "quote it if it's a string, if not stringify it"
-            if isinstance(val, str):
-                return '"' + val + '"'
-            else:
-                return str(val)
-
         # so that you can easily maintain code
         # Searching nrows is easier than searching n in editors
         nrows = n
 
         if isinstance(query, str):
-            seq_rvals = self._cursor.execute(
-                _select_statement(query, cols or '*'), args)
+            seq_rvals = self._cursor.execute(_select_statement(query), args)
             colnames = [c[0] for c in seq_rvals.description]
+            rows = _build_rows(seq_rvals, colnames)
 
         # then query is an iterator of rows, or a list of rows
         # of course it can be just a generator function of rows
@@ -313,44 +296,7 @@ class SQLPlus:
             if hasattr(rows, '__call__'):
                 rows = rows(*args)
 
-            if cols:
-                rows = pick(cols, rows)
-
-            row0, rows = _peek_first(rows)
-
-            colnames = row0.columns
-            seq_rvals = (r.values for r in rows)
-
-        # write to a file
-        if filename:
-            # practically infinite number
-            nrows = nrows or sys.maxsize
-
-            if not filename.endswith('.csv'):
-                filename = filename + '.csv'
-
-            if os.path.isfile(os.path.join(WORKSPACE, filename)) \
-               and not overwrite:
-                return
-
-            with open(os.path.join(WORKSPACE, filename), 'w') as fout:
-                fout.write(','.join(colnames) + '\n')
-                for rvals in islice(seq_rvals, nrows):
-                    fout.write(','.join([quote(val) for val in rvals]) +
-                               '\n')
-        # write to stdout
-        else:
-            # show practically all columns.
-            with pd.option_context("display.max_rows", nrows), \
-                    pd.option_context("display.max_columns", 1000):
-                # make use of pandas DataFrame displaying
-                # islice 1 more rows than required
-                # to see if there are more rows left
-                seq_rvals_list = list(islice(seq_rvals, nrows + 1))
-                print(pd.DataFrame(seq_rvals_list[:nrows],
-                                   columns=colnames))
-                if len(seq_rvals_list) > nrows:
-                    print("...more rows...")
+        _show(rows, n=nrows, cols=cols, filename=filename, overwrite=overwrite)
 
     # Simpler version of show (when you write it to a file)
     # so you make less mistakes.
@@ -884,3 +830,76 @@ def _sqlite3_save(cursor, srows, table_name, column_names):
     istmt = _insert_statement(table_name, len(column_names))
     for r in srows:
         cursor.execute(istmt, r)
+
+
+def _show(rows, n=30, cols=None, filename=None, overwrite=True):
+    """Printing to a screen or saving to a file
+
+    Args:
+        rows (Iter[Row])
+        n (int): maximum number of lines to show
+        cols (str or List[str]): columns to show
+        filename (str): filename to save
+        overwrite (bool): if true overwrite a file
+    """
+    def quote(val):
+        "quote it if it's a string, if not stringify it"
+        if isinstance(val, str):
+            return '"' + val + '"'
+        else:
+            return str(val)
+
+    # so that you can easily maintain code
+    # Searching nrows is easier than searching n in editors
+    nrows = n
+
+    # then query is an iterator of rows, or a list of rows
+    # of course it can be just a generator function of rows
+
+    if cols:
+        rows = pick(cols, rows)
+
+    row0, rows = _peek_first(rows)
+
+    colnames = row0.columns
+    seq_rvals = (r.values for r in rows)
+
+    # write to a file
+    if filename:
+        # practically infinite number
+        nrows = nrows or sys.maxsize
+
+        if not filename.endswith('.csv'):
+            filename = filename + '.csv'
+
+        if os.path.isfile(os.path.join(WORKSPACE, filename)) \
+           and not overwrite:
+            return
+
+        with open(os.path.join(WORKSPACE, filename), 'w') as fout:
+            fout.write(','.join(colnames) + '\n')
+            for rvals in islice(seq_rvals, nrows):
+                fout.write(','.join([quote(val) for val in rvals]) +
+                           '\n')
+    # write to stdout
+    else:
+        # show practically all columns.
+        with pd.option_context("display.max_rows", nrows), \
+                pd.option_context("display.max_columns", 1000):
+            # make use of pandas DataFrame displaying
+            # islice 1 more rows than required
+            # to see if there are more rows left
+            seq_rvals_list = list(islice(seq_rvals, nrows + 1))
+            print(pd.DataFrame(seq_rvals_list[:nrows],
+                               columns=colnames))
+            if len(seq_rvals_list) > nrows:
+                print("...more rows...")
+
+
+# sequence of row values to rows
+def _build_rows(seq_rvals, colnames):
+    for rvals in seq_rvals:
+        r = Row()
+        for col, val in zip(colnames, rvals):
+            setattr(r, col, val)
+        yield r
