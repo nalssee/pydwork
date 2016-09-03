@@ -147,14 +147,14 @@ class Testdbopen(unittest.TestCase):
             os.remove(os.path.join(get_workspace(), 'sample.csv'))
 
     def test_column_case(self):
-        # every query execution is lower cased
         with dbopen(':memory:') as conn:
             conn.run("create table Foo (a int, B real)")
             conn.run("insert into foo values (10, 20.2)")
             # table name is case-insensitive
-
-            rows = list(conn.reel('fOo'))
-            self.assertEqual(rows[0].b, 20.2)
+            rows = list(conn.reel('foO'))
+            # but columns names are at least in my system, OS X El Capitan
+            # I don't know well about it
+            self.assertEqual(rows[0].B, 20.2)
 
     def test_order_of_columns(self):
         with dbopen(':memory:') as conn:
@@ -507,5 +507,33 @@ class TestRows(unittest.TestCase):
         for rs in iris.group('species'):
             sum += len(rs)
         self.assertEqual(sum, 150)
+
+
+class TestUserDefinedFunctions(unittest.TestCase):
+    def test_simple(self):
+        # isnum, istext, yyyymm
+        with dbopen(':memeory:') as c:
+            c.save(reel('sa'), name='sa')
+            c.show('sa')
+            self.assertEqual(len(Rows(c.reel("""select * from sa where
+                                             tsymbol='MSFT'"""))), 132)
+            self.assertEqual(len(Rows(c.reel("""select * from sa where
+                                             tsymbol='MSFT' and isnum(n) = 1
+                                             """))), 124)
+            self.assertEqual(len(Rows(c.reel("""select * from sa where
+                                             tsymbol='MSFT' and istext(n) = 1
+                                             """))), 8)
+            c.drop('sa1')
+            c.run("""
+                  create table if not exists sa1 as
+                  select *, yyyymm(yyyymm, 3) as yyyymm_n3
+                  from sa
+                  where tsymbol='MSFT'
+                  """)
+
+            c.show('sa1')
+            r0 = next(c.reel('sa1'))
+            self.assertEqual(r0.yyyymm_n3, 200504)
+
 
 unittest.main()

@@ -48,7 +48,6 @@ If you have some basic SQL and Python knowledge,
 I believe this is better that using Pandas for some people.
 For me, it is.
 
-
 As for docstring:
     GF[int->int]: generator function type that yields int
                   and takes int as arg, parameters are optional
@@ -75,6 +74,8 @@ from itertools import chain, groupby, islice
 from bs4 import BeautifulSoup
 
 import pandas as pd
+
+from .helpers import isnum, istext, yyyymm
 
 __all__ = ['dbopen', 'Row', 'Rows', 'gby', 'reel',
            'reel_html_table', 'pick',
@@ -179,6 +180,11 @@ class SQLPlus:
         self._cursor = self.conn.cursor()
         self.tables = self._list_tables()
 
+        # load some user-defined functions from helpers.py
+        self.conn.create_function('isnum', 1, isnum)
+        self.conn.create_function('istext', 1, istext)
+        self.conn.create_function('yyyymm', 2, yyyymm)
+
     # args can be a list, a tuple or a dictionary
     def run(self, query, args=()):
         """Simply executes sql statement and update tables attribute
@@ -187,7 +193,6 @@ class SQLPlus:
             query (str): SQL query string
             args (List[any] or Tuple[any]): args for SQL query
         """
-        query = query.lower()
         self._cursor.execute(query, args)
         self.tables = self._list_tables()
 
