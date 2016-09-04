@@ -135,9 +135,6 @@ class Rows(list):
     """
     A shallow wrapper of a list of Row instances
     """
-    def __init__(self, data):
-        super().__init__(list(data))
-
     def add(self, col, fn):
         for r in self:
             setattr(r, col, fn(r))

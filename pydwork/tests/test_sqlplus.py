@@ -488,7 +488,8 @@ class TestMisc(unittest.TestCase):
 
 class TestRows(unittest.TestCase):
     def test_rows(self):
-        iris = Rows(reel('iris'))
+        # You can safely 'Rows' it multiple times of course
+        iris = Rows(Rows(Rows(reel('iris'))))
         # order is destructive
         iris.order('sepal_length, sepal_width', reverse=True)
         self.assertEqual(iris[0].col, '132')
