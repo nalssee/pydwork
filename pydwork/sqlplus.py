@@ -150,6 +150,14 @@ class Rows(list):
             xs.append(getattr(r, colname))
         return xs
 
+    def cols(self, colnames):
+        "Returns a list of lists"
+        colnames = _listify(colnames)
+        xs = []
+        for r in self:
+            xs.append([getattr(r, col) for col in colnames])
+        return xs
+
     def order(self, key, reverse=None):
         key = _build_keyfn(key)
         self.sort(key=key, reverse=reverse)
