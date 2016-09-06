@@ -135,10 +135,20 @@ class Rows(list):
     """
     A shallow wrapper of a list of Row instances
     """
-    def add(self, col, fn):
-        for r in self:
-            setattr(r, col, fn(r))
+
+    def add(self, colname, xs):
+        if len(self) != len(xs):
+            raise ValueError('Length of list not matched')
+
+        for r, x in zip(self, xs):
+            setattr(r, colname, x)
         return self
+
+    def col(self, colname):
+        xs = []
+        for r in self:
+            xs.append(getattr(r, colname))
+        return xs
 
     def order(self, key, reverse=None):
         key = _build_keyfn(key)
@@ -158,6 +168,9 @@ class Rows(list):
 
     def show(self, n=30, cols=None, filename=None, overwrite=True):
         _show(self, n=n, cols=cols, filename=filename, overwrite=overwrite)
+
+    def df(self):
+        return todf(self)
 
 
 class SQLPlus:
