@@ -158,7 +158,7 @@ class Rows(list):
             xs.append([getattr(r, col) for col in colnames])
         return xs
 
-    def order(self, key, reverse=None):
+    def order(self, key, reverse=0):
         key = _build_keyfn(key)
         self.sort(key=key, reverse=reverse)
         return self
