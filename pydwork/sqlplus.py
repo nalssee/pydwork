@@ -133,12 +133,12 @@ class Row:
 
 class Rows(list):
     """
-    A shallow wrapper of a list of Row instances
+    a shallow wrapper of a list of row instances
     """
 
     def add(self, colname, xs):
         if len(self) != len(xs):
-            raise ValueError('Length of list not matched')
+            raise valueerror('length of list not matched')
 
         for r, x in zip(self, xs):
             setattr(r, colname, x)
@@ -151,7 +151,7 @@ class Rows(list):
         return xs
 
     def cols(self, colnames):
-        "Returns a list of lists"
+        "returns a list of lists"
         colnames = _listify(colnames)
         xs = []
         for r in self:
@@ -166,6 +166,42 @@ class Rows(list):
     def filter(self, pred):
         pred = _build_keyfn(pred)
         return Rows([r for r in self if pred(r)])
+
+    def fromto(self, col, beg, end):
+        "simplified fitering, inclusive"
+        result = []
+        for r in self:
+            val = getattr(r, col)
+            if beg <= val and val <= end:
+                result.append(r)
+        return Rows(result)
+
+    def ge(self, col, beg):
+        "greater than or equal to"
+        result = []
+        for r in self:
+            val = getattr(r, col)
+            if beg <= val:
+                result.append(r)
+        return Rows(result)
+
+    def le(self, col, end):
+        "less than or equal to"
+        result = []
+        for r in self:
+            val = getattr(r, col)
+            if val <= end:
+                result.append(r)
+        return Rows(result)
+
+    def num(self, cols):
+        "another simplified filtering, numbers only"
+        cols = _listify(cols)
+        result = []
+        for r in self:
+            if all(isnum(getattr(r, col)) for col in cols):
+                result.append(r)
+        return Rows(result)
 
     def group(self, key):
         # it is illogical to return an instance of Rows

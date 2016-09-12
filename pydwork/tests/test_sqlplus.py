@@ -7,6 +7,7 @@ TESTPATH = os.path.dirname(os.path.realpath(__file__))
 PYPATH = os.path.join(TESTPATH, '..', '..')
 sys.path.append(PYPATH)
 
+
 from pydwork.sqlplus import *
 
 set_workspace(os.path.join(TESTPATH, 'data'))
@@ -508,6 +509,9 @@ class TestRows(unittest.TestCase):
         for rs in iris.group('species'):
             sum += len(rs)
         self.assertEqual(sum, 150)
+        print(dir(iris))
+
+
 
 
 class TestUserDefinedFunctions(unittest.TestCase):
