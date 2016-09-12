@@ -211,7 +211,10 @@ class Rows(list):
         return result
 
     def show(self, n=30, cols=None, filename=None, overwrite=True):
-        _show(self, n=n, cols=cols, filename=filename, overwrite=overwrite)
+        if self == []:
+            print(self)
+        else:
+            _show(self, n=n, cols=cols, filename=filename, overwrite=overwrite)
 
     def df(self):
         return todf(self)

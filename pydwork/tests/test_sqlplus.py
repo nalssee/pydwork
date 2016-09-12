@@ -509,17 +509,24 @@ class TestRows(unittest.TestCase):
         for rs in iris.group('species'):
             sum += len(rs)
         self.assertEqual(sum, 150)
-        print(dir(iris))
 
+        with dbopen(':memory:') as c:
+            c.save(reel('iris'), name='iris')
+            iris = Rows(c.reel('iris'))
 
+            self.assertEqual(len(iris.ge('sepal_length', 7.0)), 13)
+            self.assertEqual(len(iris.le('sepal_length', 7.0)), 138)
+            self.assertEqual(len(iris.fromto('sepal_length', 5.0, 5.0)), 10)
+            self.assertEqual(len(iris.num('species')), 0)
+            self.assertEqual(len(iris.num('sepal_length, sepal_width')), 150)
 
 
 class TestUserDefinedFunctions(unittest.TestCase):
     def test_simple(self):
         # isnum, istext, yyyymm
         with dbopen(':memeory:') as c:
+            # I'm using seeking alpha data here
             c.save(reel('sa'), name='sa')
-            c.show('sa')
             self.assertEqual(len(Rows(c.reel("""select * from sa where
                                              tsymbol='MSFT'"""))), 132)
             self.assertEqual(len(Rows(c.reel("""select * from sa where
@@ -536,7 +543,6 @@ class TestUserDefinedFunctions(unittest.TestCase):
                   where tsymbol='MSFT'
                   """)
 
-            c.show('sa1')
             r0 = next(c.reel('sa1'))
             self.assertEqual(r0.yyyymm_n3, 200504)
 
