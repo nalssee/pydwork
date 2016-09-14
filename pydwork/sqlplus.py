@@ -203,6 +203,14 @@ class Rows(list):
                 result.append(r)
         return Rows(result)
 
+    def contains(self, col, vals):
+        vals = _listify(vals)
+        result = []
+        for r in self:
+            if getattr(r, col) in vals:
+                result.append(r)
+        return Rows(result)
+
     def group(self, key):
         # it is illogical to return an instance of Rows
         result = []

@@ -519,6 +519,10 @@ class TestRows(unittest.TestCase):
             self.assertEqual(len(iris.fromto('sepal_length', 5.0, 5.0)), 10)
             self.assertEqual(len(iris.num('species')), 0)
             self.assertEqual(len(iris.num('sepal_length, sepal_width')), 150)
+            self.assertEqual(len(iris.contains('species',
+                                               'versicolor, virginica')),
+                             100)
+
 
 
 class TestUserDefinedFunctions(unittest.TestCase):
