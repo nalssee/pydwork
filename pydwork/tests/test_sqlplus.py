@@ -9,6 +9,7 @@ sys.path.append(PYPATH)
 
 
 from pydwork.sqlplus import *
+from pydwork.util import mpairs
 
 set_workspace(os.path.join(TESTPATH, 'data'))
 
@@ -550,5 +551,14 @@ class TestUserDefinedFunctions(unittest.TestCase):
             r0 = next(c.reel('sa1'))
             self.assertEqual(r0.yyyymm_n3, 200504)
 
+
+class TestMpairs(unittest.TestCase):
+    def test_mpairs(self):
+        xs = (x for x in [2, 4, 7, 9, 10, 11, 21])
+        ys = (x for x in [1, 3, 4, 9, 10, 21, 100])
+        result = []
+        for a, b in mpairs(xs, ys):
+            result.append(a)
+        self.assertEqual(result, [4,9,10, 21])
 
 unittest.main()
