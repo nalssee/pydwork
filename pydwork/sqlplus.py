@@ -224,6 +224,10 @@ class Rows(list):
         else:
             _show(self, n=n, cols=cols, filename=filename, overwrite=overwrite)
 
+    # Simpler version of show (when you write it to a file)
+    def write(self, filename):
+        _show(self, n=None, filename=filename, overwrite=True)
+
     def df(self):
         return todf(self)
 
