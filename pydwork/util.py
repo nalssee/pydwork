@@ -43,28 +43,33 @@ def random_string(nchars=20):
                    string.digits) for _ in range(nchars))
 
 
-def mpairs(seq1, seq2, key=lambda x: x):
+def mpairs(seq1, seq2, key1=lambda x: x, key2=None):
     """Generates a tuple of matching pairs
+    key1 and key2 are functions
+
     seq1, seq2 must be sorted before being passed here
-    or you will see unexpected results
+        and also each key value(which is returned by key funcs) must be UNIQUE
+        otherwise you will see unexpected results
     """
+    key2 = key2 or key1
+
     while True:
         try:
             s1 = next(seq1)
             s2 = next(seq2)
 
-            a1 = key(s1)
-            a2 = key(s2)
+            k1 = key1(s1)
+            k2 = key2(s2)
 
-            if a1 == a2:
+            if k1 == k2:
                 yield (s1, s2)
-            elif a1 < a2:
-                seq1 = dropwhile(lambda x: key(x) < a2, seq1)
+            elif k1 < k2:
+                seq1 = dropwhile(lambda x: key1(x) < k2, seq1)
                 # put it back
                 seq2 = chain([s2], seq2)
             else:
                 seq1 = chain([s1], seq1)
-                seq2 = dropwhile(lambda x: key(x) < a1, seq2)
+                seq2 = dropwhile(lambda x: key2(x) < k1, seq2)
 
         except StopIteration:
             break
