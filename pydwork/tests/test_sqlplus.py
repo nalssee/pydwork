@@ -11,7 +11,12 @@ sys.path.append(PYPATH)
 from pydwork.sqlplus import *
 from pydwork.util import mpairs
 
-set_workspace(os.path.join(TESTPATH, 'data'))
+
+# set_workspace(os.path.join(TESTPATH, 'data'))
+
+print('________________________________________________________________')
+set_workspace('data')
+
 
 # This should work as a tutorial as well.
 print("\nNo need to read the following")
@@ -60,7 +65,7 @@ class Testdbopen(unittest.TestCase):
                     # Each property is either a string, integer or real.
                     r.sp1 = r.species[:1]
                     yield r
-            # function name just becomes the table name
+           # function name just becomes the table name
             conn.save(first_char)
 
             def top20_sl():

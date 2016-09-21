@@ -675,14 +675,14 @@ def disjoin(colnames):
     return dec
 
 
-# Should I just export WORKSPACE variable directly?
 def set_workspace(dir):
     """
     Args:
         dir (str)
     """
     global WORKSPACE
-    WORKSPACE = dir
+
+    WORKSPACE = dir if os.path.isabs(dir) else os.path.join(os.getcwd(), dir)
 
 
 def get_workspace():
