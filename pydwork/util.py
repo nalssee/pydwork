@@ -53,23 +53,21 @@ def mpairs(seq1, seq2, key1=lambda x: x, key2=None):
     """
     key2 = key2 or key1
 
+    s1, s2 = next(seq1), next(seq2)
+    k1, k2 = key1(s1), key2(s2)
+
     while True:
         try:
-            s1 = next(seq1)
-            s2 = next(seq2)
-
-            k1 = key1(s1)
-            k2 = key2(s2)
-
             if k1 == k2:
                 yield (s1, s2)
+                s1, s2 = next(seq1), next(seq2)
+                k1, k2 = key1(s1), key2(s2)
             elif k1 < k2:
-                seq1 = dropwhile(lambda x: key1(x) < k2, seq1)
-                # put it back
-                seq2 = chain([s2], seq2)
+                s1 = next(dropwhile(lambda x: key1(x) < k2, seq1))
+                k1 = key1(s1)
             else:
-                seq1 = chain([s1], seq1)
-                seq2 = dropwhile(lambda x: key2(x) < k1, seq2)
+                s2 = next(dropwhile(lambda x: key2(x) < k1, seq2))
+                k2 = key2(s2)
 
         except StopIteration:
             break

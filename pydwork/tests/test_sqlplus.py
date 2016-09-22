@@ -562,9 +562,10 @@ class TestMpairs(unittest.TestCase):
         xs = (x for x in [2, 4, 7, 9, 10, 11, 21])
         ys = (y for y in [1, 3, 4, 9, 10, 21, 100])
         result = []
-        id = lambda x: x
         for a, b in mpairs(xs, ys):
             result.append(a)
         self.assertEqual(result, [4,9,10, 21])
+
+
 
 unittest.main()
