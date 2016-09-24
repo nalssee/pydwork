@@ -569,13 +569,13 @@ def reel(csv_file, header=None, group=False):
         ncol = len(columns)
 
         def rows():
-            for line_no, line in enumerate(csv.reader(fin)):
+            for line_no, line in enumerate(csv.reader(fin), 2):
                 if len(line) != ncol:
                     if is_empty_line(line):
                         continue
-                    # You've read a line alread, so line_no + 1
-                    raise ValueError("%s at %s invalid line" %
-                                     (csv_file, line_no + 1))
+                    raise ValueError(
+                        """%s at line %s column count not matched %s != %s: %s
+                        """ % (csv_file, line_no, ncol, len(line), line))
                 row1 = Row()
                 for col, val in zip(columns, line):
                     setattr(row1, col, val)
