@@ -916,13 +916,6 @@ def _show(rows, n=30, cols=None, filename=None, overwrite=True):
         filename (str): filename to save
         overwrite (bool): if true overwrite a file
     """
-    def quote(val):
-        "quote it if it's a string, if not stringify it"
-        if isinstance(val, str):
-            return '"' + val + '"'
-        else:
-            return str(val)
-
     # so that you can easily maintain code
     # Searching nrows is easier than searching n in editors
     nrows = n
@@ -951,11 +944,12 @@ def _show(rows, n=30, cols=None, filename=None, overwrite=True):
             return
 
         with open(os.path.join(WORKSPACE, filename), 'w') as fout:
-            fout.write(','.join(colnames) + '\n')
+            w = csv.writer(fout)
+            w.writerow(colnames)
             for rvals in islice(seq_rvals, nrows):
-                fout.write(','.join([quote(val) for val in rvals]) +
-                           '\n')
-    # write to stdout
+                w.writerow(rvals)
+
+   # write to stdout
     else:
         # show practically all columns.
         with pd.option_context("display.max_rows", nrows), \
