@@ -124,3 +124,9 @@ def istext(x):
 def yyyymm(date, n):
     d1 = datetime.strptime(str(date), '%Y%m') + relativedelta(months=n)
     return int(d1.strftime('%Y%m'))
+
+
+def yyyymmdd(date, n):
+    d1 = datetime.strptime(str(date), '%Y%m%d') + relativedelta(days=n)
+    return int(d1.strftime('%Y%m%d'))
+

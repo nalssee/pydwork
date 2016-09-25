@@ -9,7 +9,7 @@ sys.path.append(PYPATH)
 
 
 from pydwork.sqlplus import *
-from pydwork.util import mpairs
+from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd
 
 
 # set_workspace(os.path.join(TESTPATH, 'data'))
@@ -491,6 +491,20 @@ class TestMisc(unittest.TestCase):
                       """))
             r1.sepal_length10 = r1.sepal_length * 10
             self.assertEqual(r1.values, ['setosa', 5.1, 51.0])
+
+    def test_utilfns(self):
+        self.assertTrue(isnum(3))
+        self.assertTrue(isnum(-3.32))
+        self.assertFalse(isnum('32.3'))
+
+        self.assertFalse(istext(3))
+        self.assertTrue(istext('32.3'))
+
+        self.assertEqual(yyyymm(199912, 2), 200002)
+        self.assertEqual(yyyymm(199912, -2), 199910)
+
+        self.assertEqual(yyyymmdd(19991231, 2), 20000102)
+        self.assertEqual(yyyymmdd(19991231, -2), 19991229)
 
 
 class TestRows(unittest.TestCase):
