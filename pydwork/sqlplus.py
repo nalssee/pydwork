@@ -16,7 +16,7 @@ widely used, reliable tools like Pandas, Numpy, Scipy, ...
 Pandas is said-to-be a really great for wrangling data.
 But it wasn't a very smooth process for me to learn Pandas.
 And you have to load all the data in the system memory.
-So you have to figure out a way around when you need to
+eo you have to figure out a way around when you need to
 handle very large data sets.
 
 If you focus only on data wragling, SQL is an amazingly great
@@ -69,13 +69,14 @@ import tempfile
 from collections import Counter
 from contextlib import contextmanager
 from functools import wraps
-from itertools import chain, groupby, islice
+from itertools import groupby, islice
 
 from bs4 import BeautifulSoup
 
 import pandas as pd
 
-from .helpers import isnum, istext, yyyymm
+from .util import isnum, istext, yyyymm, listify, camel2snake, peek_first
+
 
 __all__ = ['dbopen', 'Row', 'Rows', 'gby', 'reel',
            'reel_html_table', 'pick',
@@ -152,7 +153,7 @@ class Rows(list):
 
     def cols(self, colnames):
         "returns a list of lists"
-        colnames = _listify(colnames)
+        colnames = listify(colnames)
         xs = []
         for r in self:
             xs.append([getattr(r, col) for col in colnames])
@@ -196,7 +197,7 @@ class Rows(list):
 
     def num(self, cols):
         "another simplified filtering, numbers only"
-        cols = _listify(cols)
+        cols = listify(cols)
         result = []
         for r in self:
             if all(isnum(getattr(r, col)) for col in cols):
@@ -204,7 +205,7 @@ class Rows(list):
         return Rows(result)
 
     def contains(self, col, vals):
-        vals = _listify(vals)
+        vals = listify(vals)
         result = []
         for r in self:
             if getattr(r, col) in vals:
@@ -318,7 +319,7 @@ class SQLPlus:
         if nrows:
             seq = islice(seq, nrows)
 
-        row0, seq = _peek_first(seq)
+        row0, seq = peek_first(seq)
         colnames = row0.columns
 
         # You can't save the iterator directly because
@@ -422,7 +423,7 @@ class SQLPlus:
         """
         # you can't use '?' for table name
         # '?' is for data insertion
-        tables = _listify(tables)
+        tables = listify(tables)
         summary_dir = os.path.join(WORKSPACE, 'summary')
         for table in tables:
             self.run('drop table if exists %s' % table)
@@ -508,7 +509,7 @@ def pick(cols, seq):
     Yields:
         Row
     """
-    cols = _listify(cols)
+    cols = listify(cols)
     for r in seq:
         r1 = Row()
         for c in cols:
@@ -565,7 +566,7 @@ def reel(csv_file, header=None, group=False):
     with open(os.path.join(WORKSPACE, csv_file)) as fin:
         first_line = fin.readline()[:-1]
         header = header or first_line
-        columns = _gen_valid_column_names(_listify(header))
+        columns = _gen_valid_column_names(listify(header))
         ncol = len(columns)
 
         def rows():
@@ -627,7 +628,7 @@ def adjoin(colnames):
     Returns:
         FN
     """
-    colnames = _listify(colnames)
+    colnames = listify(colnames)
 
     def dec(gen):
         "real decorator"
@@ -656,7 +657,7 @@ def disjoin(colnames):
     Returns:
         FN
     """
-    colnames = _listify(colnames)
+    colnames = listify(colnames)
 
     def dec(gen):
         "real decorator"
@@ -693,17 +694,6 @@ def get_workspace():
     return WORKSPACE
 
 
-def camel2snake(name):
-    """
-    Args:
-        name (str): camelCase
-    Returns:
-        str: snake_case
-    """
-    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
-    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
-
-
 def _build_keyfn(key):
     """
     Args:
@@ -715,7 +705,7 @@ def _build_keyfn(key):
     if hasattr(key, '__call__'):
         return key
 
-    colnames = _listify(key)
+    colnames = listify(key)
     if len(colnames) == 1:
         return lambda r: getattr(r, colnames[0])
     else:
@@ -796,44 +786,6 @@ def _gen_valid_column_names(columns):
     return result_columns
 
 
-def _listify(colstr):
-    """A comma or space separated string to a list of strings
-
-    Args:
-        colstr (str)
-    Returns:
-        List[str]
-
-    Example:
-        >>> _listify('a b c')
-        ['a', 'b', 'c']
-
-        >>> _listify('a, b, c')
-        ['a', 'b', 'c']
-    """
-    if isinstance(colstr, str):
-        if ',' in colstr:
-            return [x.strip() for x in colstr.split(',')]
-        else:
-            return [x for x in colstr.split(' ') if x]
-    else:
-        return colstr
-
-
-def _peek_first(seq):
-    """
-    Note:
-        peeked first item is pushed back to the sequence
-    Args:
-        seq (Iter[type])
-    Returns:
-        Tuple(type, Iter[type])
-    """
-    seq = iter(seq)
-    first_item = next(seq)
-    return first_item, chain([first_item], seq)
-
-
 def _create_statement(name, colnames):
     """create table if not exists foo (...)
 
@@ -886,7 +838,7 @@ def _select_statement(query, cols='*'):
         str
     """
     if _is_oneword(query):
-        return "select %s from %s" % (', '.join(_listify(cols)), query)
+        return "select %s from %s" % (', '.join(listify(cols)), query)
     return query
 
 
@@ -926,7 +878,7 @@ def _show(rows, n=30, cols=None, filename=None, overwrite=True):
     if cols:
         rows = pick(cols, rows)
 
-    row0, rows = _peek_first(rows)
+    row0, rows = peek_first(rows)
 
     colnames = row0.columns
     seq_rvals = (r.values for r in rows)
@@ -949,7 +901,7 @@ def _show(rows, n=30, cols=None, filename=None, overwrite=True):
             for rvals in islice(seq_rvals, nrows):
                 w.writerow(rvals)
 
-   # write to stdout
+    # write to stdout
     else:
         # show practically all columns.
         with pd.option_context("display.max_rows", nrows), \

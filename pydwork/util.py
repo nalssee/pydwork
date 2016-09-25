@@ -1,18 +1,11 @@
-import contextlib
-import time
 import random
 import string
+import re
 
-from itertools import zip_longest, chain, dropwhile
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
-
-@contextlib.contextmanager
-def timeit():
-    start = time.time()
-    try:
-        yield
-    finally:
-        print('\nTotal time: ', time.time() - start)
+from itertools import dropwhile, chain
 
 
 def nchunks(xs, n):
@@ -27,14 +20,6 @@ def nchunks(xs, n):
             chunksize = round(len(xs[start:]) / (n - i))
             yield xs[start:start + chunksize]
             start += chunksize
-
-
-# Excerpted from Python referece.
-def grouper(iterable, n, fillvalue=None):
-    "Collect data into fixed-length chunks or blocks"
-    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
-    args = [iter(iterable)] * n
-    return zip_longest(*args, fillvalue=fillvalue)
 
 
 def random_string(nchars=20):
@@ -73,3 +58,69 @@ def mpairs(seq1, seq2, key1=lambda x: x, key2=None):
             break
 
 
+def camel2snake(name):
+    """
+    Args:
+        name (str): camelCase
+    Returns:
+        str: snake_case
+    """
+    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
+
+def peek_first(seq):
+    """
+    Note:
+        peeked first item is pushed back to the sequence
+    Args:
+        seq (Iter[type])
+    Returns:
+        Tuple(type, Iter[type])
+    """
+    seq = iter(seq)
+    first_item = next(seq)
+    return first_item, chain([first_item], seq)
+
+
+def listify(colstr):
+    """A comma or space separated string to a list of strings
+
+    Args:
+        colstr (str)
+    Returns:
+        List[str]
+
+    Example:
+        >>> _listify('a b c')
+        ['a', 'b', 'c']
+
+        >>> _listify('a, b, c')
+        ['a', 'b', 'c']
+    """
+    if isinstance(colstr, str):
+        if ',' in colstr:
+            return [x.strip() for x in colstr.split(',')]
+        else:
+            return [x for x in colstr.split(' ') if x]
+    else:
+        return colstr
+
+
+# The following guys are also going to be
+# included in "extended sqlite functions"
+# set
+
+
+# If the return value is True it is converted to 1 or 0 in sqlite3
+def isnum(x):
+    return isinstance(x, float) or isinstance(x, int)
+
+
+def istext(x):
+    return isinstance(x, str)
+
+
+def yyyymm(date, n):
+    d1 = datetime.strptime(str(date), '%Y%m') + relativedelta(months=n)
+    return int(d1.strftime('%Y%m'))

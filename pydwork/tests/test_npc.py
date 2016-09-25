@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import unittest
 
 TESTPATH = os.path.dirname(os.path.realpath(__file__))
@@ -7,7 +8,16 @@ PYPATH = os.path.join(TESTPATH, '..', '..')
 sys.path.append(PYPATH)
 
 from pydwork.npc import *
-from pydwork.util import timeit
+
+import contextlib
+
+@contextlib.contextmanager
+def timeit():
+    start = time.time()
+    try:
+        yield
+    finally:
+        print('\nTotal time: ', time.time() - start)
 
 
 class CnPUtilsTest(unittest.TestCase):
