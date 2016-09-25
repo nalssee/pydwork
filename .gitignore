@@ -4,5 +4,6 @@ __pycache__
 /*.egg
 /dist/
 build/lib/pydwork/*
-
-
+tests/data/\:memory\:
+tests/ghostdriver.log
+tests/results/
