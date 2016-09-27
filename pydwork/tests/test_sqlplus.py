@@ -7,15 +7,10 @@ TESTPATH = os.path.dirname(os.path.realpath(__file__))
 PYPATH = os.path.join(TESTPATH, '..', '..')
 sys.path.append(PYPATH)
 
-
 from pydwork.sqlplus import *
 from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd, \
-    prepend_header, pimap
+    prepend_header, pmap
 
-from multiprocessing import Pool
-
-
-# set_workspace(os.path.join(TESTPATH, 'data'))
 set_workspace('data')
 
 print('________________________________________________________________')
@@ -23,6 +18,7 @@ print('________________________________________________________________')
 # This should work as a tutorial as well.
 print("\nNo need to read the following")
 print("Simply skim through, and recognize if it's not too weird\n\n")
+
 
 def fillin(line, n):
     """For invalid line handling"""
@@ -32,11 +28,6 @@ def fillin(line, n):
         return line[:n]
     return line
 
-def fib(x):
-    if x < 2:
-        return x
-    else:
-        return fib(x - 1) + fib(x - 2)
 
 def count(conn, table):
     if isinstance(table, str):

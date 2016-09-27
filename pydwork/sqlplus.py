@@ -70,6 +70,7 @@ from contextlib import contextmanager
 from functools import wraps
 from itertools import groupby, islice
 
+# the only 3rd party lib
 import pandas as pd
 
 from .util import isnum, istext, yyyymm, listify, camel2snake, peek_first
@@ -209,7 +210,7 @@ class Rows(list):
     def group(self, key):
         # it is illogical to return an instance of Rows
         result = []
-        for rs in gby(self, key):
+        for rs in _gby(self, key):
             result.append(rs)
         return result
 
@@ -276,7 +277,7 @@ class SQLPlus:
             raise ValueError('duplicates in columns names')
 
         if group:
-            yield from gby(_build_rows(qrows, columns), group)
+            yield from _gby(_build_rows(qrows, columns), group)
         else:
             yield from _build_rows(qrows, columns)
 
@@ -333,6 +334,7 @@ class SQLPlus:
 
             def vals(seq):
                 for r in seq:
+                    #
                     assert r.columns == colnames, str(r)
                     yield r.values
 
@@ -472,15 +474,17 @@ def fromdf(df):
     """
     Args:
         df (pd.DataFrame)
-    Yields:
-        Row
+    Returns:
+        List[Row]
     """
     colnames = df.columns.values
+    result = []
     for vals in df.values.tolist():
         r = Row()
         for c, v in zip(colnames, vals):
             setattr(r, c, v)
-        yield r
+        result.append(r)
+    return result
 
 
 # consider changing the name to reel_csv
@@ -523,7 +527,7 @@ def reel(csv_file, header=None, group=False):
                 yield row1
 
         if group:
-            yield from gby(rows(), group)
+            yield from _gby(rows(), group)
         else:
             yield from rows()
 
@@ -546,9 +550,7 @@ def get_workspace():
     return WORKSPACE
 
 
-# pick and gby might need underscore
-# I don't export these anymore
-def pick(cols, seq):
+def _pick(cols, seq):
     """
     Args:
         cols (str or List[str])
@@ -564,7 +566,7 @@ def pick(cols, seq):
         yield r1
 
 
-def gby(seq, key):
+def _gby(seq, key):
     """Group the iterator by a key
 
     Args
@@ -761,7 +763,7 @@ def _show(rows, n=30, cols=None, filename=None, overwrite=True):
     # of course it can be just a generator function of rows
 
     if cols:
-        rows = pick(cols, rows)
+        rows = _pick(cols, rows)
 
     row0, rows = peek_first(rows)
 

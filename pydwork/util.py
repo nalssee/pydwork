@@ -3,14 +3,11 @@ import string
 import re
 import fileinput
 
-import multiprocessing as mp
-import threading as th
-from queue import Queue
-
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 from itertools import dropwhile, chain
+
 from multiprocessing import Pool
 
 
@@ -138,7 +135,7 @@ def listify(colstr):
         return colstr
 
 
-def pimap(func, iterable, chunksize=1, processes=2, ordered=False):
+def pmap(func, iterable, chunksize=1, processes=2, ordered=True):
     "Thin wrapper for imap in multiprocessing"
     with Pool(processes=processes) as pool:
         imap = pool.imap if ordered else pool.imap_unordered
