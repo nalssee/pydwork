@@ -61,7 +61,6 @@ As for docstring:
 import os
 import sys
 import csv
-import fileinput
 import re
 import sqlite3
 import tempfile
@@ -71,16 +70,12 @@ from contextlib import contextmanager
 from functools import wraps
 from itertools import groupby, islice
 
-from bs4 import BeautifulSoup
-
 import pandas as pd
 
 from .util import isnum, istext, yyyymm, listify, camel2snake, peek_first
 
 
-__all__ = ['dbopen', 'Row', 'Rows', 'gby', 'reel',
-           'reel_html_table', 'pick',
-           'prepend_header', 'adjoin', 'disjoin',
+__all__ = ['dbopen', 'Row', 'Rows', 'reel', 'adjoin', 'disjoin',
            'todf', 'torows',
            'set_workspace', 'get_workspace']
 
@@ -517,31 +512,6 @@ def pick(cols, seq):
         yield r1
 
 
-def prepend_header(filename, header=None, drop=1):
-    """Drop n lines and prepend header
-
-    Args:
-        filename (str)
-        header (str)
-        drop (int)
-    """
-    for no, line in enumerate(
-            fileinput.input(os.path.join(WORKSPACE, filename), inplace=True)):
-        # it's meaningless to set drop to -1, -2, ...
-        if no == 0 and drop == 0:
-            if header:
-                print(header)
-            print(line, end='')
-        # replace
-        elif no + 1 == drop:
-            if header:
-                print(header)
-        elif no >= drop:
-            print(line, end='')
-        else:
-            # no + 1 < drop
-            continue
-
 
 # consider changing the name to reel_csv
 # EVERY COLUMN IS A STRING!!!
@@ -581,38 +551,6 @@ def reel(csv_file, header=None, group=False):
                 for col, val in zip(columns, line):
                     setattr(row1, col, val)
                 yield row1
-
-        if group:
-            yield from gby(rows(), group)
-        else:
-            yield from rows()
-
-
-# Inflexible, experimental
-def reel_html_table(html_file, css_selector='table', group=False):
-    """Read a simple well formed table
-
-    Args:
-        html_file (str)
-        css_selector (str)
-    Yields:
-        Row
-    """
-    if not html_file.endswith('.html'):
-        html_file += '.html'
-    with open(os.path.join(WORKSPACE, html_file)) as fin:
-        soup = BeautifulSoup(fin, 'html.parser')
-        trs = soup.select(css_selector)[0].select('tr')
-        colnames = _gen_valid_column_names(
-            [x.text for x in trs[0].select('th')])
-
-        def rows():
-            for tr in trs[1:]:
-                r = Row()
-                vals = [x.text for x in tr.select('td')]
-                for col, val in zip(colnames, vals):
-                    setattr(r, col, val)
-                yield r
 
         if group:
             yield from gby(rows(), group)

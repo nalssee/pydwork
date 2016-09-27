@@ -1,6 +1,11 @@
 import random
 import string
 import re
+import fileinput
+
+import multiprocessing as mp
+import threading as th
+from queue import Queue
 
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -20,6 +25,31 @@ def nchunks(xs, n):
             chunksize = round(len(xs[start:]) / (n - i))
             yield xs[start:start + chunksize]
             start += chunksize
+
+
+def prepend_header(filename, header=None, drop=1):
+    """Drop n lines and prepend header
+
+    Args:
+        filename (str)
+        header (str)
+        drop (int)
+    """
+    for no, line in enumerate(fileinput.input(filename, inplace=True)):
+        # it's meaningless to set drop to -1, -2, ...
+        if no == 0 and drop == 0:
+            if header:
+                print(header)
+            print(line, end='')
+        # replace
+        elif no + 1 == drop:
+            if header:
+                print(header)
+        elif no >= drop:
+            print(line, end='')
+        else:
+            # no + 1 < drop
+            continue
 
 
 def random_string(nchars=20):
@@ -107,10 +137,17 @@ def listify(colstr):
         return colstr
 
 
+def pimap(func, iterable, chunksize=10, processes=2, ordered=False):
+    "Thin wrapper for imap in multiprocessing"
+    with Pool(processes=processes) as pool:
+        imap = pool.imap if ordered else pool.imap_unordered
+        for x in imap(func, iterable, chunksize):
+            yield x
+
+
 # The following guys are also going to be
 # included in "extended sqlite functions"
 # set
-
 
 # If the return value is True it is converted to 1 or 0 in sqlite3
 def isnum(x):

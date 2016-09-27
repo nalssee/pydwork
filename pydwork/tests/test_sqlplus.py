@@ -9,19 +9,18 @@ sys.path.append(PYPATH)
 
 
 from pydwork.sqlplus import *
-from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd
+from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd, \
+    prepend_header
 
 
 # set_workspace(os.path.join(TESTPATH, 'data'))
-
-print('________________________________________________________________')
 set_workspace('data')
 
+print('________________________________________________________________')
 
 # This should work as a tutorial as well.
 print("\nNo need to read the following")
 print("Simply skim through, and recognize if it's not too weird\n\n")
-
 
 def fillin(line, n):
     """For invalid line handling"""
@@ -69,9 +68,9 @@ class Testdbopen(unittest.TestCase):
             conn.save(first_char)
 
             def top20_sl():
-                rows = conn.reel(
-                    "select * from first_char order by sp1, sl desc")
-                for rs in gby(rows, 'sp1'):
+                for rs in conn.reel(
+                    "select * from first_char order by sp1, sl desc",
+                    group='sp1'):
                     yield from rs[:20]
 
             conn.save(top20_sl)
@@ -92,10 +91,7 @@ class Testdbopen(unittest.TestCase):
 
             # gby with empty list group
             # All of the rows in a table is grouped.
-            for rs in gby(conn.reel("select * from first_char"), []):
-                # the entire data sample is 150
-                self.assertEqual(len(rs), 150)
-
+            self.assertEqual(len(Rows(conn.reel('first_char'))), 150)
             # list_tables, in alphabetical order
             self.assertEqual(conn.tables, ['first_char', 'top20_sl'])
 
@@ -143,10 +139,10 @@ class Testdbopen(unittest.TestCase):
 
     def test_saving_csv(self):
         with dbopen(':memory:') as conn:
-            iris = reel('iris.csv', header="no sl sw pl pw sp")
+            iris = reel('iris.csv', header="no sl sw pl pw sp", group='sp')
 
             def first2group():
-                for rs in islice(gby(iris, 'sp'), 2):
+                for rs in islice(iris, 2):
                     yield from rs
             conn.show(first2group, filename='sample.csv', n=None)
             # each group contains 50 rows, hence 100
@@ -188,7 +184,7 @@ class Testdbopen(unittest.TestCase):
             @disjoin('sepal_length, sepal_width, col')
             @adjoin('first, second, third')
             def safe():
-                for rs in gby(reel('iris.csv'), 'species'):
+                for rs in reel('iris.csv', group='species'):
                     rs[0].first = 'yes'
                     rs[1].second = 'yes'
                     yield from rs
@@ -207,9 +203,6 @@ class Testdbopen(unittest.TestCase):
     def test_todf(self):
         with dbopen(':memory:') as conn:
             conn.save(reel('iris.csv'), name='iris')
-            for rs in gby(conn.reel('iris'), 'species'):
-                self.assertEqual(todf(rs).shape, (50, 6))
-            # you can pass group in reel, choose whatever you like
             for rs in conn.reel('iris', group='species'):
                 self.assertEqual(todf(rs).shape, (50, 6))
 
@@ -220,7 +213,7 @@ class Testdbopen(unittest.TestCase):
 
             # do not use adjoin or disjoin. it's crazy
             def length_plus_width():
-                for rs in gby(conn.reel('iris'), 'species'):
+                for rs in conn.reel('iris', group='species'):
                     df = todf(rs)
                     df['sepal'] = df.sepal_length + df.sepal_width
                     df['petal'] = df.petal_length + df.petal_width
@@ -239,179 +232,6 @@ class Testdbopen(unittest.TestCase):
                 c = round(r1.petal_length + r1.petal_width, 2)
                 d = round(r2.petal, 2)
                 self.assertEqual(c, d)
-
-
-class CustomersAndOrders(unittest.TestCase):
-    def setUp(self):
-        with dbopen('customers_and_orders.db') as c:
-            c.save(reel_html_table('customers'), 'customers')
-            c.save(reel_html_table('orders'), 'orders')
-
-    def tearDown(self):
-        import shutil
-        summary_dir = os.path.join(get_workspace(), 'summary')
-        if os.path.isdir(summary_dir):
-            shutil.rmtree(summary_dir)
-        os.remove(os.path.join(get_workspace(), 'customers_and_orders.db'))
-
-    def test_multiple_connections(self):
-        with dbopen('customers_and_orders.db') as c1:
-            with dbopen(':memory:') as c2:
-                c2.save(c1.reel('customers'), 'customers')
-                for r1, r2 in zip(c1.reel('customers'), c2.reel('customers')):
-                    self.assertEqual(r1.address, r2.address)
-
-    def test_reel_html_table(self):
-        with dbopen('customers_and_orders.db') as c:
-            customers = list(c.reel('customers'))
-            orders = list(c.reel('orders'))
-            self.assertEqual(customers[0].columns,
-                             ['customer_id', 'customer_name',
-                              'contact_name', 'address', 'city',
-                              'postal_code', 'country'])
-
-            self.assertEqual(len(customers), 91)
-            self.assertEqual(orders[0].columns,
-                             ['order_id', 'customer_id', 'employee_id',
-                              'order_date', 'shipper_id'])
-            self.assertEqual(len(orders), 196)
-
-            c.summarize(n=17)
-            self.assertEqual(len(list(reel('summary/customers'))), 17)
-            self.assertEqual(len(list(reel('summary/orders'))), 17)
-
-    def test_drop_it(self):
-        with dbopen('customers_and_orders.db') as c:
-            def int_postal_code():
-                for r in c.reel('customers'):
-                    if isinstance(r.postal_code, int):
-                        yield r
-
-            def nonint_postal_code():
-                for r in c.reel('customers'):
-                    if not isinstance(r.postal_code, int):
-                        yield r
-
-            self.assertEqual(len(list(int_postal_code())), 66)
-            self.assertEqual(len(list(nonint_postal_code())), 25)
-
-            c.save(int_postal_code)
-            c.save(nonint_postal_code)
-            self.assertEqual(len(c.tables), 4)
-
-            c.summarize()
-            summary_dir = os.path.join(get_workspace(), 'summary')
-
-            f1 = os.path.join(summary_dir, 'int_postal_code.csv')
-            self.assertTrue(os.path.isfile(f1))
-            f2 = os.path.join(summary_dir, 'nonint_postal_code.csv')
-            self.assertTrue(os.path.isfile(f2))
-
-            c.drop('int_postal_code')
-            self.assertEqual(len(c.tables), 3)
-            self.assertFalse(os.path.isfile(f1))
-
-            c.drop('nonint_postal_code')
-            self.assertEqual(len(c.tables), 2)
-            self.assertFalse(os.path.isfile(f2))
-
-            # must not raise exception
-            c.drop('int_postal_code')
-
-    def test_left_join(self):
-        with dbopen('customers_and_orders.db') as c:
-            c.run("""
-            create table customers1 as
-            select a.*, b.order_id, b.employee_id, b.order_date, b.shipper_id
-            from customers a
-
-            left join orders b
-            on a.customer_id = b.customer_id
-
-            """)
-
-            self.assertEqual(len(c.tables), 3)
-
-            def nones():
-                for r in c.reel('customers1'):
-                    if r.order_id is None:
-                        yield r
-
-            self.assertEqual(count(c, nones()), 17)
-
-    def test_gby(self):
-        with dbopen('customers_and_orders.db') as c:
-            with self.assertRaises(AttributeError):
-                # country does not exists in select columns
-                for rs in gby(c.reel("""
-                select customer_name, postal_code
-                from customers
-                order by country
-                """), 'country'):
-                    pass
-
-            total = 0
-            for rs in gby(c.reel("""
-            select customer_name, postal_code, country
-            from customers
-            order by country
-            """), 'country'):
-                df = todf(rs)
-                total += df.shape[0]
-
-            self.assertEqual(total, count(c, 'customers'))
-
-            def major_markets(n):
-                """
-                find major n countries with lots of customers
-                """
-                def country_counts():
-                    for rs in c.reel("""
-                    select *
-                    from customers
-                    order by country
-                    """, group='country'):
-                        r = Row()
-                        r.country = rs[0].country
-                        r.count = len(rs)
-                        yield r
-                c.save(country_counts)
-
-                countries = []
-
-                for r in islice(c.reel("""
-                select * from country_counts
-                order by count desc
-                """), n):
-                    countries.append(r.country)
-                return countries
-
-            self.assertEqual(major_markets(5),
-                             ['USA', 'France', 'Germany', 'Brazil', 'UK'])
-
-    def test_todf_torows(self):
-        with dbopen('customers_and_orders.db') as c:
-            query = """
-            select *
-            from orders
-            order by employee_id, order_date
-            """
-
-            def orders1():
-                for rs in gby(c.reel(query), 'employee_id'):
-                    yield from torows(todf(rs))
-
-            self.assertEqual(count(c, orders1()), 196)
-
-            with self.assertRaises(AssertionError):
-                for a, b in zip(orders1(), c.reel(query)):
-                    self.assertEqual(a.customer_id, b.customer_id)
-
-            for a, b in zip(list(orders1()), c.reel(query)):
-                self.assertEqual(a.customer_id, b.customer_id)
-
-            for a, b in zip(orders1(), list(c.reel(query))):
-                self.assertEqual(a.customer_id, b.customer_id)
 
 
 class TestRow(unittest.TestCase):
@@ -445,33 +265,34 @@ class TestRow(unittest.TestCase):
 
 class TestMisc(unittest.TestCase):
     def test_prepend_header(self):
+        # since prepend_header is a util you need to pass the full path
+        iris2 = os.path.join(get_workspace(), 'iris2.csv')
         with dbopen(':memory:') as c:
             c.write(reel('iris'), 'iris2.csv')
-            prepend_header('iris2.csv', 'cnt, sl, sw, pl, pw, sp', drop=20)
+            prepend_header(iris2, 'cnt, sl, sw, pl, pw, sp', drop=20)
             first = next(reel('iris2.csv'))
             self.assertEqual(first.cnt, '20')
 
             c.write(reel('iris'), 'iris2.csv')
-            prepend_header('iris2.csv', 'cnt, sl, sw, pl, pw, sp')
+            prepend_header(iris2, 'cnt, sl, sw, pl, pw, sp')
             first = next(reel('iris2.csv'))
             self.assertEqual(first.cnt, '1')
 
             c.write(reel('iris'), 'iris2.csv')
-            prepend_header('iris2.csv', 'cnt, sl, sw, pl, pw, sp', drop=0)
+            prepend_header(iris2, 'cnt, sl, sw, pl, pw, sp', drop=0)
             first = next(reel('iris2.csv'))
             self.assertEqual(first.cnt, 'col')
             self.assertEqual(first.sl, 'sepal_length')
 
             c.write(reel('iris'), 'iris2.csv')
             # simply drop the first 5 lines, and do nothing else
-            prepend_header('iris2.csv', header=None, drop=5)
+            prepend_header(iris2, header=None, drop=5)
             # don't drop any and just write the header
-            prepend_header('iris2.csv', header='cnt, sl, sw, pl, pw, sp',
-                           drop=0)
+            prepend_header(iris2, header='cnt, sl, sw, pl, pw, sp', drop=0)
             first = next(reel('iris2.csv'))
             self.assertEqual(first.cnt, '5')
 
-            os.remove(os.path.join(get_workspace(), 'iris2.csv'))
+            os.remove(iris2)
 
     def test_duplicates(self):
         with dbopen(':memory:') as c:
@@ -548,7 +369,7 @@ class TestRows(unittest.TestCase):
 class TestUserDefinedFunctions(unittest.TestCase):
     def test_simple(self):
         # isnum, istext, yyyymm
-        with dbopen(':memeory:') as c:
+        with dbopen(':memory:') as c:
             # I'm using seeking alpha data here
             c.save(reel('sa'), name='sa')
             self.assertEqual(len(Rows(c.reel("""select * from sa where
@@ -579,7 +400,6 @@ class TestMpairs(unittest.TestCase):
         for a, b in mpairs(xs, ys):
             result.append(a)
         self.assertEqual(result, [4,9,10, 21])
-
 
 
 unittest.main()
