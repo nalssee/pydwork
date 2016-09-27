@@ -465,8 +465,8 @@ def todf(rows):
     """
     colnames = rows[0].columns
     d = {}
-    for col in zip(colnames, *(r.values for r in rows)):
-        d[col[0]] = col[1:]
+    for c, *vs in zip(colnames, *(r.values for r in rows)):
+        d[c] = vs
     return pd.DataFrame(d)
 
 
