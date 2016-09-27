@@ -10,7 +10,9 @@ sys.path.append(PYPATH)
 
 from pydwork.sqlplus import *
 from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd, \
-    prepend_header
+    prepend_header, pimap
+
+from multiprocessing import Pool
 
 
 # set_workspace(os.path.join(TESTPATH, 'data'))
@@ -30,6 +32,11 @@ def fillin(line, n):
         return line[:n]
     return line
 
+def fib(x):
+    if x < 2:
+        return x
+    else:
+        return fib(x - 1) + fib(x - 2)
 
 def count(conn, table):
     if isinstance(table, str):
@@ -171,34 +178,23 @@ class Testdbopen(unittest.TestCase):
                              ['col', 'sepal_length', 'sepal_width',
                               'petal_length', 'petal_width', 'species'])
 
-    def test_adjoin_disjoin(self):
+    def test_unsafe_save(self):
         with dbopen(':memory:') as conn:
             def unsafe():
                 for rs in reel('iris.csv', group='species'):
-                    rs[0].first = 'yes'
-                    yield from rs
-            with self.assertRaises(Exception):
-                conn.save(unsafe)
+                    rs[0].a = 'a'
+                    yield rs[0]
+                    for r in rs[1:]:
+                        r.b = 'b'
+                        yield r
 
-            # no need to use del anymore here
-            @disjoin('sepal_length, sepal_width, col')
-            @adjoin('first, second, third')
-            def safe():
-                for rs in reel('iris.csv', group='species'):
-                    rs[0].first = 'yes'
-                    rs[1].second = 'yes'
-                    yield from rs
+            with self.assertRaises(AssertionError):
+                conn.save(unsafe, safe=True)
 
-            # No error
-            conn.save(safe)
-
-            r1, r2, *rs = safe()
-            self.assertEqual(r1.columns, r2.columns)
-            for r in rs:
-                self.assertEqual(r1.columns, r.columns)
-
-            self.assertEqual([r1.first, r1.second, r1.third], ['yes', '', ''])
-            self.assertEqual([r2.first, r2.second, r2.third], ['', 'yes', ''])
+            # if you don't pass safe as True,
+            # 'save' just checks the number of columns
+            # so the following doesn't raise any exceptions
+            conn.save(unsafe)
 
     def test_todf(self):
         with dbopen(':memory:') as conn:
@@ -206,7 +202,7 @@ class Testdbopen(unittest.TestCase):
             for rs in conn.reel('iris', group='species'):
                 self.assertEqual(todf(rs).shape, (50, 6))
 
-    def test_torows(self):
+    def test_fromdf(self):
         "Yield pandas data frames and they are flattened again"
         with dbopen(':memory:') as conn:
             conn.save(reel('iris.csv'), name='iris')
@@ -221,7 +217,7 @@ class Testdbopen(unittest.TestCase):
                     del df['sepal_width']
                     del df['petal_length']
                     del df['petal_width']
-                    yield from torows(df)
+                    yield from fromdf(df)
 
             conn.save(length_plus_width)
             iris = list(conn.reel('iris'))

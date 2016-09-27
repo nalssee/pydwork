@@ -75,8 +75,7 @@ import pandas as pd
 from .util import isnum, istext, yyyymm, listify, camel2snake, peek_first
 
 
-__all__ = ['dbopen', 'Row', 'Rows', 'reel', 'adjoin', 'disjoin',
-           'todf', 'torows',
+__all__ = ['dbopen', 'Row', 'Rows', 'reel', 'todf', 'fromdf',
            'set_workspace', 'get_workspace']
 
 
@@ -281,7 +280,8 @@ class SQLPlus:
         else:
             yield from _build_rows(qrows, columns)
 
-    def save(self, seq, name=None, args=(), n=None, overwrite=False):
+    def save(self, seq, name=None, args=(), n=None,
+             overwrite=False, safe=False):
         """create a table from an iterator.
 
         Note:<%=  %>
@@ -293,6 +293,7 @@ class SQLPlus:
             name (str): table name in DB
             args (List[type]): args for seq (GF)
             n (int): number of rows to save
+            safe (Bool): checks if all rows have the same column names
         """
         # single letter variable is hard to find
         nrows = n
@@ -329,7 +330,14 @@ class SQLPlus:
         with tempfile.NamedTemporaryFile() as f:
             conn = sqlite3.connect(f.name)
             cursor = conn.cursor()
-            _sqlite3_save(cursor, (r.values for r in seq), name, colnames)
+
+            def vals(seq):
+                for r in seq:
+                    assert r.columns == colnames, str(r)
+                    yield r.values
+
+            values1 = vals(seq) if safe else (r.values for r in seq)
+            _sqlite3_save(cursor, values1, name, colnames)
             _sqlite3_save(self._cursor, _sqlite3_reel(cursor, name, colnames),
                           name, colnames)
             # no need to commit and close the connection,
@@ -446,20 +454,6 @@ def dbopen(dbfile):
         splus.conn.close()
 
 
-def gby(seq, key):
-    """Group the iterator by a key
-
-    Args
-        seq (iter)
-        key (FN[Row -> type] or List[str] or str): if [], group them all
-    Yields:
-        List[Row]
-    """
-    key = _build_keyfn(key)
-    for _, rows in groupby(seq, key):
-        # to list or not to list
-        yield list(rows)
-
 
 def todf(rows):
     """
@@ -476,12 +470,12 @@ def todf(rows):
 
 
 # This is not an ordinary function!!
-# So, x != torows(todf(x))
+# So, x != fromdf(todf(x))
 # efficiency issue
 # Most of the time, in fact almost always,
 # you will use this function to use with yield from
 # so there's no point in returning a list of rows
-def torows(df):
+def fromdf(df):
     """
     Args:
         df (pd.DataFrame)
@@ -494,22 +488,6 @@ def torows(df):
         for c, v in zip(colnames, vals):
             setattr(r, c, v)
         yield r
-
-
-def pick(cols, seq):
-    """
-    Args:
-        cols (str or List[str])
-        seq (Iter[Row])
-    Yields:
-        Row
-    """
-    cols = listify(cols)
-    for r in seq:
-        r1 = Row()
-        for c in cols:
-            setattr(r1, c, getattr(r, c))
-        yield r1
 
 
 
@@ -558,62 +536,6 @@ def reel(csv_file, header=None, group=False):
             yield from rows()
 
 
-def adjoin(colnames):
-    """Decorator to ensure that the rows to have the columns for sure
-
-    Args:
-        colnames (str or List[str])
-    Returns:
-        FN
-    """
-    colnames = listify(colnames)
-
-    def dec(gen):
-        "real decorator"
-        @wraps(gen)
-        def wrapper(*args, **kwargs):
-            "if a column doesn't exist, append it"
-            for row in gen(*args, **kwargs):
-                for col in colnames:
-                    try:
-                        # rearrange the order
-                        val = getattr(row, col)
-                        delattr(row, col)
-                        setattr(row, col, val)
-                    except:
-                        setattr(row, col, '')
-                yield row
-        return wrapper
-    return dec
-
-
-def disjoin(colnames):
-    """Decorator to ensure that the rows NOT to have the columns for sure.
-
-    Args:
-        colnames (str or List[str])
-    Returns:
-        FN
-    """
-    colnames = listify(colnames)
-
-    def dec(gen):
-        "real decorator"
-        @wraps(gen)
-        def wrapper(*args, **kwargs):
-            "Delete a column"
-            for row in gen(*args, **kwargs):
-                for col in colnames:
-                    # whatever it is, just delete it
-                    try:
-                        delattr(row, col)
-                    except:
-                        pass
-                yield row
-        return wrapper
-    return dec
-
-
 def set_workspace(dir):
     """
     Args:
@@ -630,6 +552,39 @@ def get_workspace():
         str
     """
     return WORKSPACE
+
+
+# pick and gby might need underscore
+# I don't export these anymore
+def pick(cols, seq):
+    """
+    Args:
+        cols (str or List[str])
+        seq (Iter[Row])
+    Yields:
+        Row
+    """
+    cols = listify(cols)
+    for r in seq:
+        r1 = Row()
+        for c in cols:
+            setattr(r1, c, getattr(r, c))
+        yield r1
+
+
+def gby(seq, key):
+    """Group the iterator by a key
+
+    Args
+        seq (iter)
+        key (FN[Row -> type] or List[str] or str): if [], group them all
+    Yields:
+        List[Row]
+    """
+    key = _build_keyfn(key)
+    for _, rows in groupby(seq, key):
+        # to list or not to list
+        yield list(rows)
 
 
 def _build_keyfn(key):
