@@ -1,8 +1,4 @@
 # pydwork
 >
-> Python tools for data analysis and collection
+> Sometimes you need more than just SQL when you handle large datasets
 >
-* npc.py: parallelism and concurrency
-* pullin.py: web data scraping
-* sqlplus.py: data wrangling (some functional additions to sqlite3)
-* util.py: utils
