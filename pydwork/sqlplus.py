@@ -454,7 +454,6 @@ def dbopen(dbfile):
         splus.conn.close()
 
 
-
 def todf(rows):
     """
     Args:
@@ -469,12 +468,6 @@ def todf(rows):
     return pd.DataFrame(d)
 
 
-# This is not an ordinary function!!
-# So, x != fromdf(todf(x))
-# efficiency issue
-# Most of the time, in fact almost always,
-# you will use this function to use with yield from
-# so there's no point in returning a list of rows
 def fromdf(df):
     """
     Args:
@@ -488,7 +481,6 @@ def fromdf(df):
         for c, v in zip(colnames, vals):
             setattr(r, c, v)
         yield r
-
 
 
 # consider changing the name to reel_csv
