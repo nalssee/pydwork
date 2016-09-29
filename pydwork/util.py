@@ -2,13 +2,14 @@ import random
 import string
 import re
 import fileinput
+import time
 
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
-from itertools import dropwhile, chain
+from itertools import dropwhile, chain, zip_longest
 
-from multiprocessing import Pool
+import multiprocessing as mp
 
 
 def nchunks(xs, n):
@@ -135,12 +136,83 @@ def listify(colstr):
         return colstr
 
 
-def pmap(func, iterable, chunksize=1, processes=2, ordered=True):
-    "Thin wrapper for imap in multiprocessing"
-    with Pool(processes=processes) as pool:
-        imap = pool.imap if ordered else pool.imap_unordered
-        for x in imap(func, iterable, chunksize):
-            yield x
+# copied from 'itertools'
+def grouper(iterable, n, fillvalue=None):
+    "Collect data into fixed-length chunks or blocks"
+    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
+    args = [iter(iterable)] * n
+    return zip_longest(*args, fillvalue=fillvalue)
+
+
+# Pool.iamp in multiprocessing doesn't allow
+# it to pass locally defined functions
+# I won't define unordered version although it is somewhat faster
+# and easy to write and also doesn't cause a lot of troubles,
+# I want to minimize any nondeterminism at all costs.
+def pmap(func, seq, chunksize=1, processes=mp.cpu_count()):
+    # I don't think keeping low qsize doesn't affect the performance
+    max_qsize = processes
+    empty_elt = random_string()
+    sentinel = random_string()
+    que1, que2 = mp.Queue(max_qsize), mp.Queue(max_qsize)
+
+    counter = mp.Value('i', 0)
+    ws = []
+
+    def insert1(seq, que1):
+        for i, chunk in enumerate(grouper(seq, chunksize, empty_elt)):
+            que1.put((i, chunk))
+        que1.put((i + 1, sentinel))
+
+    w0 = mp.Process(target=insert1, args=(seq, que1))
+    w0.daemon = True
+    w0.start()
+    ws.append(w0)
+
+    def safe_put(que2, val, i):
+        empty_spin = 0
+        while True:
+            if i == counter.value:
+                que2.put(val)
+                time.sleep(0.01)
+                counter.value += 1
+                break
+            empty_spin += 1
+            if empty_spin > 10:
+                time.sleep(0.1)
+
+
+    def insert2(que1, que2):
+        while True:
+            i, chunk = que1.get()
+            if chunk == sentinel:
+                safe_put(que2, sentinel, i)
+                return
+            else:
+                result = []
+                for x in chunk:
+                    if x != empty_elt:
+                        try:
+                            result.append(func(x))
+                        except Exception as error:
+                            print(repr(error))
+                            result.append(sentinel)
+                safe_put(que2, result, i)
+
+    for _ in range(processes):
+        w = mp.Process(target=insert2, args=(que1, que2))
+        w.daemon = True
+        w.start()
+        ws.append(w)
+
+    while True:
+        result = que2.get()
+        if result == sentinel:
+            for w in ws:
+                w.terminate()
+            return
+        else:
+            yield from result
 
 
 # The following guys are also going to be

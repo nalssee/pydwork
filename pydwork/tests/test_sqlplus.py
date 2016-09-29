@@ -2,6 +2,7 @@ import os
 import sys
 import unittest
 from itertools import islice
+import time
 
 TESTPATH = os.path.dirname(os.path.realpath(__file__))
 PYPATH = os.path.join(TESTPATH, '..', '..')
@@ -314,6 +315,17 @@ class TestMisc(unittest.TestCase):
         self.assertEqual(yyyymmdd(19991231, 2), 20000102)
         self.assertEqual(yyyymmdd(19991231, -2), 19991229)
 
+    def test_pmap(self):
+        def func(x):
+            time.sleep(0.1)
+            return x
+
+        start = time.time()
+        xs = list(pmap(func, range(1000), chunksize=1, processes=100))
+        print(xs)
+        self.assertEqual(xs, list(range(1000)))
+        end = time.time()
+        # self.assertTrue((end - start) < 2.3)
 
 class TestRows(unittest.TestCase):
     def test_rows(self):
