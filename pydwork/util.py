@@ -2,7 +2,6 @@ import random
 import string
 import re
 import fileinput
-import time
 
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
@@ -147,77 +146,78 @@ def grouper(iterable, n, fillvalue=None):
 # Pool.iamp in multiprocessing doesn't allow
 # it to pass locally defined functions
 # I won't define unordered version although it is somewhat faster
-# and easy to write and also doesn't cause a lot of troubles,
-# I want to minimize any nondeterminism at all costs.
+# and easy to write and also doesn't cause a lot of troubles.
+# Nevertheless I want to minimize any nondeterminism at all costs.
 def pmap(func, seq, chunksize=1, processes=mp.cpu_count()):
-    # I don't think keeping low qsize doesn't affect the performance
-    max_qsize = processes
-    empty_elt = random_string()
-    sentinel = random_string()
-    que1, que2 = mp.Queue(max_qsize), mp.Queue(max_qsize)
+    """
+    parallel map, ordered version
+    if you are curious about the parameters, refer to multiprocessing library
+    documentation (Pool.imap)
+    """
+    the_end = random_string()
 
-    counter = mp.Value('i', 0)
+    # Opening multiple ques sounds dumb in a way
+    # but this is a easier way to implement the ordered version of
+    # parrallel map. It's just that there is a limit in the number of
+    # ques in the OS. Of course you wouldn't make more than 20 processes.
+    que1s = [mp.Queue(1) for _ in range(processes)]
+    que2s = [mp.Queue(1) for _ in range(processes)]
+
     ws = []
 
-    def insert1(seq, que1):
-        for i, chunk in enumerate(grouper(seq, chunksize, empty_elt)):
-            que1.put((i, chunk))
-        que1.put((i + 1, sentinel))
+    def insert1(seq, que1s):
+        for chunks in grouper(grouper(seq, chunksize, the_end),
+                              processes, the_end):
+            for que1, chunk in zip(que1s, chunks):
+                que1.put(chunk)
+        for que1 in que1s:
+            que1.put(the_end)
 
-    w0 = mp.Process(target=insert1, args=(seq, que1))
+    w0 = mp.Process(target=insert1, args=(seq, que1s))
     w0.daemon = True
     w0.start()
     ws.append(w0)
 
-    def safe_put(que2, val, i):
-        empty_spin = 0
-        while True:
-            if i == counter.value:
-                que2.put(val)
-                time.sleep(0.01)
-                counter.value += 1
-                break
-            empty_spin += 1
-            if empty_spin > 10:
-                time.sleep(0.1)
-
-
     def insert2(que1, que2):
         while True:
-            i, chunk = que1.get()
-            if chunk == sentinel:
-                safe_put(que2, sentinel, i)
+            chunk = que1.get()
+            if chunk == the_end:
+                que2.put(the_end)
                 return
             else:
                 result = []
                 for x in chunk:
-                    if x != empty_elt:
+                    if x != the_end:
                         try:
                             result.append(func(x))
                         except Exception as error:
-                            print(repr(error))
-                            result.append(sentinel)
-                safe_put(que2, result, i)
+                            que2.put(the_end)
+                            que2.put('child process error: ' + repr(error))
+                            return
+                que2.put(result)
 
-    for _ in range(processes):
+    for que1, que2 in zip(que1s, que2s):
         w = mp.Process(target=insert2, args=(que1, que2))
         w.daemon = True
         w.start()
         ws.append(w)
 
     while True:
-        result = que2.get()
-        if result == sentinel:
-            for w in ws:
-                w.terminate()
-            return
-        else:
-            yield from result
+        for que2 in que2s:
+            result = que2.get()
+            if result == the_end:
+                if not que2.empty():
+                    # you have an error message.
+                    print(que2.get())
+                for w in ws:
+                    w.terminate()
+                return
+            else:
+                yield from result
 
 
 # The following guys are also going to be
-# included in "extended sqlite functions"
-# set
+# included in "extended sqlite functions" set
 
 # If the return value is True it is converted to 1 or 0 in sqlite3
 def isnum(x):

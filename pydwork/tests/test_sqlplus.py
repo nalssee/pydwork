@@ -317,15 +317,25 @@ class TestMisc(unittest.TestCase):
 
     def test_pmap(self):
         def func(x):
-            time.sleep(0.1)
+            time.sleep(0.001)
             return x
 
         start = time.time()
-        xs = list(pmap(func, range(1000), chunksize=1, processes=100))
-        print(xs)
-        self.assertEqual(xs, list(range(1000)))
+        xs = list(pmap(func, range(10000), chunksize=3, processes=7))
+        self.assertEqual(xs, list(range(10000)))
         end = time.time()
-        # self.assertTrue((end - start) < 2.3)
+        self.assertTrue((end - start) < 2)
+
+        def func2(x):
+            if x > 4:
+                10 / 0
+            else:
+                return x
+
+        # you must see zero division error message
+        # but still you should get 5 elements
+        self.assertEqual(list(pmap(func2, range(100), processes=2)), [0, 1, 2, 3, 4])
+
 
 class TestRows(unittest.TestCase):
     def test_rows(self):
