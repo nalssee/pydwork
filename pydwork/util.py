@@ -56,9 +56,9 @@ def random_string(nchars=20):
                    string.digits) for _ in range(nchars))
 
 
-def mpairs(seq1, seq2, key1=lambda x: x, key2=None):
+def mpairs(seq1, seq2, key1, key2=None):
     """Generates a tuple of matching pairs
-    key1 and key2 are functions
+    key1 and key2 are functions (getters, sort of)
 
     seq1, seq2 must be sorted before being passed here
         and also each key value(which is returned by key funcs) must be UNIQUE
