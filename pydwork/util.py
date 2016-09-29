@@ -9,6 +9,8 @@ from dateutil.relativedelta import relativedelta
 from itertools import dropwhile, chain, zip_longest
 
 import multiprocessing as mp
+import threading as th
+from queue import Queue
 
 
 def nchunks(xs, n):
@@ -214,6 +216,39 @@ def pmap(func, seq, chunksize=1, processes=mp.cpu_count()):
                 return
             else:
                 yield from result
+
+
+# unordered merge
+def umerge(*sequences, parallel=False):
+    the_end = random_string() if parallel else object()
+    que = mp.Queue() if parallel else Queue()
+    worker = mp.Process if parallel else th.Thread
+    n_sequences = len(sequences)
+
+    def insert(sequence):
+        for x in sequence:
+            que.put(x)
+        que.put(the_end)
+
+    ws = []
+    for seq in sequences:
+        w = worker(target=insert, args=(seq,))
+        w.daemon = True
+        ws.append(w)
+        w.start()
+
+    the_end_cnt = 0
+    while True:
+        val = que.get()
+        if val == the_end:
+            the_end_cnt += 1
+            if the_end_cnt == n_sequences:
+                break
+        else:
+            yield val
+
+    for w in ws:
+        w.join()
 
 
 # The following guys are also going to be
