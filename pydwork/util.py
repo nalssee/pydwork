@@ -150,37 +150,55 @@ def grouper(iterable, n, fillvalue=None):
 # I won't define unordered version although it is somewhat faster
 # and easy to write and also doesn't cause a lot of troubles.
 # Nevertheless I want to minimize any nondeterminism at all costs.
-def pmap(func, seq, chunksize=1, processes=mp.cpu_count()):
+def pmap(func, seq,
+         chunksize=1, nworkers=mp.cpu_count(),
+         fargs=[], parallel=True):
     """
     parallel map, ordered version
     if you are curious about the parameters, refer to multiprocessing library
     documentation (Pool.imap)
+
+    fargs: first args for each 'func'
+           unless fargs is not [], 'nworkers' is ignored
+           number of fargs becomes nworkers
+
+           You may think of those cases you want to use selenium drivers
+           for web scraping. If you have, say, 4 workers you need 4 drivers
+
+    parallel: If parallel is False, wokers are threads, not processes
     """
+    if fargs:
+        nworkers = len(fargs)
+    else:
+        fargs = [None] * nworkers
+
     the_end = random_string()
+    create_que = mp.Queue if parallel else Queue
+    create_worker = mp.Process if parallel else th.Thread
 
     # Opening multiple ques sounds dumb in a way
     # but this is a easier way to implement the ordered version of
     # parrallel map. It's just that there is a limit in the number of
     # ques in the OS. Of course you wouldn't make more than 20 processes.
-    que1s = [mp.Queue(1) for _ in range(processes)]
-    que2s = [mp.Queue(1) for _ in range(processes)]
+    que1s = [create_que(1) for _ in range(nworkers)]
+    que2s = [create_que(1) for _ in range(nworkers)]
 
     ws = []
 
     def insert1(seq, que1s):
         for chunks in grouper(grouper(seq, chunksize, the_end),
-                              processes, the_end):
+                              nworkers, the_end):
             for que1, chunk in zip(que1s, chunks):
                 que1.put(chunk)
         for que1 in que1s:
             que1.put(the_end)
 
-    w0 = mp.Process(target=insert1, args=(seq, que1s))
+    w0 = create_worker(target=insert1, args=(seq, que1s))
     w0.daemon = True
     w0.start()
     ws.append(w0)
 
-    def insert2(que1, que2):
+    def insert2(func, que1, que2):
         while True:
             chunk = que1.get()
             if chunk == the_end:
@@ -198,8 +216,12 @@ def pmap(func, seq, chunksize=1, processes=mp.cpu_count()):
                             return
                 que2.put(result)
 
-    for que1, que2 in zip(que1s, que2s):
-        w = mp.Process(target=insert2, args=(que1, que2))
+    for farg, que1, que2 in zip(fargs, que1s, que2s):
+        if farg:
+            newfunc = lambda x: func(farg, x)
+        else:
+            newfunc = func
+        w = create_worker(target=insert2, args=(newfunc, que1, que2))
         w.daemon = True
         w.start()
         ws.append(w)
@@ -210,45 +232,11 @@ def pmap(func, seq, chunksize=1, processes=mp.cpu_count()):
             if result == the_end:
                 if not que2.empty():
                     # you have an error message.
+                    # todo: thread version it doesn't show the error message
                     print(que2.get())
-                for w in ws:
-                    w.terminate()
                 return
             else:
                 yield from result
-
-
-# unordered merge
-def umerge(*sequences, parallel=False):
-    the_end = random_string() if parallel else object()
-    que = mp.Queue() if parallel else Queue()
-    worker = mp.Process if parallel else th.Thread
-    n_sequences = len(sequences)
-
-    def insert(sequence):
-        for x in sequence:
-            que.put(x)
-        que.put(the_end)
-
-    ws = []
-    for seq in sequences:
-        w = worker(target=insert, args=(seq,))
-        w.daemon = True
-        ws.append(w)
-        w.start()
-
-    the_end_cnt = 0
-    while True:
-        val = que.get()
-        if val == the_end:
-            the_end_cnt += 1
-            if the_end_cnt == n_sequences:
-                break
-        else:
-            yield val
-
-    for w in ws:
-        w.join()
 
 
 # The following guys are also going to be
