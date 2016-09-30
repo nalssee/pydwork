@@ -183,8 +183,6 @@ def pmap(func, seq,
     que1s = [create_que(1) for _ in range(nworkers)]
     que2s = [create_que(1) for _ in range(nworkers)]
 
-    ws = []
-
     def insert1(seq, que1s):
         for chunks in grouper(grouper(seq, chunksize, the_end),
                               nworkers, the_end):
@@ -196,7 +194,6 @@ def pmap(func, seq,
     w0 = create_worker(target=insert1, args=(seq, que1s))
     w0.daemon = True
     w0.start()
-    ws.append(w0)
 
     def insert2(func, que1, que2):
         while True:
@@ -224,7 +221,6 @@ def pmap(func, seq,
         w = create_worker(target=insert2, args=(newfunc, que1, que2))
         w.daemon = True
         w.start()
-        ws.append(w)
 
     while True:
         for que2 in que2s:
