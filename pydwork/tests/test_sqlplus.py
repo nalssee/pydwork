@@ -321,7 +321,15 @@ class TestMisc(unittest.TestCase):
             return x
 
         start = time.time()
-        xs = list(pmap(func, range(10000), chunksize=3, nworkers=7))
+        xs = list(pmap(func, range(10000), chunksize=3, nworkers=8))
+        self.assertEqual(xs, list(range(10000)))
+        end = time.time()
+        self.assertTrue((end - start) < 2)
+
+        # thread version
+        start = time.time()
+        xs = list(pmap(func, range(10000), chunksize=3, nworkers=8,
+                       parallel=False))
         self.assertEqual(xs, list(range(10000)))
         end = time.time()
         self.assertTrue((end - start) < 2)
@@ -334,8 +342,22 @@ class TestMisc(unittest.TestCase):
 
         # you must see zero division error message
         # but still you should get 5 elements
-        self.assertEqual(list(pmap(func2, range(100), nworkers=2,)),
+        self.assertEqual(list(pmap(func2, range(100), nworkers=2,
+                                   parallel=True)),
                          [0, 1, 2, 3, 4])
+        self.assertEqual(list(pmap(func2, range(100), nworkers=2,
+                                   parallel=False)),
+                         [0, 1, 2, 3, 4])
+
+        def func3(a, x):
+            return a + x
+
+        self.assertEqual(list(pmap(func3, '12345',
+                                   fargs=['A', 'B'], parallel=True)),
+                         ['A1', 'B2', 'A3', 'B4', 'A5'])
+        self.assertEqual(list(pmap(func3, '12345',
+                                   fargs=['A', 'B'], parallel=False)),
+                         ['A1', 'B2', 'A3', 'B4', 'A5'])
 
 
 

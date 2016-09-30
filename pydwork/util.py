@@ -209,19 +209,22 @@ def pmap(func, seq,
                             result.append(func(x))
                         except Exception as error:
                             que2.put(the_end)
-                            que2.put('child process error: ' + repr(error))
+                            que2.put('child worker error: ' + repr(error))
                             return
                 que2.put(result)
 
     for farg, que1, que2 in zip(fargs, que1s, que2s):
         if farg:
-            newfunc = lambda x: func(farg, x)
+            # passing lexical closure
+            # you can just do 'lambda x: func(farg, x)' for parallel version
+            # because Python just copies args for each process
+            # but it wouldn't work for thread version
+            newfunc = (lambda farg: lambda x: func(farg, x))(farg)
         else:
             newfunc = func
-        # don't replace the above with the following:
-        # newfunc = lambda x: func(farg, x) if farg else func
+        # don't replace the above with something like:
+        # newfunc = A if test else B
         # causes a "can't pickle" error, I have no idea why.
-
         w = create_worker(target=insert2, args=(newfunc, que1, que2))
         w.daemon = True
         w.start()
@@ -232,7 +235,7 @@ def pmap(func, seq,
             if result == the_end:
                 if not que2.empty():
                     # you have an error message.
-                    # todo: thread version it doesn't show the error message
+                    # todo: thread version doesn't show the error message
                     print(que2.get())
                 return
             else:
