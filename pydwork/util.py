@@ -209,7 +209,7 @@ def pmap(func, seq,
                             result.append(func(x))
                         except Exception as error:
                             que2.put(the_end)
-                            que2.put('child worker error: ' + repr(error))
+                            print('child worker error: ' + repr(error), x)
                             return
                 que2.put(result)
 
@@ -233,13 +233,13 @@ def pmap(func, seq,
         for que2 in que2s:
             result = que2.get()
             if result == the_end:
-                if not que2.empty():
-                    # you have an error message.
-                    # todo: thread version doesn't show the error message
-                    print(que2.get())
                 return
             else:
                 yield from result
+
+    # all the processes and threads are set to daemon
+    # hence no need to terminate them manually
+    # I might be wrong in the long run though.
 
 
 # The following guys are also going to be

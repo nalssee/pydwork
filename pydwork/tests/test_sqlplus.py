@@ -335,7 +335,7 @@ class TestMisc(unittest.TestCase):
         self.assertTrue((end - start) < 2)
 
         def func2(x):
-            if x > 4:
+            if x == 4:
                 10 / 0
             else:
                 return x
@@ -344,10 +344,10 @@ class TestMisc(unittest.TestCase):
         # but still you should get 5 elements
         self.assertEqual(list(pmap(func2, range(100), nworkers=2,
                                    parallel=True)),
-                         [0, 1, 2, 3, 4])
+                         [0, 1, 2, 3])
         self.assertEqual(list(pmap(func2, range(100), nworkers=2,
                                    parallel=False)),
-                         [0, 1, 2, 3, 4])
+                         [0, 1, 2, 3])
 
         def func3(a, x):
             return a + x
@@ -358,6 +358,7 @@ class TestMisc(unittest.TestCase):
         self.assertEqual(list(pmap(func3, '12345',
                                    fargs=['A', 'B'], parallel=False)),
                          ['A1', 'B2', 'A3', 'B4', 'A5'])
+
 
 
 
