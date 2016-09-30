@@ -218,6 +218,10 @@ def pmap(func, seq,
             newfunc = lambda x: func(farg, x)
         else:
             newfunc = func
+        # don't replace the above with the following:
+        # newfunc = lambda x: func(farg, x) if farg else func
+        # causes a "can't pickle" error, I have no idea why.
+
         w = create_worker(target=insert2, args=(newfunc, que1, que2))
         w.daemon = True
         w.start()
