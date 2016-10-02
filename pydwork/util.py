@@ -209,7 +209,10 @@ def pmap(func, seq,
                             result.append(func(x))
                         except Exception as error:
                             que2.put(the_end)
-                            print('child worker error: ' + repr(error), x)
+                            str_x = str(x)
+                            if len(str_x) > 20:
+                                str_x = str_x[:20] + '...'
+                            print('child worker error: ' + repr(error), str_x)
                             return
                 que2.put(result)
 
