@@ -471,17 +471,7 @@ def dbopen(dbfile):
 
 
 def todf(rows):
-    """
-    Args:
-        List[Row]
-    Returns:
-        pd.DataFrame
-    """
-    colnames = rows[0].columns
-    d = {}
-    for c, *vs in zip(colnames, *(r.values for r in rows)):
-        d[c] = vs
-    return pd.DataFrame(d)
+    return pd.DataFrame([r.values for r in rows], columns=rows[0].columns)
 
 
 def fromdf(df):
