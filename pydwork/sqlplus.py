@@ -310,7 +310,9 @@ class SQLPlus:
         if overwrite:
             self.run('drop table if exists %s' % name)
 
-        if name in self.tables:
+        # table names are case insensitive
+        # I want to be careful here since it is not expensive at all
+        if name.lower() in [x.lower() for x in self.tables]:
             return
 
         if nrows:
