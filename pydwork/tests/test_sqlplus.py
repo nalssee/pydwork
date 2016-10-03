@@ -398,6 +398,15 @@ class TestRows(unittest.TestCase):
                                                'versicolor, virginica')),
                              100)
 
+            rs = []
+            for x in range(10):
+                r = Row()
+                r.x = x
+                rs.append(r)
+            rs = Rows(rs)
+            self.assertEqual(rs.truncate('x', 0.2).col('x'),
+                             [2, 3, 4, 5, 6, 7])
+
 
 
 class TestUserDefinedFunctions(unittest.TestCase):

@@ -70,8 +70,8 @@ from contextlib import contextmanager
 from functools import wraps
 from itertools import groupby, islice
 
-# the only 3rd party lib
 import pandas as pd
+import numpy as np
 
 from .util import isnum, istext, yyyymm, listify, camel2snake, peek_first
 
@@ -162,6 +162,18 @@ class Rows(list):
     def filter(self, pred):
         pred = _build_keyfn(pred)
         return Rows([r for r in self if pred(r)])
+
+    def truncate(self, col, limit=0.01):
+        xs = []
+        for r in self:
+            val = getattr(r, col)
+            if isnum(val):
+                xs.append(val)
+
+        lower = np.percentile(xs, limit * 100)
+        higher = np.percentile(xs, (1 - limit) * 100)
+
+        return self.fromto(col, lower, higher)
 
     def fromto(self, col, beg, end):
         "simplified fitering, inclusive"
