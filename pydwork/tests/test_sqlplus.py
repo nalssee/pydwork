@@ -445,4 +445,15 @@ class TestMpairs(unittest.TestCase):
         self.assertEqual(result, [4,9,10, 21])
 
 
+class TestOLS(unittest.TestCase):
+    def test_ols(self):
+        with dbopen(':memory:') as c:
+            c.save(reel('iris'), name='iris')
+            for rs in c.reel('iris', group='species'):
+                result =Rows(rs).ols('sepal_length ~ petal_length + petal_width')
+                # maybe you should test more here
+                self.assertEqual(result.nobs, 50)
+                self.assertEqual(len(result.params), 3)
+
+
 unittest.main()

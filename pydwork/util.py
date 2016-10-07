@@ -150,6 +150,12 @@ def grouper(iterable, n, fillvalue=None):
 # I won't define unordered version although it is somewhat faster
 # and easy to write and also doesn't cause a lot of troubles.
 # Nevertheless I want to minimize any nondeterminism at all costs.
+
+# Be careful! this is very easy to use and may look useful for many cases
+# but actually many of the jobs are better off with just a single process
+# use it when each work requires a lot of computations. (like fib(40))
+# Of course there's not much of a harm in using this but as for many jobs you will be
+# disappointed if you've expected some performance gains
 def pmap(func, seq,
          chunksize=1, nworkers=mp.cpu_count(),
          fargs=[], parallel=True):

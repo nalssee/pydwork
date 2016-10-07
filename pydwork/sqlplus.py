@@ -72,6 +72,7 @@ from itertools import groupby, islice
 
 import pandas as pd
 import numpy as np
+import statsmodels.api as sm
 
 from .util import isnum, istext, yyyymm, listify, camel2snake, peek_first
 
@@ -219,6 +220,14 @@ class Rows(list):
                 result.append(r)
         return Rows(result)
 
+    def ols(self, model):
+        left, right = model.split('~')
+        yvar = left.strip()
+        xvars = [x.strip() for x in right.split('+')]
+        Y = self.col(yvar)
+        X = sm.add_constant(self.cols(xvars))
+        return sm.OLS(Y, X).fit()
+
     def group(self, key):
         # it is illogical to return an instance of Rows
         result = []
@@ -236,6 +245,8 @@ class Rows(list):
     def write(self, filename):
         _show(self, n=None, filename=filename, overwrite=True)
 
+    # not so efficient in many cases
+    # avoid it if possible
     def df(self):
         return todf(self)
 
