@@ -397,6 +397,7 @@ class TestRows(unittest.TestCase):
             self.assertEqual(len(iris.contains('species',
                                                'versicolor, virginica')),
                              100)
+            self.assertEqual(len(iris.contains('sepal_length', 5.0)), 10)
 
             rs = []
             for x in range(10):
@@ -455,5 +456,6 @@ class TestOLS(unittest.TestCase):
                 self.assertEqual(result.nobs, 50)
                 self.assertEqual(len(result.params), 3)
 
+from pydwork.util import listify
 
 unittest.main()

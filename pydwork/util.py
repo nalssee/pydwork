@@ -113,28 +113,29 @@ def peek_first(seq):
     return first_item, chain([first_item], seq)
 
 
-def listify(colstr):
-    """A comma or space separated string to a list of strings
-
-    Args:
-        colstr (str)
-    Returns:
-        List[str]
-
-    Example:
-        >>> _listify('a b c')
-        ['a', 'b', 'c']
-
-        >>> _listify('a, b, c')
-        ['a', 'b', 'c']
+def listify(x):
     """
-    if isinstance(colstr, str):
-        if ',' in colstr:
-            return [x.strip() for x in colstr.split(',')]
+    Example:
+        >>> listify('a b c')
+        ['a', 'b', 'c']
+
+        >>> listify('a, b, c')
+        ['a', 'b', 'c']
+
+        >>> listify(3)
+        [3]
+    """
+    if isinstance(x, str):
+        if ',' in x:
+            return [x1.strip() for x1 in x.split(',')]
         else:
-            return [x for x in colstr.split(' ') if x]
+            return [x1 for x1 in x.split(' ') if x1]
+    elif isinstance(x, list):
+        return x
+    elif isinstance(x, tuple) or isinstance(x, dict):
+        return list(x)
     else:
-        return colstr
+        return [x]
 
 
 # copied from 'itertools'
