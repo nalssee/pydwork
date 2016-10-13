@@ -142,6 +142,9 @@ class Rows(list):
     """
     a shallow wrapper of a list of row instances
     """
+    # Don't try to define __getattr__, __setattr__
+    # List objects has a lot of useful attributes that can't be overwritten
+    # Not the same situation as 'Row' class
 
     def __getitem__(self, cols):
         if isinstance(cols, int):
