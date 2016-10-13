@@ -480,26 +480,34 @@ class TestUserDefinedFunctions(unittest.TestCase):
     def test_simple(self):
         # isnum, istext, yyyymm
         with dbopen(':memory:') as c:
-            # I'm using seeking alpha data here
-            c.save(reel('sa'), name='sa')
-            self.assertEqual(len(Rows(c.reel("""select * from sa where
-                                             tsymbol='MSFT'"""))), 132)
-            self.assertEqual(len(Rows(c.reel("""select * from sa where
-                                             tsymbol='MSFT' and isnum(n) = 1
-                                             """))), 124)
-            self.assertEqual(len(Rows(c.reel("""select * from sa where
-                                             tsymbol='MSFT' and istext(n) = 1
-                                             """))), 8)
-            c.drop('sa1')
-            c.run("""
-                  create table if not exists sa1 as
-                  select *, yyyymm(yyyymm, 3) as yyyymm_n3
-                  from sa
-                  where tsymbol='MSFT'
-                  """)
+            # fama french 5 industry portfolios
+            c.save(reel('indport'), name='indport')
+            c.run(
+                """
+                create table if not exists indport1 as
+                select *, substr(date, 1, 4) as yyyy,
+                substr(date, 1, 6) as yyyymm,
+                case
+                when cnsmr >= 0 then 1
+                else 'neg'
+                end as sign_cnsmr
+                from indport
+                """)
 
-            r0 = next(c.reel('sa1'))
-            self.assertEqual(r0.yyyymm_n3, 200504)
+            na = len(Rows(c.reel("select * from indport1 where isnum(sign_cnsmr)")))
+            nb = len(Rows(c.reel("select * from indport1 where istext(sign_cnsmr)")))
+            nc = len(Rows(c.reel("select * from indport1")))
+            self.assertEqual(na + nb, nc)
+
+            r = next(c.reel(
+                """
+                select *, yyyymm(substr(date, 1, 6), 12) as yyyymm1,
+                yyyymmdd(date, 365) as yyyymmdd1
+                from indport
+                where date >= 20160801
+                """))
+            self.assertEqual(r.yyyymm1, 201708)
+            self.assertEqual(r.yyyymmdd1, 20170801)
 
 
 class TestMpairs(unittest.TestCase):
