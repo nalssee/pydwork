@@ -150,9 +150,9 @@ class Rows(list):
         cols = listify(cols)
         if len(cols) == 1:
             col = cols[0]
-            return [getattr(r, col) for r in self]
+            return [r[col] for r in self]
         else:
-            return [[getattr(r, c) for c in cols] for r in self]
+            return [[r[c] for c in cols] for r in self]
 
     def __setitem__(self, cols, vals):
         if isinstance(cols, int):
@@ -174,11 +174,11 @@ class Rows(list):
         if ncols == 1:
             col = cols[0]
             for r, v in zip(self, vals):
-                setattr(r, col, v)
+                r[col] = v
         else:
             for r, vs in zip(self, vals):
                 for c, v in zip(cols, vs):
-                    setattr(r, c, v)
+                    r[c] = v
 
     def __delitem__(self, cols):
         if isinstance(cols, int):
@@ -208,7 +208,7 @@ class Rows(list):
     def truncate(self, col, limit=0.01):
         xs = []
         for r in self:
-            val = getattr(r, col)
+            val = r[col]
             if isnum(val):
                 xs.append(val)
 
@@ -220,33 +220,31 @@ class Rows(list):
     def fromto(self, col, beg, end):
         "simplified fitering, inclusive"
         def testfn(r):
-            val = getattr(r, col)
+            val = r[col]
             return beg <= val and val <= end
         return self.filter(testfn)
 
     def ge(self, col, beg):
         "greater than or equal to"
-        return self.filter(lambda r: beg <= getattr(r, col))
+        return self.filter(lambda r: beg <= r[col])
 
     def le(self, col, end):
         "less than or equal to"
-        return self.filter(lambda r: getattr(r, col) <= end)
+        return self.filter(lambda r: r[col] <= end)
 
     def num(self, cols):
         "another simplified filtering, numbers only"
         cols = listify(cols)
-        return self.filter(
-            lambda r: all(isnum(getattr(r, col)) for col in cols))
+        return self.filter(lambda r: all(isnum(r[col]) for col in cols))
 
     def text(self, cols):
         "another simplified filtering, texts(string) only"
         cols = listify(cols)
-        return self.filter(
-            lambda r: all(istext(getattr(r, col)) for col in cols))
+        return self.filter(lambda r: all(istext(r[col]) for col in cols))
 
     def contains(self, col, vals):
         vals = listify(vals)
-        return self.filter(lambda r: getattr(r, col) in vals)
+        return self.filter(lambda r: r[col] in vals)
 
     def ols(self, model):
         left, right = model.split('~')
@@ -510,7 +508,7 @@ def dbopen(dbfile):
 def todf(rows, cols=None):
     if cols:
         cols = listify(cols)
-        return pd.DataFrame([[getattr(r, col) for col in cols] for r in rows],
+        return pd.DataFrame([[r[col] for col in cols] for r in rows],
                             columns=cols)
     else:
         return pd.DataFrame([r.values for r in rows], columns=rows[0].columns)
@@ -528,7 +526,7 @@ def fromdf(df):
     for vals in df.values.tolist():
         r = Row()
         for c, v in zip(colnames, vals):
-            setattr(r, c, v)
+            r[c] = v
         result.append(r)
     return result
 
@@ -569,7 +567,7 @@ def reel(csv_file, header=None, group=False):
                         """ % (csv_file, line_no, ncol, len(line), line))
                 row1 = Row()
                 for col, val in zip(columns, line):
-                    setattr(row1, col, val)
+                    row1[col] = val
                 yield row1
 
         if group:
@@ -608,7 +606,7 @@ def _pick(cols, seq):
     for r in seq:
         r1 = Row()
         for c in cols:
-            setattr(r1, c, getattr(r, c))
+            r1[c] = r[c]
         yield r1
 
 
@@ -640,9 +638,9 @@ def _build_keyfn(key):
 
     colnames = listify(key)
     if len(colnames) == 1:
-        return lambda r: getattr(r, colnames[0])
+        return lambda r: r[colnames[0]]
     else:
-        return lambda r: [getattr(r, colname) for colname in colnames]
+        return lambda r: [r[colname] for colname in colnames]
 
 
 def _gen_valid_column_names(columns):
@@ -854,5 +852,5 @@ def _build_rows(seq_rvals, colnames):
     for rvals in seq_rvals:
         r = Row()
         for col, val in zip(colnames, rvals):
-            setattr(r, col, val)
+            r[col] = val
         yield r
