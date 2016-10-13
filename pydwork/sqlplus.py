@@ -246,9 +246,10 @@ class Rows(list):
         _show(self, n=None, filename=filename, overwrite=True)
 
     # not so efficient in many cases
-    # avoid it if possible
-    def df(self):
-        return todf(self)
+    # Use this when you need to see what's inside
+    # for example, when you want to see the distribution of data.
+    def df(self, cols=None):
+        return todf(self, cols)
 
 
 class SQLPlus:
@@ -481,8 +482,13 @@ def dbopen(dbfile):
         splus.conn.close()
 
 
-def todf(rows):
-    return pd.DataFrame([r.values for r in rows], columns=rows[0].columns)
+def todf(rows, cols=None):
+    if cols:
+        cols = listify(cols)
+        return pd.DataFrame([[getattr(r, col) for col in cols] for r in rows],
+                            columns=cols)
+    else:
+        return pd.DataFrame([r.values for r in rows], columns=rows[0].columns)
 
 
 def fromdf(df):

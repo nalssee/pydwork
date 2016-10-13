@@ -408,6 +408,19 @@ class TestRows(unittest.TestCase):
             self.assertEqual(rs.truncate('x', 0.2).col('x'),
                              [2, 3, 4, 5, 6, 7])
 
+    def test_describe(self):
+        import matplotlib.pyplot as plt
+        with dbopen(':memory:') as c:
+            c.save(reel('iris'), name='iris')
+            iris = Rows(c.reel('iris'))
+            self.assertTrue('petal_width' in dir(iris[0]))
+            for g in iris.group('species'):
+                df = Rows(g).df('sepal_length, sepal_width')
+                summary = df.describe()
+                self.assertFalse('petal_width' in dir(summary))
+                # you can plot it
+                # df.plot.scatter(x='sepal_length', y='sepal_width')
+                # plt.show()
 
 
 class TestUserDefinedFunctions(unittest.TestCase):
