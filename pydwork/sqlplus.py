@@ -162,7 +162,7 @@ class Rows(list):
 
     def filter(self, pred):
         pred = _build_keyfn(pred)
-        return Rows([r for r in self if pred(r)])
+        return Rows(r for r in self if pred(r))
 
     def truncate(self, col, limit=0.01):
         xs = []
@@ -178,47 +178,38 @@ class Rows(list):
 
     def fromto(self, col, beg, end):
         "simplified fitering, inclusive"
-        result = []
-        for r in self:
+        def testfn(r):
             val = getattr(r, col)
-            if beg <= val and val <= end:
-                result.append(r)
-        return Rows(result)
+            return beg <= val and val <= end
+        return self.filter(testfn)
 
     def ge(self, col, beg):
         "greater than or equal to"
-        result = []
-        for r in self:
-            val = getattr(r, col)
-            if beg <= val:
-                result.append(r)
-        return Rows(result)
+        return self.filter(lambda r: beg <= getattr(r, col))
 
     def le(self, col, end):
         "less than or equal to"
-        result = []
-        for r in self:
-            val = getattr(r, col)
-            if val <= end:
-                result.append(r)
-        return Rows(result)
+        return self.filter(lambda r: getattr(r, col) <= end)
 
     def num(self, cols):
         "another simplified filtering, numbers only"
         cols = listify(cols)
-        result = []
-        for r in self:
-            if all(isnum(getattr(r, col)) for col in cols):
-                result.append(r)
-        return Rows(result)
+        def testfn(r):
+            return all(isnum(getattr(r, col)) for col in cols)
+        return self.filter(testfn)
+
+    def text(self, cols):
+        "another simplified filtering, texts(string) only"
+        cols = listify(cols)
+        def testfn(r):
+            return all(istext(getattr(r, col)) for col in cols)
+        return self.filter(testfn)
 
     def contains(self, col, vals):
         vals = listify(vals)
-        result = []
-        for r in self:
-            if getattr(r, col) in vals:
-                result.append(r)
-        return Rows(result)
+        def testfn(r):
+            return getattr(r, col) in vals
+        return self.filter(testfn)
 
     def ols(self, model):
         left, right = model.split('~')
