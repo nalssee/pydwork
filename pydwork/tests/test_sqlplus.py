@@ -250,6 +250,33 @@ class TestRow(unittest.TestCase):
         r1.z = r1.x - r1.z
         self.assertEqual(r1.values, [r1.x, r1.z])
 
+    def test_row2(self):
+        r1 = Row()
+        self.assertEqual(r1.columns, [])
+        self.assertEqual(r1.values, [])
+
+        r1['x'] = 10
+        r1['y'] = 'abc'
+        r1['z'] = 39.2
+
+        self.assertEqual(r1.columns, ['x', 'y', 'z'])
+        self.assertEqual(r1.values, [10, 'abc', 39.2])
+
+        with self.assertRaises(AttributeError):
+            r1['a']
+
+        with self.assertRaises(ValueError):
+            del r1['a']
+
+        del r1['y']
+
+        self.assertEqual(r1.columns, ['x', 'z'])
+        self.assertEqual(r1.values, [10, 39.2])
+
+        r1['x'] *= 10
+        r1['z'] = r1['x'] - r1['z']
+        self.assertEqual(r1.values, [r1['x'], r1['z']])
+
 
 class TestMisc(unittest.TestCase):
     def test_prepend_header(self):
@@ -361,7 +388,6 @@ class TestMisc(unittest.TestCase):
 
 
 
-
 class TestRows(unittest.TestCase):
     def test_rows(self):
         # You can safely 'Rows' it multiple times of course
@@ -377,7 +403,7 @@ class TestRows(unittest.TestCase):
         # filter is non-destructive
         self.assertEqual(iris[0].col, '132')
 
-        self.assertEqual(len(iris.group('species')[0]), 12)
+        self.assertEqual(len(next(iris.group('species'))), 12)
 
         # just because..
         sum = 0
@@ -407,8 +433,33 @@ class TestRows(unittest.TestCase):
                 r.x = x
                 rs.append(r)
             rs = Rows(rs)
-            self.assertEqual(rs.truncate('x', 0.2).col('x'),
+            self.assertEqual(rs.truncate('x', 0.2)['x'],
                              [2, 3, 4, 5, 6, 7])
+
+    def test_rows2(self):
+        rs = Rows([Row(), Row(), Row()])
+        avals = [1, 2, 3]
+        rs['a'] = avals
+
+        self.assertEqual(rs['a'], avals)
+        self.assertEqual(rs[1].a, 2)
+        with self.assertRaises(ValueError):
+            rs['b'] = list(range(2))
+
+        # assign multiple columns in a go.
+        rs['b, c'] = [[10, 20], [30, 40], [50, 60]]
+
+        with self.assertRaises(ValueError):
+            rs['d, e'] = [[10, 20], [40], [50, 60]]
+
+        with self.assertRaises(AttributeError):
+            print(rs['d'])
+        self.assertEqual(rs[0].columns, ['a', 'b', 'c'])
+        del rs['a, c']
+        # I am not sure why this should raise ValueError
+        with self.assertRaises(ValueError):
+            del rs['a']
+        self.assertEqual(rs[0].columns, ['b'])
 
     def test_describe(self):
         import matplotlib.pyplot as plt

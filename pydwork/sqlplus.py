@@ -124,6 +124,15 @@ class Row:
         del self.values[idx]
         super().__delattr__(name)
 
+    def __getitem__(self, name):
+        return getattr(self, name)
+
+    def __setitem__(self, name, value):
+        setattr(self, name, value)
+
+    def __delitem__(self, name):
+        delattr(self, name)
+
     def __str__(self):
         return str(list(zip(self.columns, self.values)))
 
@@ -133,27 +142,58 @@ class Rows(list):
     a shallow wrapper of a list of row instances
     """
 
-    def add(self, colname, xs):
-        if len(self) != len(xs):
-            raise valueerror('length of list not matched')
+    def __getitem__(self, cols):
+        if isinstance(cols, int):
+            return super().__getitem__(cols)
 
-        for r, x in zip(self, xs):
-            setattr(r, colname, x)
-        return self
+        cols = listify(cols)
+        if len(cols) == 1:
+            col = cols[0]
+            return [getattr(r, col) for r in self]
+        else:
+            return [[getattr(r, c) for c in cols] for r in self]
 
-    def col(self, colname):
-        xs = []
-        for r in self:
-            xs.append(getattr(r, colname))
-        return xs
+    def __setitem__(self, cols, vals):
+        if isinstance(cols, int):
+            return super().__setitem__(cols, vals)
 
-    def cols(self, colnames):
-        "returns a list of lists"
-        colnames = listify(colnames)
-        xs = []
-        for r in self:
-            xs.append([getattr(r, col) for col in colnames])
-        return xs
+
+        cols = listify(cols)
+        ncols = len(cols)
+
+        # validity check,
+        if len(self) != len(vals):
+            raise ValueError('Number of values to assign inappropriate')
+        # vals must be rectangular!
+        if ncols > 1:
+            for vs in vals:
+                if len(vs) != ncols:
+                    raise ValueError('Invalid values to assign', vs)
+
+        if ncols == 1:
+            col = cols[0]
+            for r, v in zip(self, vals):
+                setattr(r, col, v)
+        else:
+            for r, vs in zip(self, vals):
+                for c, v in zip(cols, vs):
+                    setattr(r, c, v)
+
+    def __delitem__(self, cols):
+        if isinstance(cols, int):
+            return super().__delitem__(cols)
+
+        cols = listify(cols)
+        ncols = len(cols)
+
+        if ncols == 1:
+            col = cols[0]
+            for r in self:
+                delattr(r, col)
+        else:
+            for r in self:
+                for c in cols:
+                    delattr(r, c)
 
     def order(self, key, reverse=0):
         key = _build_keyfn(key)
@@ -211,16 +251,12 @@ class Rows(list):
         left, right = model.split('~')
         yvar = left.strip()
         xvars = [x.strip() for x in right.split('+')]
-        Y = self.col(yvar)
-        X = sm.add_constant(self.cols(xvars))
+        Y = self[yvar]
+        X = sm.add_constant(self[xvars])
         return sm.OLS(Y, X).fit()
 
     def group(self, key):
-        # it is illogical to return an instance of Rows
-        result = []
-        for rs in _gby(self, key):
-            result.append(rs)
-        return result
+        yield from _gby(self, key)
 
     def show(self, n=30, cols=None, filename=None, overwrite=True):
         if self == []:
