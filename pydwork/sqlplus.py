@@ -194,22 +194,18 @@ class Rows(list):
     def num(self, cols):
         "another simplified filtering, numbers only"
         cols = listify(cols)
-        def testfn(r):
-            return all(isnum(getattr(r, col)) for col in cols)
-        return self.filter(testfn)
+        return self.filter(
+            lambda r: all(isnum(getattr(r, col)) for col in cols))
 
     def text(self, cols):
         "another simplified filtering, texts(string) only"
         cols = listify(cols)
-        def testfn(r):
-            return all(istext(getattr(r, col)) for col in cols)
-        return self.filter(testfn)
+        return self.filter(
+            lambda r: all(istext(getattr(r, col)) for col in cols))
 
     def contains(self, col, vals):
         vals = listify(vals)
-        def testfn(r):
-            return getattr(r, col) in vals
-        return self.filter(testfn)
+        return self.filter(lambda r: getattr(r, col) in vals)
 
     def ols(self, model):
         left, right = model.split('~')
