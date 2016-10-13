@@ -504,12 +504,13 @@ class TestUserDefinedFunctions(unittest.TestCase):
 
 class TestMpairs(unittest.TestCase):
     def test_mpairs(self):
-        xs = (x for x in [2, 4, 7, 9, 10, 11, 21])
-        ys = (y for y in [1, 3, 4, 9, 10, 21, 100])
+        # lists, iterators are OK
+        xs = iter([2, 4, 7, 9, 10, 11, 21])
+        ys = [1, 3, 4, 9, 10, 21, 100]
         result = []
         for a, b in mpairs(xs, ys, lambda x: x):
             result.append(a)
-        self.assertEqual(result, [4,9,10, 21])
+        self.assertEqual(result, [4, 9, 10, 21])
 
 
 class TestOLS(unittest.TestCase):

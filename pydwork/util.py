@@ -68,6 +68,8 @@ def mpairs(seq1, seq2, key1, key2=None):
     """
     key2 = key2 or key1
 
+    seq1, seq2 = iter(seq1), iter(seq2)
+
     s1, s2 = next(seq1), next(seq2)
     k1, k2 = key1(s1), key2(s2)
 
