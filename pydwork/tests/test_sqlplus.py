@@ -462,7 +462,6 @@ class TestRows(unittest.TestCase):
         self.assertEqual(rs[0].columns, ['b'])
 
     def test_describe(self):
-        import matplotlib.pyplot as plt
         with dbopen(':memory:') as c:
             c.save(reel('iris'), name='iris')
             iris = Rows(c.reel('iris'))
