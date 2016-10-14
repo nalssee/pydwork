@@ -439,6 +439,7 @@ class SQLPlus:
         select * from sqlite_master
         where type='table'
         """)
+        # **.lower()
         tables = [row[1].lower() for row in query]
         return sorted(tables)
 
@@ -449,16 +450,11 @@ class SQLPlus:
         Args:
             tables (str or List[str])
         """
-        # you can't use '?' for table name
-        # '?' is for data insertion
         tables = listify(tables)
-        summary_dir = os.path.join(WORKSPACE, 'summary')
         for table in tables:
+            # you can't use '?' for table name
+            # '?' is for data insertion
             self.run('drop table if exists %s' % table)
-            filename = os.path.join(summary_dir, table + '.csv')
-            if os.path.isfile(filename):
-                # remove summary file as well if exists
-                os.remove(filename)
         self.tables = self._list_tables()
 
 
