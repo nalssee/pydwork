@@ -65,7 +65,7 @@ import re
 import sqlite3
 import tempfile
 
-from collections import Counter
+from collections import Counter, OrderedDict
 from contextlib import contextmanager
 from functools import wraps
 from itertools import groupby, islice
@@ -90,49 +90,40 @@ class Row:
     Basically the same as sqlite3.Row
     it's just that using sqlite3.Row is a bit clunkier.
     r['col'] = 34
-    I prefer r.col = 34
+    I also want to write as r.col = 34
 
     And it's better to keep the order of columns
     """
-
     def __init__(self):
-        super().__setattr__('_columns', [])
-        super().__setattr__('_values', [])
+        super().__setattr__('_ordered_dict', OrderedDict())
 
     @property
     def columns(self):
         "List[str]: column names"
-        return self._columns
+        return list(self._ordered_dict.keys())
 
     @property
     def values(self):
         "List[type]"
-        return self._values
+        return list(self._ordered_dict.values())
+
+    def __getattr__(self, name):
+        return self._ordered_dict[name]
 
     def __setattr__(self, name, value):
-        if name not in self.__dict__:
-            self.columns.append(name)
-            self.values.append(value)
-        else:
-            # Updating the attribute value of a row
-            idx = self.columns.index(name)
-            self.values[idx] = value
-        super().__setattr__(name, value)
+        self._ordered_dict[name] = value
 
     def __delattr__(self, name):
-        idx = self.columns.index(name)
-        del self.columns[idx]
-        del self.values[idx]
-        super().__delattr__(name)
+        del self._ordered_dict[name]
 
     def __getitem__(self, name):
-        return getattr(self, name)
+        return self._ordered_dict[name]
 
     def __setitem__(self, name, value):
-        setattr(self, name, value)
+        self._ordered_dict[name] = value
 
     def __delitem__(self, name):
-        delattr(self, name)
+        del self._ordered_dict[name]
 
     def __str__(self):
         return str(list(zip(self.columns, self.values)))
@@ -160,7 +151,6 @@ class Rows(list):
     def __setitem__(self, cols, vals):
         if isinstance(cols, int):
             return super().__setitem__(cols, vals)
-
 
         cols = listify(cols)
         ncols = len(cols)
@@ -456,20 +446,6 @@ class SQLPlus:
         """)
         tables = [row[1].lower() for row in query]
         return sorted(tables)
-
-    def summarize(self, n=1000, overwrite=True):
-        """
-        Args:
-            n (int)
-            overwrite (bool)
-        """
-        summary_dir = os.path.join(WORKSPACE, 'summary')
-        if not os.path.exists(summary_dir):
-            os.makedirs(summary_dir)
-
-        for table in self.tables:
-            filename = os.path.join(summary_dir, table + '.csv')
-            self.show(table, n=n, filename=filename, overwrite=overwrite)
 
     def drop(self, tables):
         """
