@@ -138,7 +138,7 @@ class Rows(list):
     # Not the same situation as 'Row' class
 
     def __getitem__(self, cols):
-        if isinstance(cols, int):
+        if isinstance(cols, int) or isinstance(cols, slice):
             return super().__getitem__(cols)
 
         cols = listify(cols)
@@ -149,7 +149,7 @@ class Rows(list):
             return [[r[c] for c in cols] for r in self]
 
     def __setitem__(self, cols, vals):
-        if isinstance(cols, int):
+        if isinstance(cols, int) or isinstance(cols, slice):
             return super().__setitem__(cols, vals)
 
         cols = listify(cols)
@@ -174,7 +174,7 @@ class Rows(list):
                     r[c] = v
 
     def __delitem__(self, cols):
-        if isinstance(cols, int):
+        if isinstance(cols, int) or isinstance(cols, slice):
             return super().__delitem__(cols)
 
         cols = listify(cols)
@@ -183,11 +183,11 @@ class Rows(list):
         if ncols == 1:
             col = cols[0]
             for r in self:
-                delattr(r, col)
+                del r[col]
         else:
             for r in self:
                 for c in cols:
-                    delattr(r, c)
+                    del r[c]
 
     def order(self, key, reverse=0):
         key = _build_keyfn(key)
@@ -263,8 +263,8 @@ class Rows(list):
     # not so efficient in many cases
     # Use this when you need to see what's inside
     # for example, when you want to see the distribution of data.
-    def df(self, cols=None):
-        return todf(self, cols)
+    def df(self, cols=None, safe=True):
+        return todf(self, cols, safe=safe)
 
 
 class SQLPlus:
@@ -322,7 +322,7 @@ class SQLPlus:
             yield from _build_rows(qrows, columns)
 
     def save(self, seq, name=None, args=(), n=None,
-             overwrite=False, safe=False):
+             overwrite=False, safe=True):
         """create a table from an iterator.
 
         Note:<%=  %>
@@ -374,13 +374,8 @@ class SQLPlus:
             conn = sqlite3.connect(f.name)
             cursor = conn.cursor()
 
-            def vals(seq):
-                for r in seq:
-                    #
-                    assert r.columns == colnames, str(r)
-                    yield r.values
-
-            values1 = vals(seq) if safe else (r.values for r in seq)
+            values1 = _safe_values(seq, colnames) if safe else \
+                     (r.values for r in seq)
             _sqlite3_save(cursor, values1, name, colnames)
             _sqlite3_save(self._cursor, _sqlite3_reel(cursor, name, colnames),
                           name, colnames)
@@ -484,13 +479,22 @@ def dbopen(dbfile):
         splus.conn.close()
 
 
-def todf(rows, cols=None):
+def todf(rows, cols=None, safe=True):
     if cols:
         cols = listify(cols)
         return pd.DataFrame([[r[col] for col in cols] for r in rows],
                             columns=cols)
     else:
-        return pd.DataFrame([r.values for r in rows], columns=rows[0].columns)
+        cols = rows[0].columns
+        seq = _safe_values(rows, cols) if safe else \
+              (r.values for r in rows)
+        return pd.DataFrame(list(seq), columns=cols)
+
+
+def _safe_values(rows, cols):
+    for r in rows:
+        assert r.columns == cols, str(r)
+        yield r.values
 
 
 def fromdf(df):
@@ -599,9 +603,9 @@ def _gby(seq, key):
         List[Row]
     """
     key = _build_keyfn(key)
-    for _, rows in groupby(seq, key):
+    for _, rs in groupby(seq, key):
         # to list or not to list
-        yield list(rows)
+        yield Rows(rs)
 
 
 def _build_keyfn(key):
@@ -791,7 +795,8 @@ def _show(rows, n=30, cols=None, filename=None, overwrite=True):
     row0, rows = peek_first(rows)
 
     colnames = row0.columns
-    seq_rvals = (r.values for r in rows)
+    # Always use safer way
+    seq_rvals = _safe_values(rows, colnames)
 
     # write to a file
     if filename:

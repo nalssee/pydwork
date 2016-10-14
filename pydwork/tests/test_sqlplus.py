@@ -181,12 +181,11 @@ class Testdbopen(unittest.TestCase):
                         yield r
 
             with self.assertRaises(Exception):
-                conn.save(unsafe, safe=True)
+                conn.save(unsafe)
 
-            # if you don't pass safe as True,
             # 'save' just checks the number of columns
             # so the following doesn't raise any exceptions
-            conn.save(unsafe)
+            conn.save(unsafe, safe=False)
 
     def test_todf(self):
         with dbopen(':memory:') as conn:
@@ -461,13 +460,21 @@ class TestRows(unittest.TestCase):
             del rs['a']
         self.assertEqual(rs[0].columns, ['b'])
 
+        # you can pass slice
+        del rs[2:]
+        r = Row()
+        r.c = 1
+        rs.append(r)
+        with self.assertRaises(Exception):
+            rs.show()
+
     def test_describe(self):
         with dbopen(':memory:') as c:
             c.save(reel('iris'), name='iris')
             iris = Rows(c.reel('iris'))
             self.assertTrue('petal_width' in iris[0].columns)
             for g in iris.group('species'):
-                df = Rows(g).df('sepal_length, sepal_width')
+                df = g.df('sepal_length, sepal_width')
                 summary = df.describe()
                 self.assertFalse('petal_width' in dir(summary))
                 # you can plot it
@@ -525,11 +532,10 @@ class TestOLS(unittest.TestCase):
         with dbopen(':memory:') as c:
             c.save(reel('iris'), name='iris')
             for rs in c.reel('iris', group='species'):
-                result =Rows(rs).ols('sepal_length ~ petal_length + petal_width')
+                result =rs.ols('sepal_length ~ petal_length + petal_width')
                 # maybe you should test more here
                 self.assertEqual(result.nobs, 50)
                 self.assertEqual(len(result.params), 3)
 
-from pydwork.util import listify
 
 unittest.main()
