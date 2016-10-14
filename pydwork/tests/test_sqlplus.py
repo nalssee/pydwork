@@ -181,7 +181,7 @@ class Testdbopen(unittest.TestCase):
                         yield r
 
             with self.assertRaises(Exception):
-                conn.save(unsafe)
+                conn.save(unsafe, safe=True)
 
             # 'save' just checks the number of columns
             # so the following doesn't raise any exceptions
@@ -326,6 +326,31 @@ class TestMisc(unittest.TestCase):
                       """))
             r1.sepal_length10 = r1.sepal_length * 10
             self.assertEqual(r1.values, ['setosa', 5.1, 51.0])
+
+    def test_rows_alike(self):
+        @rows_alike
+        def unsafe_seq(x, y, z):
+            rs = [Row(), Row(), Row()]
+            rs[0].a = x
+            rs[1].a = y
+            rs[2].b = z
+            yield from rs
+
+        with self.assertRaises(AssertionError):
+            for r in unsafe_seq(1, 20, 3):
+                pass
+
+        # no safety check
+        def unsafe_seq1(x, y, z):
+            rs = [Row(), Row(), Row()]
+            rs[0].a = x
+            rs[1].a = y
+            rs[2].b = z
+            yield from rs
+
+        # no assertion error
+        for r in unsafe_seq1(1, 20, 3):
+            pass
 
     def test_utilfns(self):
         self.assertTrue(isnum(3))

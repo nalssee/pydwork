@@ -79,7 +79,7 @@ from .util import isnum, istext, yyyymm, yyyymmdd, \
 
 
 __all__ = ['dbopen', 'Row', 'Rows', 'reel', 'todf', 'fromdf',
-           'set_workspace', 'get_workspace']
+           'set_workspace', 'get_workspace', 'rows_alike']
 
 
 WORKSPACE = ''
@@ -94,6 +94,8 @@ class Row:
 
     And it's better to keep the order of columns
     """
+    # Python 3.6 is expected to used ordered dict for keyword args
+    # If so, we may consider passing kwargs
     def __init__(self):
         super().__setattr__('_ordered_dict', OrderedDict())
 
@@ -126,7 +128,9 @@ class Row:
         del self._ordered_dict[name]
 
     def __str__(self):
-        return str(list(zip(self.columns, self.values)))
+        content = ' | '.join(c + ': ' + str(v) for c, v in \
+                             zip(self.columns, self.values))
+        return '[' + content + ']'
 
 
 class Rows(list):
@@ -158,6 +162,7 @@ class Rows(list):
         # validity check,
         if len(self) != len(vals):
             raise ValueError('Number of values to assign inappropriate')
+
         # vals must be rectangular!
         if ncols > 1:
             for vs in vals:
@@ -263,7 +268,7 @@ class Rows(list):
     # not so efficient in many cases
     # Use this when you need to see what's inside
     # for example, when you want to see the distribution of data.
-    def df(self, cols=None, safe=True):
+    def df(self, cols=None, safe=False):
         return todf(self, cols, safe=safe)
 
 
@@ -322,7 +327,7 @@ class SQLPlus:
             yield from _build_rows(qrows, columns)
 
     def save(self, seq, name=None, args=(), n=None,
-             overwrite=False, safe=True):
+             overwrite=False, safe=False):
         """create a table from an iterator.
 
         Note:<%=  %>
@@ -475,7 +480,7 @@ def dbopen(dbfile):
         splus.conn.close()
 
 
-def todf(rows, cols=None, safe=True):
+def todf(rows, cols=None, safe=False):
     if cols:
         cols = listify(cols)
         return pd.DataFrame([[r[col] for col in cols] for r in rows],
@@ -485,12 +490,6 @@ def todf(rows, cols=None, safe=True):
         seq = _safe_values(rows, cols) if safe else \
               (r.values for r in rows)
         return pd.DataFrame(list(seq), columns=cols)
-
-
-def _safe_values(rows, cols):
-    for r in rows:
-        assert r.columns == cols, str(r)
-        yield r.values
 
 
 def fromdf(df):
@@ -571,6 +570,25 @@ def get_workspace():
         str
     """
     return WORKSPACE
+
+
+# ensure a row generator to yield homogeneous rows
+def rows_alike(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        r0, rs = peek_first(func(*args, **kwargs))
+        cols = r0.columns
+        for r in rs:
+            assert r.columns == cols, str(r)
+            yield r
+    return wrapper
+
+
+# I don't like the name
+def _safe_values(rows, cols):
+    for r in rows:
+        assert r.columns == cols, str(r)
+        yield r.values
 
 
 def _pick(cols, seq):
