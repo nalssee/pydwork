@@ -411,9 +411,12 @@ class SQLPlus:
         nrows = n
 
         if isinstance(query, str):
-            seq_rvals = self._cursor.execute(_select_statement(query), args)
-            colnames = [c[0] for c in seq_rvals.description]
-            rows = _build_rows(seq_rvals, colnames)
+            if query.endswith('.csv'):
+                rows = _csv_reel(query)
+            else:
+                seq_rvals = self._cursor.execute(_select_statement(query), args)
+                colnames = [c[0] for c in seq_rvals.description]
+                rows = _build_rows(seq_rvals, colnames)
 
         # then query is an iterator of rows, or a list of rows
         # of course it can be just a generator function of rows

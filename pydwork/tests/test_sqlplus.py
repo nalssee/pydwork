@@ -42,6 +42,8 @@ class Testdbopen(unittest.TestCase):
 
     def test_gby(self):
        with dbopen(':memory:') as c:
+            # if the string ends with '.csv'
+            c.show('iris.csv', 5)
 
             def first_char(r):
                 r.sp1 = r.species[:1]
