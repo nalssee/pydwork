@@ -40,49 +40,32 @@ def count(conn, table):
 
 class Testdbopen(unittest.TestCase):
 
-    def test_loading(self):
-        with dbopen(':memory:') as conn:
-            with self.assertRaises(Exception):
-                # column number mismatch, notice pw is missing
-                next(reel('iris.csv', header="no sl sw pl species"))
-            # when it's loaded, it's just an iterator of objects
-            # with string only properties. No type guessing is attempted.
-            conn.save(reel('iris.csv', header="no sl sw pl pw species"),
-                      name="iris")
-
     def test_gby(self):
-        """Just a dumb presentation to show how 'gby' works.
-        """
-        with dbopen(':memory:') as conn:
-            def first_char():
-                "make a new column with the first charactor of species."
-                for r in reel('iris.csv', header="no sl sw pl pw species"):
-                    # Since r is just an object you can simply add new columns
-                    # or delete columns as you'd do with objects.
+       with dbopen(':memory:') as c:
 
-                    # Each property is either a string, integer or real.
-                    r.sp1 = r.species[:1]
-                    yield r
-           # function name just becomes the table name
-            conn.save(first_char)
+            def first_char(r):
+                r.sp1 = r.species[:1]
+                return r
+
+            c.save('iris', fn=first_char, name='first_char')
 
             def top20_sl():
-                for rs in conn.reel(
-                    "select * from first_char order by sp1, sl desc",
+                for rs in c.reel(
+                    "select * from first_char order by sp1, sepal_length desc",
                     group='sp1'):
                     yield from rs[:20]
 
-            conn.save(top20_sl)
+            c.save(top20_sl)
 
             print("\nYou should see the same two tables")
             print("==========")
-            conn.show("select no, sl from top20_sl", n=3)
+            c.show("select col, sepal_length from top20_sl", n=3)
             print("----------")
-            conn.show(top20_sl, n=3, cols='no, sl')
+            c.show(top20_sl, n=3, cols='col, sepal_length')
             print("==========")
 
             r0, r1 = list(
-                conn.reel("""select avg(sl) as slavg
+                c.reel("""select avg(sepal_length) as slavg
                 from top20_sl group by sp1
                 """))
             self.assertEqual(round(r0.slavg, 3), 5.335)
@@ -90,40 +73,41 @@ class Testdbopen(unittest.TestCase):
 
             # gby with empty list group
             # All of the rows in a table is grouped.
-            self.assertEqual(len(Rows(conn.reel('first_char'))), 150)
+            self.assertEqual(len(list(c.reel('first_char'))), 150)
             # list_tables, in alphabetical order
-            self.assertEqual(conn.tables, ['first_char', 'top20_sl'])
+            self.assertEqual(c.tables, ['first_char', 'top20_sl'])
+
+            # get the whole rows
+            for rs in c.reel('top20_sl', group=lambda r: 1):
+                self.assertEqual(len(rs), 40)
 
     def test_run_over_run(self):
         with dbopen(':memory:') as conn:
-            conn.save(reel("iris.csv",
-                           header="no,sl,sw,pl,pw,sp"), name="iris1")
-            conn.save(reel("iris.csv",
-                           header="no,sl,sw,pl,pw,sp"), name="iris2")
-            a = conn.reel("select * from iris1 where sp='setosa'")
-            b = conn.reel("select * from iris2 where sp='versicolor'")
-            self.assertEqual(next(a).sp, 'setosa')
-            self.assertEqual(next(b).sp, 'versicolor')
+            conn.save("iris", name="iris1")
+            conn.save("iris", name="iris2")
+            a = conn.reel("select * from iris1 where species='setosa'")
+            b = conn.reel("select * from iris2 where species='versicolor'")
+            self.assertEqual(next(a).species, 'setosa')
+            self.assertEqual(next(b).species, 'versicolor')
             # now you iterate over 'a' again and you may expect 'setosa'
             # to show up
             # but you'll see 'versicolor'
             # it doesn't matter you iterate over a or b
             # you simply iterate over the most recent query.
-            self.assertEqual(next(a).sp, 'versicolor')
-            self.assertEqual(next(b).sp, 'versicolor')
+            self.assertEqual(next(a).species, 'versicolor')
+            self.assertEqual(next(b).species, 'versicolor')
 
     def test_del(self):
         """tests column deletion
         """
         with dbopen(':memory:') as conn:
-            conn.save(reel('co2.csv'), name='co2')
+            conn.save('co2')
 
             def co2_less(*col):
                 """remove columns"""
-                co2 = conn.reel("select * from co2")
-                for r in co2:
+                for r in conn.reel('co2'):
                     for c in col:
-                        delattr(r, c)
+                        del r[c]
                     yield r
             print('\nco2 table')
             print('=============================================')
@@ -137,16 +121,20 @@ class Testdbopen(unittest.TestCase):
             conn.save(co2_less, args=('plant', 'conc'))
 
     def test_saving_csv(self):
-        with dbopen(':memory:') as conn:
-            iris = reel('iris.csv', header="no sl sw pl pw sp", group='sp')
+        with dbopen(':memory:') as c:
+            c.save('iris')
+            iris = c.reel('iris', group='species')
 
             def first2group():
                 for rs in islice(iris, 2):
                     yield from rs
-            conn.show(first2group, filename='sample.csv', n=None)
+
+            c.show(first2group, filename='sample.csv', n=None)
+
             # each group contains 50 rows, hence 100
-            self.assertEqual(len(list(reel('sample.csv'))), 100)
-            os.remove(os.path.join(get_workspace(), 'sample.csv'))
+            c.save('sample')
+            self.assertEqual(len(list(c.reel('sample'))), 100)
+            os.remove(os.path.join('data', 'sample.csv'))
 
     def test_column_case(self):
         with dbopen(':memory:') as conn:
@@ -159,66 +147,32 @@ class Testdbopen(unittest.TestCase):
             self.assertEqual(rows[0].B, 20.2)
 
     def test_order_of_columns(self):
-        with dbopen(':memory:') as conn:
-            row = next(reel('iris.csv'))
-            self.assertEqual(row.columns,
-                             ['col', 'sepal_length', 'sepal_width',
-                              'petal_length', 'petal_width', 'species'])
-            conn.save(reel('iris.csv'), 'iris')
-            row = next(conn.reel('iris'))
+        with dbopen(':memory:') as c:
+            c.save('iris')
+            row = next(c.reel('iris'))
             self.assertEqual(row.columns,
                              ['col', 'sepal_length', 'sepal_width',
                               'petal_length', 'petal_width', 'species'])
 
     def test_unsafe_save(self):
-        with dbopen(':memory:') as conn:
+        with dbopen(':memory:') as c:
+            c.save('iris')
             def unsafe():
-                for rs in reel('iris.csv', group='species'):
+                for rs in c.reel('iris', group='species'):
                     rs[0].a = 'a'
                     yield rs[0]
                     for r in rs[1:]:
                         r.b = 'b'
                         yield r
-
+            # when rows are not alike, you can't save it
             with self.assertRaises(Exception):
-                conn.save(unsafe, safe=True)
-
-            # 'save' just checks the number of columns
-            # so the following doesn't raise any exceptions
-            conn.save(unsafe, safe=False)
+                conn.save(unsafe)
 
     def test_todf(self):
         with dbopen(':memory:') as conn:
-            conn.save(reel('iris.csv'), name='iris')
+            conn.save('iris')
             for rs in conn.reel('iris', group='species'):
-                self.assertEqual(todf(rs).shape, (50, 6))
-
-    def test_fromdf(self):
-        "Yield pandas data frames and they are flattened again"
-        with dbopen(':memory:') as conn:
-            conn.save(reel('iris.csv'), name='iris')
-
-            # do not use adjoin or disjoin. it's crazy
-            def length_plus_width():
-                for rs in conn.reel('iris', group='species'):
-                    df = todf(rs)
-                    df['sepal'] = df.sepal_length + df.sepal_width
-                    df['petal'] = df.petal_length + df.petal_width
-                    del df['sepal_length']
-                    del df['sepal_width']
-                    del df['petal_length']
-                    del df['petal_width']
-                    yield from fromdf(df)
-
-            conn.save(length_plus_width)
-            iris = list(conn.reel('iris'))
-            for r1, r2 in zip(iris, conn.reel('length_plus_width')):
-                a = round(r1.sepal_length + r1.sepal_width, 2)
-                b = round(r2.sepal, 2)
-                self.assertEqual(a, b)
-                c = round(r1.petal_length + r1.petal_width, 2)
-                d = round(r2.petal, 2)
-                self.assertEqual(c, d)
+                self.assertEqual(rs.df().shape, (50, 6))
 
 
 class TestRow(unittest.TestCase):
@@ -280,37 +234,46 @@ class TestRow(unittest.TestCase):
 class TestMisc(unittest.TestCase):
     def test_prepend_header(self):
         # since prepend_header is a util you need to pass the full path
-        iris2 = os.path.join(get_workspace(), 'iris2.csv')
+        iris2 = os.path.join('data', 'iris2.csv')
         with dbopen(':memory:') as c:
-            c.write(reel('iris'), 'iris2.csv')
+            c.save('iris')
+            c.write(c.reel('iris'), 'iris2.csv')
             prepend_header(iris2, 'cnt, sl, sw, pl, pw, sp', drop=20)
-            first = next(reel('iris2.csv'))
-            self.assertEqual(first.cnt, '20')
+            c.drop('iris2')
+            c.save('iris2')
+            first = next(c.reel('iris2'))
+            self.assertEqual(first.cnt, 20)
 
-            c.write(reel('iris'), 'iris2.csv')
-            prepend_header(iris2, 'cnt, sl, sw, pl, pw, sp')
-            first = next(reel('iris2.csv'))
-            self.assertEqual(first.cnt, '1')
+            c.write(c.reel('iris'), 'iris2.csv')
+            prepend_header(iris2, 'cnt, sl, sw, pl, pw, sp', drop=1)
+            c.drop('iris2')
+            c.save('iris2')
+            first = next(c.reel('iris2'))
+            self.assertEqual(first.cnt, 1)
 
-            c.write(reel('iris'), 'iris2.csv')
+            c.write(c.reel('iris'), 'iris2.csv')
             prepend_header(iris2, 'cnt, sl, sw, pl, pw, sp', drop=0)
-            first = next(reel('iris2.csv'))
+            c.drop('iris2')
+            c.save('iris2')
+            first = next(c.reel('iris2'))
             self.assertEqual(first.cnt, 'col')
             self.assertEqual(first.sl, 'sepal_length')
 
-            c.write(reel('iris'), 'iris2.csv')
+            c.write(c.reel('iris'), 'iris2.csv')
             # simply drop the first 5 lines, and do nothing else
             prepend_header(iris2, header=None, drop=5)
             # don't drop any and just write the header
             prepend_header(iris2, header='cnt, sl, sw, pl, pw, sp', drop=0)
-            first = next(reel('iris2.csv'))
-            self.assertEqual(first.cnt, '5')
+            c.drop('iris2')
+            c.save('iris2')
+            first = next(c.reel('iris2'))
+            self.assertEqual(first.cnt, 5)
 
             os.remove(iris2)
 
-    def test_duplicates(self):
+    def test_dup_columns(self):
         with dbopen(':memory:') as c:
-            c.save(reel('iris'), name='iris')
+            c.save('iris')
 
             with self.assertRaises(Exception):
                 # there can't be duplicates
@@ -326,31 +289,6 @@ class TestMisc(unittest.TestCase):
                       """))
             r1.sepal_length10 = r1.sepal_length * 10
             self.assertEqual(r1.values, ['setosa', 5.1, 51.0])
-
-    def test_rows_alike(self):
-        @rows_alike
-        def unsafe_seq(x, y, z):
-            rs = [Row(), Row(), Row()]
-            rs[0].a = x
-            rs[1].a = y
-            rs[2].b = z
-            yield from rs
-
-        with self.assertRaises(AssertionError):
-            for r in unsafe_seq(1, 20, 3):
-                pass
-
-        # no safety check
-        def unsafe_seq1(x, y, z):
-            rs = [Row(), Row(), Row()]
-            rs[0].a = x
-            rs[1].a = y
-            rs[2].b = z
-            yield from rs
-
-        # no assertion error
-        for r in unsafe_seq1(1, 20, 3):
-            pass
 
     def test_utilfns(self):
         self.assertTrue(isnum(3))
@@ -400,6 +338,7 @@ class TestMisc(unittest.TestCase):
                                    parallel=False)),
                          [0, 1, 2, 3])
 
+        # first arg for each func can be passed
         def func3(a, x):
             return a + x
 
@@ -413,31 +352,61 @@ class TestMisc(unittest.TestCase):
 
 
 class TestRows(unittest.TestCase):
-    def test_rows(self):
-        # You can safely 'Rows' it multiple times of course
-        iris = Rows(Rows(Rows(reel('iris'))))
-        # order is destructive
-        iris.order('sepal_length, sepal_width', reverse=True)
-        self.assertEqual(iris[0].col, '132')
-        self.assertEqual(iris[1].col, '118')
-        self.assertEqual(iris[2].col, '136')
-
-        col1 = iris.filter(lambda r: r.species == 'versicolor')[0].col
-        self.assertEqual(col1, '51')
-        # filter is non-destructive
-        self.assertEqual(iris[0].col, '132')
-
-        self.assertEqual(len(next(iris.group('species'))), 12)
-
-        # just because..
-        sum = 0
-        for rs in iris.group('species'):
-            sum += len(rs)
-        self.assertEqual(sum, 150)
-
+    def test_rows1(self):
         with dbopen(':memory:') as c:
-            c.save(reel('iris'), name='iris')
-            iris = Rows(c.reel('iris'))
+            c.save('iris')
+            iris = c.rows('iris')
+            self.assertTrue(isinstance(iris[0], Row))
+            self.assertTrue(hasattr(iris[2:3], 'order'))
+            # hasattr doesn't work correctly for Row
+            self.assertFalse('order' in dir(iris[2]))
+            del iris[3:]
+            self.assertTrue(hasattr(iris, 'order'))
+            self.assertEqual(iris['sepal_length, sepal_width, species'][2][2],
+                             'setosa')
+            with self.assertRaises(Exception):
+                iris['one'] = [1]
+            iris['one, two'] = [[1, 2] for _ in range(3)]
+            self.assertEqual(iris['one, two'], [[1, 2] for _ in range(3)])
+            del iris['one, col']
+            self.assertTrue(hasattr(iris, 'order'))
+            self.assertEqual(len(iris[0].columns), 6)
+
+            # append heterogeneuos row
+            iris.append(Row())
+            with self.assertRaises(Exception):
+                iris.df()
+            iris[:3].df()
+
+            with self.assertRaises(Exception):
+                c.save(iris, 'iris_sample')
+            c.save(iris[:3], 'iris_sample')
+
+    def test_rows2(self):
+        with dbopen(':memory:') as c:
+            c.save('iris')
+            iris = c.rows('iris')
+            # order is destructive
+            iris.order('sepal_length, sepal_width', reverse=True)
+            self.assertEqual(iris[0].col, 132)
+            self.assertEqual(iris[1].col, 118)
+            self.assertEqual(iris[2].col, 136)
+
+            col1 = iris.equals('species', 'versicolor')[0].col
+
+            self.assertEqual(col1, 51)
+            # filter is non-destructive
+            self.assertEqual(iris[0].col, 132)
+
+            self.assertEqual(len(next(iris.group('species'))), 12)
+
+            # just because..
+            sum = 0
+            for rs in iris.group('species'):
+                sum += len(rs)
+            self.assertEqual(sum, 150)
+
+            # iris = Rows(c.reel('iris'))
 
             self.assertEqual(len(iris.ge('sepal_length', 7.0)), 13)
             self.assertEqual(len(iris.le('sepal_length', 7.0)), 138)
@@ -456,47 +425,15 @@ class TestRows(unittest.TestCase):
                 r = Row()
                 r.x = x
                 rs.append(r)
-            rs = Rows(rs)
+            c.save(rs, 'temp')
+            rs = c.rows('temp')
             self.assertEqual(rs.truncate('x', 0.2)['x'],
                              [2, 3, 4, 5, 6, 7])
 
-    def test_rows2(self):
-        rs = Rows([Row(), Row(), Row()])
-        avals = [1, 2, 3]
-        rs['a'] = avals
-
-        self.assertEqual(rs['a'], avals)
-        self.assertEqual(rs[1].a, 2)
-        with self.assertRaises(Exception):
-            rs['b'] = list(range(2))
-
-        # assign multiple columns in a go.
-        rs['b, c'] = [[10, 20], [30, 40], [50, 60]]
-
-        with self.assertRaises(Exception):
-            rs['d, e'] = [[10, 20], [40], [50, 60]]
-
-        with self.assertRaises(Exception):
-            print(rs['d'])
-        self.assertEqual(rs[0].columns, ['a', 'b', 'c'])
-        del rs['a, c']
-        # I am not sure why this should raise ValueError
-        with self.assertRaises(Exception):
-            del rs['a']
-        self.assertEqual(rs[0].columns, ['b'])
-
-        # you can pass slice
-        del rs[2:]
-        r = Row()
-        r.c = 1
-        rs.append(r)
-        with self.assertRaises(Exception):
-            rs.show()
-
     def test_describe(self):
         with dbopen(':memory:') as c:
-            c.save(reel('iris'), name='iris')
-            iris = Rows(c.reel('iris'))
+            c.save('iris')
+            iris = c.rows('iris')
             self.assertTrue('petal_width' in iris[0].columns)
             for g in iris.group('species'):
                 df = g.df('sepal_length, sepal_width')
@@ -512,7 +449,7 @@ class TestUserDefinedFunctions(unittest.TestCase):
         # isnum, istext, yyyymm
         with dbopen(':memory:') as c:
             # fama french 5 industry portfolios
-            c.save(reel('indport'), name='indport')
+            c.save('indport')
             c.run(
                 """
                 create table if not exists indport1 as
@@ -525,9 +462,9 @@ class TestUserDefinedFunctions(unittest.TestCase):
                 from indport
                 """)
 
-            na = len(Rows(c.reel("select * from indport1 where isnum(sign_cnsmr)")))
-            nb = len(Rows(c.reel("select * from indport1 where istext(sign_cnsmr)")))
-            nc = len(Rows(c.reel("select * from indport1")))
+            na = len(c.rows("select * from indport1 where isnum(sign_cnsmr)"))
+            nb = len(c.rows("select * from indport1 where istext(sign_cnsmr)"))
+            nc = len(c.rows("select * from indport1"))
             self.assertEqual(na + nb, nc)
 
             r = next(c.reel(
@@ -555,7 +492,7 @@ class TestMpairs(unittest.TestCase):
 class TestOLS(unittest.TestCase):
     def test_ols(self):
         with dbopen(':memory:') as c:
-            c.save(reel('iris'), name='iris')
+            c.save('iris')
             for rs in c.reel('iris', group='species'):
                 result =rs.ols('sepal_length ~ petal_length + petal_width')
                 # maybe you should test more here

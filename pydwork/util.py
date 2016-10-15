@@ -27,7 +27,7 @@ def nchunks(xs, n):
             start += chunksize
 
 
-def prepend_header(filename, header=None, drop=1):
+def prepend_header(filename, header=None, drop=0):
     """Drop n lines and prepend header
 
     Args:

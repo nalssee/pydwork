@@ -78,8 +78,7 @@ from .util import isnum, istext, yyyymm, yyyymmdd, \
                   listify, camel2snake, peek_first
 
 
-__all__ = ['dbopen', 'Row', 'Rows', 'reel', 'todf', 'fromdf',
-           'set_workspace', 'get_workspace', 'rows_alike']
+__all__ = ['dbopen', 'Row', 'set_workspace']
 
 
 WORKSPACE = ''
@@ -142,8 +141,11 @@ class Rows(list):
     # Not the same situation as 'Row' class
 
     def __getitem__(self, cols):
-        if isinstance(cols, int) or isinstance(cols, slice):
+        if isinstance(cols, int):
             return super().__getitem__(cols)
+        elif isinstance(cols, slice):
+            # keep it as Rows
+            return Rows(super().__getitem__(cols))
 
         cols = listify(cols)
         if len(cols) == 1:
@@ -240,6 +242,9 @@ class Rows(list):
         cols = listify(cols)
         return self.filter(lambda r: all(istext(r[col]) for col in cols))
 
+    def equals(self, col, val):
+        return self.filter(lambda r: r[col] == val)
+
     def contains(self, col, vals):
         vals = listify(vals)
         return self.filter(lambda r: r[col] in vals)
@@ -255,21 +260,27 @@ class Rows(list):
     def group(self, key):
         yield from _gby(self, key)
 
-    def show(self, n=30, cols=None, filename=None, overwrite=True):
+    def show(self, n=30, cols=None, filename=None):
         if self == []:
             print(self)
         else:
-            _show(self, n=n, cols=cols, filename=filename, overwrite=overwrite)
+            _show(self, n=n, cols=cols, filename=filename)
 
     # Simpler version of show (when you write it to a file)
     def write(self, filename):
-        _show(self, n=None, filename=filename, overwrite=True)
+        _show(self, n=None, filename=filename)
 
-    # not so efficient in many cases
     # Use this when you need to see what's inside
     # for example, when you want to see the distribution of data.
-    def df(self, cols=None, safe=False):
-        return todf(self, cols, safe=safe)
+    def df(self, cols=None):
+        if cols:
+            cols = listify(cols)
+            return pd.DataFrame([[r[col] for col in cols] for r in self],
+                                columns=cols)
+        else:
+            cols = self[0].columns
+            seq = _safe_values(self, cols)
+            return pd.DataFrame(list(seq), columns=cols)
 
 
 class SQLPlus:
@@ -326,8 +337,10 @@ class SQLPlus:
         else:
             yield from _build_rows(qrows, columns)
 
-    def save(self, seq, name=None, args=(), n=None,
-             overwrite=False, safe=False):
+    def rows(self, query, args=()):
+        return Rows(self.reel(query, args))
+
+    def save(self, seq, name=None, args=(), fn=None) :
         """create a table from an iterator.
 
         Note:<%=  %>
@@ -335,33 +348,26 @@ class SQLPlus:
             the function name is going to be the table name.
 
         Args:
-            seq (iter or GF[* -> Row])
+            seq (str or iter or GF[* -> Row])
             name (str): table name in DB
             args (List[type]): args for seq (GF)
-            n (int): number of rows to save
-            safe (Bool): checks if all rows have the same column names
+            fn (FN[Row -> Row])
         """
-        # single letter variable is hard to find
-        nrows = n
-
+        if isinstance(seq, str):
+            name = name or seq.split('.')[0].strip()
+            seq = _csv_reel(seq)
         # if 'seq' is a generator function, it is executed to make an iterator
-        if hasattr(seq, '__call__'):
+        elif hasattr(seq, '__call__'):
             name = name or seq.__name__
             seq = seq(*args)
 
-        if name is None:
-            raise ValueError('table name required')
-
-        if overwrite:
-            self.run('drop table if exists %s' % name)
+        if name is None: raise ValueError('table name required')
 
         # table names are case insensitive
-        # I want to be careful here since it is not expensive at all
-        if name.lower() in [x.lower() for x in self.tables]:
-            return
+        if name.lower() in self.tables: return
 
-        if nrows:
-            seq = islice(seq, nrows)
+        if fn:
+            seq = (fn(r) for r in seq)
 
         row0, seq = peek_first(seq)
         colnames = row0.columns
@@ -379,8 +385,7 @@ class SQLPlus:
             conn = sqlite3.connect(f.name)
             cursor = conn.cursor()
 
-            values1 = _safe_values(seq, colnames) if safe else \
-                     (r.values for r in seq)
+            values1 = _safe_values(seq, colnames)
             _sqlite3_save(cursor, values1, name, colnames)
             _sqlite3_save(self._cursor, _sqlite3_reel(cursor, name, colnames),
                           name, colnames)
@@ -390,8 +395,7 @@ class SQLPlus:
         self.tables = self._list_tables()
 
     # Be careful so that you don't overwrite the file
-    def show(self, query, args=(), n=30, cols=None,
-             filename=None, overwrite=True):
+    def show(self, query, args=(), n=30, cols=None, filename=None):
         """Printing to a screen or saving to a file
 
         Args:
@@ -400,7 +404,6 @@ class SQLPlus:
             n (int): maximum number of lines to show
             cols (str or List[str]): columns to show
             filename (str): filename to save
-            overwrite (bool): if true overwrite a file
         """
         # so that you can easily maintain code
         # Searching nrows is easier than searching n in editors
@@ -418,7 +421,7 @@ class SQLPlus:
             if hasattr(rows, '__call__'):
                 rows = rows(*args)
 
-        _show(rows, n=nrows, cols=cols, filename=filename, overwrite=overwrite)
+        _show(rows, n=nrows, cols=cols, filename=filename)
 
     # Simpler version of show (when you write it to a file)
     # so you make less mistakes.
@@ -432,21 +435,7 @@ class SQLPlus:
         if isinstance(query, str) and \
            _is_oneword(query) and filename is None:
             filename = query
-        self.show(query, filename=filename, args=args, n=None, overwrite=True)
-
-    def _list_tables(self):
-        """List of table names in the database
-
-        Returns:
-            List[str]
-        """
-        query = self._cursor.execute("""
-        select * from sqlite_master
-        where type='table'
-        """)
-        # **.lower()
-        tables = [row[1].lower() for row in query]
-        return sorted(tables)
+        self.show(query, filename=filename, args=args, n=None)
 
     def drop(self, tables):
         """
@@ -461,6 +450,20 @@ class SQLPlus:
             # '?' is for data insertion
             self.run('drop table if exists %s' % table)
         self.tables = self._list_tables()
+
+    def _list_tables(self):
+        """List of table names in the database
+
+        Returns:
+            List[str]
+        """
+        query = self._cursor.execute("""
+        select * from sqlite_master
+        where type='table'
+        """)
+        # **.lower()
+        tables = [row[1].lower() for row in query]
+        return sorted(tables)
 
 
 @contextmanager
@@ -480,43 +483,22 @@ def dbopen(dbfile):
         splus.conn.close()
 
 
-def todf(rows, cols=None, safe=False):
-    if cols:
-        cols = listify(cols)
-        return pd.DataFrame([[r[col] for col in cols] for r in rows],
-                            columns=cols)
-    else:
-        cols = rows[0].columns
-        seq = _safe_values(rows, cols) if safe else \
-              (r.values for r in rows)
-        return pd.DataFrame(list(seq), columns=cols)
-
-
-def fromdf(df):
+def set_workspace(dir):
     """
     Args:
-        df (pd.DataFrame)
-    Returns:
-        List[Row]
+        dir (str)
     """
-    colnames = df.columns.values
-    result = []
-    for vals in df.values.tolist():
-        r = Row()
-        for c, v in zip(colnames, vals):
-            r[c] = v
-        result.append(r)
-    return result
+    global WORKSPACE
+
+    WORKSPACE = dir if os.path.isabs(dir) else os.path.join(os.getcwd(), dir)
 
 
-# consider changing the name to reel_csv
 # EVERY COLUMN IS A STRING!!!
-def reel(csv_file, header=None, group=False):
+def _csv_reel(csv_file):
     """Loads well-formed csv file, 1 header line and the rest is data
 
     Args:
         csv_file (str)
-        header (str)
     Yields:
         Row
     """
@@ -531,8 +513,7 @@ def reel(csv_file, header=None, group=False):
         csv_file += '.csv'
     with open(os.path.join(WORKSPACE, csv_file)) as fin:
         first_line = fin.readline()[:-1]
-        header = header or first_line
-        columns = _gen_valid_column_names(listify(header))
+        columns = _gen_valid_column_names(listify(first_line))
         ncol = len(columns)
 
         def rows():
@@ -548,40 +529,7 @@ def reel(csv_file, header=None, group=False):
                     row1[col] = val
                 yield row1
 
-        if group:
-            yield from _gby(rows(), group)
-        else:
-            yield from rows()
-
-
-def set_workspace(dir):
-    """
-    Args:
-        dir (str)
-    """
-    global WORKSPACE
-
-    WORKSPACE = dir if os.path.isabs(dir) else os.path.join(os.getcwd(), dir)
-
-
-def get_workspace():
-    """
-    Returns:
-        str
-    """
-    return WORKSPACE
-
-
-# ensure a row generator to yield homogeneous rows
-def rows_alike(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        r0, rs = peek_first(func(*args, **kwargs))
-        cols = r0.columns
-        for r in rs:
-            assert r.columns == cols, str(r)
-            yield r
-    return wrapper
+        yield from rows()
 
 
 # I don't like the name
@@ -786,7 +734,7 @@ def _sqlite3_save(cursor, srows, table_name, column_names):
         cursor.execute(istmt, r)
 
 
-def _show(rows, n=30, cols=None, filename=None, overwrite=True):
+def _show(rows, n=30, cols=None, filename=None):
     """Printing to a screen or saving to a file
 
     Args:
@@ -794,7 +742,6 @@ def _show(rows, n=30, cols=None, filename=None, overwrite=True):
         n (int): maximum number of lines to show
         cols (str or List[str]): columns to show
         filename (str): filename to save
-        overwrite (bool): if true overwrite a file
     """
     # so that you can easily maintain code
     # Searching nrows is easier than searching n in editors
@@ -819,10 +766,6 @@ def _show(rows, n=30, cols=None, filename=None, overwrite=True):
 
         if not filename.endswith('.csv'):
             filename = filename + '.csv'
-
-        if os.path.isfile(os.path.join(WORKSPACE, filename)) \
-           and not overwrite:
-            return
 
         with open(os.path.join(WORKSPACE, filename), 'w') as fout:
             w = csv.writer(fout)
