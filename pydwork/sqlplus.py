@@ -608,7 +608,7 @@ def _gen_valid_column_names(columns):
     """
     # Some of the sqlite keywords are not allowed for column names
     # http://www.sqlite.org/sessions/lang_keywords.html
-    SQLITE_KEYWORDS = {
+    sqlite_keywords = {
         "ABORT", "ACTION", "ADD", "AFTER", "ALL", "ALTER", "ANALYZE", "AND",
         "AS", "ASC", "ATTACH", "AUTOINCREMENT", "BEFORE", "BEGIN", "BETWEEN",
         "BY", "CASCADE", "CASE", "CAST", "CHECK", "COLLATE", "COLUMN",
@@ -636,15 +636,15 @@ def _gen_valid_column_names(columns):
         'COLUMNS', 'VALUES',
     }
 
-    DEFAULT_COLUMN_NAME = 'col'
+    default_column_name = 'col'
     temp_columns = []
     for col in columns:
         # save only alphanumeric and underscore
         # and remove all the others
         newcol = camel2snake(re.sub(r'[^\w]+', '', col))
         if newcol == '':
-            newcol = DEFAULT_COLUMN_NAME
-        elif not newcol[0].isalpha() or newcol.upper() in SQLITE_KEYWORDS:
+            newcol = default_column_name
+        elif not newcol[0].isalpha() or newcol.upper() in sqlite_keywords:
             newcol = 'a_' + newcol
         temp_columns.append(newcol)
 
