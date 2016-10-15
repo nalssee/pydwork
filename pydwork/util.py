@@ -3,14 +3,14 @@ import string
 import re
 import fileinput
 
-from datetime import datetime
-from dateutil.relativedelta import relativedelta
-
-from itertools import dropwhile, chain, zip_longest
-
 import multiprocessing as mp
 import threading as th
+
+from itertools import dropwhile, chain, zip_longest
 from queue import Queue
+
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 
 def nchunks(xs, n):
@@ -54,8 +54,9 @@ def prepend_header(filename, header=None, drop=0):
 
 def random_string(nchars=20):
     "Generates a random string of lengh 'n' with alphabets and digits. "
-    return ''.join(random.SystemRandom().choice(string.ascii_letters +
-                   string.digits) for _ in range(nchars))
+    chars = string.ascii_letters + string.digits
+    return ''.join(random.SystemRandom().choice(chars) \
+                   for _ in range(nchars))
 
 
 def mpairs(seq1, seq2, key1, key2=None):
@@ -161,7 +162,7 @@ def grouper(iterable, n, fillvalue=None):
 # disappointed if you've expected some performance gains
 def pmap(func, seq,
          chunksize=1, nworkers=mp.cpu_count(),
-         fargs=[], parallel=True):
+         fargs=None, parallel=True):
     """
     parallel map, ordered version
     if you are curious about the parameters, refer to multiprocessing library

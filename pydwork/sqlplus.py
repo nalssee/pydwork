@@ -67,7 +67,6 @@ import tempfile
 
 from collections import Counter, OrderedDict
 from contextlib import contextmanager
-from functools import wraps
 from itertools import groupby, islice
 
 import pandas as pd
@@ -317,7 +316,7 @@ class SQLPlus:
         self._cursor.execute(query, args)
         self.tables = self._list_tables()
 
-    def reel(self, query, args=(), group=False):
+    def reel(self, query, group=False, args=()):
         """Generates a sequence of rows from a query.
 
         Args:
@@ -340,7 +339,7 @@ class SQLPlus:
     def rows(self, query, args=()):
         return Rows(self.reel(query, args))
 
-    def save(self, seq, name=None, args=(), fn=None) :
+    def save(self, seq, name=None, fn=None, args=()):
         """create a table from an iterator.
 
         Note:<%=  %>
@@ -361,10 +360,12 @@ class SQLPlus:
             name = name or seq.__name__
             seq = seq(*args)
 
-        if name is None: raise ValueError('table name required')
+        if name is None:
+            raise ValueError('table name required')
 
         # table names are case insensitive
-        if name.lower() in self.tables: return
+        if name.lower() in self.tables:
+            return
 
         if fn:
             seq = (fn(r) for r in seq)
@@ -395,7 +396,7 @@ class SQLPlus:
         self.tables = self._list_tables()
 
     # Be careful so that you don't overwrite the file
-    def show(self, query, args=(), n=30, cols=None, filename=None):
+    def show(self, query, n=30, cols=None, filename=None, args=()):
         """Printing to a screen or saving to a file
 
         Args:
@@ -483,14 +484,14 @@ def dbopen(dbfile):
         splus.conn.close()
 
 
-def set_workspace(dir):
+def set_workspace(path):
     """
     Args:
-        dir (str)
+        path (str)
     """
     global WORKSPACE
 
-    WORKSPACE = dir if os.path.isabs(dir) else os.path.join(os.getcwd(), dir)
+    WORKSPACE = path if os.path.isabs(path) else os.path.join(os.getcwd(), path)
 
 
 # EVERY COLUMN IS A STRING!!!
