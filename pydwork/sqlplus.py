@@ -368,10 +368,13 @@ class SQLPlus:
             return
 
         if fn:
-            seq = (fn(r) for r in seq)
+            seq1 = (fn(r) for r in seq)
+        else:
+            seq1 = seq
 
-        row0, seq = peek_first(seq)
+        row0, rows1 = peek_first(seq1)
         colnames = row0.columns
+        values1 = _safe_values(rows1, colnames)
 
         # You can't save the iterator directly because
         # once you execute a table creation query,
@@ -386,7 +389,6 @@ class SQLPlus:
             conn = sqlite3.connect(f.name)
             cursor = conn.cursor()
 
-            values1 = _safe_values(seq, colnames)
             _sqlite3_save(cursor, values1, name, colnames)
             _sqlite3_save(self._cursor, _sqlite3_reel(cursor, name, colnames),
                           name, colnames)
@@ -421,9 +423,8 @@ class SQLPlus:
         # then query is an iterator of rows, or a list of rows
         # of course it can be just a generator function of rows
         else:
-            rows = query
-            if hasattr(rows, '__call__'):
-                rows = rows(*args)
+            if hasattr(query, '__call__'):
+                rows = query(*args)
 
         _show(rows, n=nrows, cols=cols, filename=filename)
 
@@ -757,11 +758,11 @@ def _show(rows, n=30, cols=None, filename=None):
     if cols:
         rows = _pick(cols, rows)
 
-    row0, rows = peek_first(rows)
+    row0, rows1 = peek_first(rows)
 
     colnames = row0.columns
     # Always use safer way
-    seq_rvals = _safe_values(rows, colnames)
+    seq_rvals = _safe_values(rows1, colnames)
 
     # write to a file
     if filename:
