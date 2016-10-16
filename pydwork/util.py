@@ -67,7 +67,7 @@ def mpairs(seq1, seq2, key1, key2=None):
     """Generates a tuple of matching pairs
     key1 and key2 are functions (getters, sort of)
 
-    seq1, seq2 must be sorted before being passed here
+    seq1, seq2 must be sorted in ascending order before being passed here
         and also each key value(which is returned by key funcs) must be UNIQUE
         otherwise you will see unexpected results
     """

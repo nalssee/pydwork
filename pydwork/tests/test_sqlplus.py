@@ -307,6 +307,9 @@ class TestMisc(unittest.TestCase):
         self.assertEqual(yyyymmdd(19991231, 2), 20000102)
         self.assertEqual(yyyymmdd(19991231, -2), 19991229)
 
+
+class TestPmap(unittest.TestCase):
+
     def test_pmap(self):
         def func(x):
             time.sleep(0.001)
@@ -352,6 +355,17 @@ class TestMisc(unittest.TestCase):
                                    fargs=['A', 'B'], parallel=False)),
                          ['A1', 'B2', 'A3', 'B4', 'A5'])
 
+    def test_pmap2(self):
+        with dbopen(':memory:') as c:
+            c.save('iris.csv')
+
+            def func(rs):
+                return rs.ols('petal_length ~ petal_width')
+
+            params = []
+            for res in pmap(func, c.reel('iris', 'species')):
+                params.append(round(res.params[1] * 100))
+            self.assertEqual(params, [55.0, 187.0, 65.0])
 
 
 class TestRows(unittest.TestCase):
@@ -491,6 +505,30 @@ class TestMpairs(unittest.TestCase):
         for a, b in mpairs(xs, ys, lambda x: x):
             result.append(a)
         self.assertEqual(result, [4, 9, 10, 21])
+
+    def test_mpairs_with_double_dbs(self):
+        with dbopen(':memory:') as c1, dbopen(':memory:') as c2:
+            c1.save('iris.csv')
+            c2.save('co2.csv')
+
+            seq1 = c1.reel(
+                """
+                select *, round(petal_length) as key from iris
+                order by key
+                """, group='key')
+            seq2 = c2.reel(
+                """
+                select *, round(uptake / 10) as key from co2
+                order by key
+                """, group='key')
+
+            lengths = []
+
+            for a, b in mpairs(seq1, seq2, lambda rs: rs[0].key):
+                lengths.append((len(a), len(b)))
+
+            self.assertEqual(lengths, [(24, 18), (26, 17),
+                                       (3, 24), (26, 24), (43, 1)])
 
 
 class TestOLS(unittest.TestCase):

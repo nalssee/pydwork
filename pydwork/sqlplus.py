@@ -80,6 +80,16 @@ class Row:
                              zip(self.columns, self.values))
         return '[' + content + ']'
 
+    # The following two methods are used for pickle
+    # If you remove these, you can't pickle them so you can't
+    # multiprocess 'Row's
+    # I need to study more about this.
+    def __getstate__(self):
+        return self.__dict__
+
+    def __setstate__(self, d):
+        return self.__dict__.update(d)
+
 
 class Rows(list):
     """
