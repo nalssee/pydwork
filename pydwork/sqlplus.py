@@ -357,7 +357,7 @@ class SQLPlus:
         if name.lower() in self.tables:
             return
 
-        rows1 =(fn(r) for r in rows) if fn else rows
+        rows1 = (fn(r) for r in rows) if fn else rows
 
         row0, rows2 = peek_first(rows1)
         cols = row0.columns
@@ -393,7 +393,6 @@ class SQLPlus:
             args (List[type] or Tuple[type]): args for query (GF)
             n (int): maximum number of lines to show
             cols (str or List[str]): columns to show
-            filename (str): filename to save
         """
         _, rows = _x2rows(x, self._cursor, args)
         _show(rows, n, cols, None)
@@ -470,7 +469,7 @@ def _x2rows(x, cursor, args):
     x can be either a string or a generator
     if it is a string it can be either a csv file name or a sql statement
 
-    returns an appropriate name and an iterator or rows
+    returns an appropriate name and an iterator of rows
     """
     if isinstance(x, str):
         # csv file name
