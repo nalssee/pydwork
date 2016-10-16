@@ -2,16 +2,8 @@
 SQLite3 based utils for statistical analysis
 
 Reeling off rows from db(SQLite3) and saving them back to db
-
-As for docstring:
-    GF[int->int]: generator function type that yields int
-                  and takes int as arg, parameters are optional
-    FN[str->str]: Ordinary function type
-    iter: types.GeneratorType
-    Iter[str]: iterator of strings
-    file: file object
-
 """
+
 import os
 import sys
 import csv
@@ -101,6 +93,7 @@ class Rows(list):
     # Not the same situation as 'Row' class
 
     def __getitem__(self, cols):
+        "cols: integer or list of strings or comma separated string"
         if isinstance(cols, int):
             return super().__getitem__(cols)
         elif isinstance(cols, slice):
@@ -115,6 +108,9 @@ class Rows(list):
             return [[r[c] for c in cols] for r in self]
 
     def __setitem__(self, cols, vals):
+        """vals can be just a list or a list of lists,
+        demensions must match
+        """
         if isinstance(cols, int) or isinstance(cols, slice):
             return super().__setitem__(cols, vals)
 
@@ -243,9 +239,8 @@ class SQLPlus:
     def run(self, query, args=()):
         """Simply executes sql statement and update tables attribute
 
-        Args:
-            query (str): SQL query string
-            args (List[any] or Tuple[any]): args for SQL query
+        query: SQL query string
+        args: args for SQL query
         """
         self._cursor.execute(query, args)
         self.tables = self._list_tables()
@@ -253,13 +248,9 @@ class SQLPlus:
     def reel(self, query, group=False, args=()):
         """Generates a sequence of rows from a query.
 
-        Args:
-            query (str): select statement or table name
-
-        Yields:
-            Row
+        query:  select statement or table name
         """
-        qrows = self._cursor.execute(_select_statement(query), args)
+        qrows = self._cursor.execute(_select_statement(query, '*'), args)
         columns = [c[0] for c in qrows.description]
         # there can't be duplicates in column names
         if len(columns) != len(set(columns)):
@@ -271,16 +262,16 @@ class SQLPlus:
             yield from _build_rows(qrows, columns)
 
     def rows(self, query, args=()):
+        "Returns a 'Rows' instance"
         return Rows(self.reel(query, args))
 
     def save(self, x, name=None, fn=None, args=()):
         """create a table from an iterator.
 
-        Args:
-            x (str or iter or GF[* -> Row])
-            name (str): table name in DB
-            args (List[type]): args for seq (GF)
-            fn (FN[Row -> Row])
+        x (str or iter or GF[* -> Row])
+        name (str): table name in DB
+        fn: function that takes a row(all elements are strings)
+            and returns a row, used for csv file transformation
         """
         name1, rows = _x2rows(x, self._cursor, args)
         name = name or name1
@@ -295,7 +286,7 @@ class SQLPlus:
 
         row0, rows2 = peek_first(rows1)
         cols = row0.columns
-        values = _safe_values(rows2, cols)
+        seq_values = _safe_values(rows2, cols)
 
         # You can't save the iterator directly because
         # once you execute a table creation query,
@@ -310,7 +301,7 @@ class SQLPlus:
             conn = sqlite3.connect(f.name)
             cursor = conn.cursor()
 
-            _sqlite3_save(cursor, values, name, cols)
+            _sqlite3_save(cursor, seq_values, name, cols)
             _sqlite3_save(self._cursor, _sqlite3_reel(cursor, name, cols),
                           name, cols)
             # no need to commit and close the connection,
@@ -320,35 +311,18 @@ class SQLPlus:
 
     # Be careful so that you don't overwrite the file
     def show(self, x, n=30, cols=None, args=()):
-        """Printing to a screen or saving to a file
-
-        Args:
-            x (str or Iter[Row] or GF)
-            args (List[type] or Tuple[type]): args for query (GF)
-            n (int): maximum number of lines to show
-            cols (str or List[str]): columns to show
-        """
+        "Printing to a screen or saving to a file "
         _, rows = _x2rows(x, self._cursor, args)
         _show(rows, n, cols, None)
 
     def write(self, x, filename=None, cols=None, args=()):
-        """
-        Args:
-            x (str or Iter[Row] or GF)
-            args (List[type] or Tuple[type]): args for query (GF)
-            filename (str): filename to save
-        """
+        "writes to a file(csv)"
         name, rows = _x2rows(x, self._cursor, args)
         filename = filename or name
         _show(rows, None, cols, filename)
 
     def drop(self, tables):
-        """
-        drop table if exists
-
-        Args:
-            tables (str or List[str])
-        """
+        " drop table if exists "
         tables = listify(tables)
         for table in tables:
             # you can't use '?' for table name
@@ -357,11 +331,7 @@ class SQLPlus:
         self.tables = self._list_tables()
 
     def _list_tables(self):
-        """List of table names in the database
-
-        Returns:
-            List[str]
-        """
+        "List of table names in the database "
         query = self._cursor.execute("""
         select * from sqlite_master
         where type='table'
@@ -373,13 +343,7 @@ class SQLPlus:
 
 @contextmanager
 def dbopen(dbfile):
-    """Connects to SQL database(sqlite)
-
-    Args:
-        dbfile (str)
-    Yields:
-        SQLPlus
-    """
+    "Connects to SQL database(sqlite)"
     splus = SQLPlus(dbfile)
     try:
         yield splus
@@ -389,10 +353,7 @@ def dbopen(dbfile):
 
 
 def set_workspace(path):
-    """
-    Args:
-        path (str)
-    """
+    "all the files and dbs are saved in a given path"
     global WORKSPACE
     WORKSPACE = path if os.path.isabs(path) else os.path.join(os.getcwd(), path)
 
@@ -411,7 +372,7 @@ def _x2rows(x, cursor, args):
             return name, _csv_reel(x)
         # sql statement
         else:
-            seq_rvals = cursor.execute(_select_statement(x), args)
+            seq_rvals = cursor.execute(_select_statement(x, '*'), args)
             colnames = [c[0] for c in seq_rvals.description]
             name = x if _is_oneword(x) else None
             return name, _build_rows(seq_rvals, colnames)
@@ -425,16 +386,8 @@ def _x2rows(x, cursor, args):
 
 # EVERY COLUMN IS A STRING!!!
 def _csv_reel(csv_file):
-    """Loads well-formed csv file, 1 header line and the rest is data
-
-    Args:
-        csv_file (str)
-    Yields:
-        Row
-    """
+    "Loads well-formed csv file, 1 header line and the rest is data "
     def is_empty_line(line):
-        # Performance is not so important
-        # since this function is invoked only when the line is really wierd
         """Tests if a list of strings is empty for example ["", ""] or []
         """
         return [x for x in line if x.strip() != ""] == []
@@ -459,21 +412,15 @@ def _csv_reel(csv_file):
             yield row1
 
 
-# I don't like the name
 def _safe_values(rows, cols):
+    "assert all rows have cols"
     for r in rows:
         assert r.columns == cols, str(r)
         yield r.values
 
 
 def _pick(cols, seq):
-    """
-    Args:
-        cols (str or List[str])
-        seq (Iter[Row])
-    Yields:
-        Row
-    """
+    " pick only cols for a seq, similar to sql select "
     cols = listify(cols)
     for r in seq:
         r1 = Row()
@@ -484,12 +431,7 @@ def _pick(cols, seq):
 
 def _gby(seq, key):
     """Group the iterator by a key
-
-    Args
-        seq (iter)
-        key (FN[Row -> type] or List[str] or str): if [], group them all
-    Yields:
-        List[Row]
+    key is like a key function in sort
     """
     key = _build_keyfn(key)
     for _, rs in groupby(seq, key):
@@ -498,13 +440,8 @@ def _gby(seq, key):
 
 
 def _build_keyfn(key):
-    """
-    Args:
-        key (str or List[str]): column names
-    Returns:
-        FN[Row -> type]
-    """
-    # if the key is a function, just return it
+    " if key is a string return a key function "
+    # if the key is already a function, just return it
     if hasattr(key, '__call__'):
         return key
 
@@ -520,14 +457,8 @@ def _gen_valid_column_names(columns):
 
     Note:
         Every column name is lowercased
-    Args:
-        columns (List[str])
-    Returns:
-        List[str]
-    Example:
         >>> _gen_valid_column_names(['a', '_b', 'a', 'a1"*c', 'a1c'])
         ['a0', 'a_b', 'a1', 'a1c0', 'a1c1']
-
     """
     # Some of the sqlite keywords are not allowed for column names
     # http://www.sqlite.org/sessions/lang_keywords.html
@@ -595,11 +526,6 @@ def _create_statement(name, colnames):
     Note:
         Every type is numeric.
         Table name and column names are all lower cased
-    Args:
-        name (str): table name
-        colnames (List[str])
-    Returns:
-        str
     """
     schema = ', '.join([col.lower() + ' ' + 'numeric' for col in colnames])
     return "create table if not exists %s (%s)" % (name.lower(), schema)
@@ -607,54 +533,35 @@ def _create_statement(name, colnames):
 
 def _insert_statement(name, ncol):
     """insert into foo values (?, ?, ?, ...)
-
     Note:
         Column name is lower cased
-    Args:
-        name (str): table name
-        ncol (int)
-    Returns:
-        str
+
+    ncol : number of columns
     """
     qmarks = ', '.join(['?'] * ncol)
     return "insert into %s values (%s)" % (name.lower(), qmarks)
 
 
 def _is_oneword(query):
-    """
-    Args:
-        query (str)
-    Returns:
-        bool
-    """
+    " tests if query is one word "
     return len(query.strip().split(' ')) == 1
 
 
-def _select_statement(query, cols='*'):
-    """If query is just one word, turn it to a select stmt
-    or just leave it
-
-    Args:
-        query (str)
-        cols (str or List[str])
-    Returns:
-        str
-    """
+def _select_statement(query, cols):
+    "If query is just one word, turn it to a select stmt "
     if _is_oneword(query):
         return "select %s from %s" % (', '.join(listify(cols)), query)
     return query
 
 
-# The following 2 helpers are used in 'SQLPlus.save'
-# just reel out sqlite3 rows and save sqlite3 rows
-# not the rows from this script.
 def _sqlite3_reel(cursor, table_name, column_names):
+    "generates instances of sqlite3.Row"
     q = _select_statement(table_name, column_names)
     yield from cursor.execute(q)
 
 
-# srows: sqlite3 rows
 def _sqlite3_save(cursor, srows, table_name, column_names):
+    "saves sqlite3.Row instances to db"
     cursor.execute(_create_statement(table_name, column_names))
     istmt = _insert_statement(table_name, len(column_names))
     for r in srows:
@@ -664,27 +571,20 @@ def _sqlite3_save(cursor, srows, table_name, column_names):
 def _show(rows, n, cols, filename):
     """Printing to a screen or saving to a file
 
-    Args:
-        rows (Iter[Row])
-        n (int): maximum number of lines to show
-        cols (str or List[str]): columns to show
-        filename (str): filename to save
+    rows: iterator of Row instances
+    n: maximum number of lines to show
+    cols:  columns to show
     """
     # so that you can easily maintain code
     # Searching nrows is easier than searching n in editors
     nrows = n
 
-    # then query is an iterator of rows, or a list of rows
-    # of course it can be just a generator function of rows
-
     if cols:
         rows = _pick(cols, rows)
 
     row0, rows1 = peek_first(rows)
-
-    colnames = row0.columns
-    # Always use safer way
-    seq_rvals = _safe_values(rows1, colnames)
+    cols = row0.columns
+    seq_values = _safe_values(rows1, cols)
 
     # write to a file
     if filename:
@@ -696,9 +596,9 @@ def _show(rows, n, cols, filename):
 
         with open(os.path.join(WORKSPACE, filename), 'w') as fout:
             w = csv.writer(fout)
-            w.writerow(colnames)
-            for rvals in islice(seq_rvals, nrows):
-                w.writerow(rvals)
+            w.writerow(cols)
+            for vs in islice(seq_values, nrows):
+                w.writerow(vs)
 
     # write to stdout
     else:
@@ -708,17 +608,17 @@ def _show(rows, n, cols, filename):
             # make use of pandas DataFrame displaying
             # islice 1 more rows than required
             # to see if there are more rows left
-            seq_rvals_list = list(islice(seq_rvals, nrows + 1))
-            print(pd.DataFrame(seq_rvals_list[:nrows],
-                               columns=colnames))
-            if len(seq_rvals_list) > nrows:
+            list_values = list(islice(seq_values, nrows + 1))
+            print(pd.DataFrame(list_values[:nrows], columns=cols))
+            if len(list_values) > nrows:
                 print("...more rows...")
 
 
 # sequence of row values to rows
-def _build_rows(seq_rvals, colnames):
-    for rvals in seq_rvals:
+def _build_rows(seq_values, cols):
+    "build rows from an iterator of values"
+    for vals in seq_values:
         r = Row()
-        for col, val in zip(colnames, rvals):
+        for col, val in zip(cols, vals):
             r[col] = val
         yield r
