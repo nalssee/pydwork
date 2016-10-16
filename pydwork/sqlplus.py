@@ -80,21 +80,25 @@ class Row:
                              zip(self.columns, self.values))
         return '[' + content + ']'
 
+    # TODO
     # The following two methods are used for pickle
-    # If you remove these, you can't pickle them so you can't
-    # multiprocess 'Row's
+    # If you remove these methods, you can't pickle them so you can't
+    # multiprocess concerning 'Row's
     # I need to study more about this.
+    # Probably it's all because of not using the conventional way
+    # of getting attributes.
+    # Even 'hasattr' doensn't work properly,
+    # although you may never want to use it.
     def __getstate__(self):
         return self.__dict__
 
     def __setstate__(self, d):
-        return self.__dict__.update(d)
+        self.__dict__.update(d)
 
 
 class Rows(list):
     """
-    a shallow wrapper of a list of row instances
-    """
+    a shallow wrapper of a list of row instances """
     # Don't try to define __getattr__, __setattr__
     # List objects has a lot of useful attributes that can't be overwritten
     # Not the same situation as 'Row' class
