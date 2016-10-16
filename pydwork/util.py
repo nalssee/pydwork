@@ -1,3 +1,7 @@
+"""
+Functions that are not specific to "Row" objects
+"""
+
 import random
 import string
 import re
@@ -260,19 +264,22 @@ def pmap(func, seq,
 
 # If the return value is True it is converted to 1 or 0 in sqlite3
 def isnum(x):
+    "Tests if x is numeric"
     return isinstance(x, float) or isinstance(x, int)
 
 
 def istext(x):
+    "Tests if x is string"
     return isinstance(x, str)
 
 
 def yyyymm(date, n):
+    "example: yyyymm(198101, -2) => 198011"
     d1 = datetime.strptime(str(date), '%Y%m') + relativedelta(months=n)
     return int(d1.strftime('%Y%m'))
 
 
 def yyyymmdd(date, n):
+    "example: yyyymmdd(19810101, 2) => 19810103"
     d1 = datetime.strptime(str(date), '%Y%m%d') + relativedelta(days=n)
     return int(d1.strftime('%Y%m%d'))
-
