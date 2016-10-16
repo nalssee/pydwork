@@ -1,52 +1,7 @@
 """
 SQLite3 based utils for statistical analysis
 
---------------------------------------------------------------
-What this program does is just reeling off rows from db(SQLite3)
-and saving them back to db
---------------------------------------------------------------
-
-Emperical data analysis task is largely composed of two parts,
-wrangling data(cleaning up so you can easily handle it)
-and applying statistical methodologies to data.
-
-Python is really great for data analysis, since you have
-widely used, reliable tools like Pandas, Numpy, Scipy, ...
-
-Pandas is said-to-be a really great for wrangling data.
-But it wasn't a very smooth process for me to learn Pandas.
-And you have to load all the data in the system memory.
-eo you have to figure out a way around when you need to
-handle very large data sets.
-
-If you focus only on data wragling, SQL is an amazingly great
-tool. Performance, flexibility, reliablity, ease of use, it will
-never disappoint you.
-
-But there's one problem in SQL for data analysis. It doesn't
-integrate with python functions out of box. And it doesn't provide
-sophisticated statistical functions.
-
-Say you want to group stock returns every year
-,do some linear regressions with variables of your interests,
-and sum up the coefficients from the task.
-If you have to do the work using plain SQL,
-your life won't be happy anymore.
-
-It would be great if you can integrate Python with SQL.
-It is what I'm trying to do here.
-
-This program is not a sophisticated, full-fledged automation system.
-I'd rather say it's just a mental framework.
-
-Use SQL to clean up data and group them by certain criteria,
-apply statical tools to each group using Python(statmodels, numpy and so on)
-and sum up the results.
-
-If you have some basic SQL and Python knowledge,
-(You don't have to be an expert)
-I believe this is better that using Pandas for some people.
-For me, it is.
+Reeling off rows from db(SQLite3) and saving them back to db
 
 As for docstring:
     GF[int->int]: generator function type that yields int
@@ -57,7 +12,6 @@ As for docstring:
     file: file object
 
 """
-
 import os
 import sys
 import csv
@@ -85,14 +39,10 @@ WORKSPACE = ''
 
 class Row:
     """
-    Basically the same as sqlite3.Row
-    it's just that using sqlite3.Row is a bit clunkier.
-    r['col'] = 34
-    I also want to write as r.col = 34
-
-    And it's better to keep the order of columns
+    Mutable version of sqlite3.Row
+    It is not safe but essential I suppose.
     """
-    # Python 3.6 is expected to used ordered dict for keyword args
+    # Python 3.6 is expected to use an ordered dict for keyword args
     # If so, we may consider passing kwargs
     def __init__(self):
         super().__setattr__('_ordered_dict', OrderedDict())
@@ -460,7 +410,6 @@ def set_workspace(path):
         path (str)
     """
     global WORKSPACE
-
     WORKSPACE = path if os.path.isabs(path) else os.path.join(os.getcwd(), path)
 
 
