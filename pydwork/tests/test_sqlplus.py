@@ -517,4 +517,18 @@ class TestOLS(unittest.TestCase):
                 self.assertEqual(len(result.params), 3)
 
 
+# class TestSample(unittest.TestCase):
+#     def test_hist(self):
+#         with dbopen(':memory:') as c:
+#             import matplotlib.pyplot as plt
+#             c.save('iris.csv')
+#             iris = c.rows('iris')
+#             print(iris.df().describe(include='all'))
+#
+#             iris.df().plot.scatter('petal_length', 'petal_width')
+#             plt.show()
+#             for g in iris.group('species'):
+#                 g.df()['sepal_length'].plot.hist(bins=20, legend=True)
+#             plt.show()
+
 unittest.main()
