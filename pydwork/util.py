@@ -115,9 +115,9 @@ def peek_first(seq):
     Returns:
         Tuple(type, Iter[type])
     """
-    seq = iter(seq)
-    first_item = next(seq)
-    return first_item, chain([first_item], seq)
+    seq1 = iter(seq)
+    first_item = next(seq1)
+    return first_item, chain([first_item], seq1)
 
 
 def listify(x):
