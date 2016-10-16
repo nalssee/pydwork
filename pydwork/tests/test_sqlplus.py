@@ -12,30 +12,8 @@ from pydwork.sqlplus import *
 from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd, \
     prepend_header, pmap
 
+
 set_workspace('data')
-
-print('________________________________________________________________')
-
-# This should work as a tutorial as well.
-print("\nNo need to read the following")
-print("Simply skim through, and recognize if it's not too weird\n\n")
-
-
-def fillin(line, n):
-    """For invalid line handling"""
-    if len(line) < n:
-        return line + [''] * (n - len(line))
-    if len(line) > n:
-        return line[:n]
-    return line
-
-
-def count(conn, table):
-    if isinstance(table, str):
-        return sum(1 for _ in conn.reel(table))
-    else:
-        # seq
-        return sum(1 for _ in table)
 
 
 class Testdbopen(unittest.TestCase):
@@ -410,7 +388,7 @@ class TestRows(unittest.TestCase):
             self.assertEqual(iris[1].col, 118)
             self.assertEqual(iris[2].col, 136)
 
-            col1 = iris.equals('species', 'versicolor')[0].col
+            col1 = iris.where(lambda r: r['species'] == 'versicolor')[0].col
 
             self.assertEqual(col1, 51)
             # filter is non-destructive
@@ -426,17 +404,14 @@ class TestRows(unittest.TestCase):
 
             # iris = Rows(c.reel('iris'))
 
-            self.assertEqual(len(iris.ge('sepal_length', 7.0)), 13)
-            self.assertEqual(len(iris.le('sepal_length', 7.0)), 138)
-            self.assertEqual(len(iris.fromto('sepal_length', 5.0, 5.0)), 10)
             self.assertEqual(len(iris.num('species')), 0)
             self.assertEqual(len(iris.text('species')), 150)
 
             self.assertEqual(len(iris.num('sepal_length, sepal_width')), 150)
-            self.assertEqual(len(iris.contains('species',
-                                               'versicolor, virginica')),
+            self.assertEqual(len(iris.where(lambda r: r.species in
+                                            ['versicolor', 'virginica'])),
                              100)
-            self.assertEqual(len(iris.contains('sepal_length', 5.0)), 10)
+            self.assertEqual(len(iris.where(lambda r: r.sepal_length == 5.0)), 10)
 
             rs = []
             for x in range(10):

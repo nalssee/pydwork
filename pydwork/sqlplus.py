@@ -80,20 +80,17 @@ class Row:
                              zip(self.columns, self.values))
         return '[' + content + ']'
 
-    # TODO
-    # The following two methods are used for pickle
-    # If you remove these methods, you can't pickle them so you can't
-    # multiprocess concerning 'Row's
-    # I need to study more about this.
-    # Probably it's all because of not using the conventional way
-    # of getting attributes.
-    # Even 'hasattr' doensn't work properly,
-    # although you may never want to use it.
+    # for pickling
     def __getstate__(self):
         return self.__dict__
 
     def __setstate__(self, d):
         self.__dict__.update(d)
+
+    # TODO
+    # hasattr doesn't for properly
+    # You can't make it work by changing getters and setters
+    # to an ordinary way. But it is slower
 
 
 class Rows(list):
@@ -164,53 +161,19 @@ class Rows(list):
         self.sort(key=key, reverse=reverse)
         return self
 
-    def filter(self, pred):
+    def where(self, pred):
         pred = _build_keyfn(pred)
         return Rows(r for r in self if pred(r))
-
-    def truncate(self, col, limit=0.01):
-        xs = []
-        for r in self:
-            val = r[col]
-            if isnum(val):
-                xs.append(val)
-
-        lower = np.percentile(xs, limit * 100)
-        higher = np.percentile(xs, (1 - limit) * 100)
-
-        return self.fromto(col, lower, higher)
-
-    def fromto(self, col, beg, end):
-        "simplified fitering, inclusive"
-        def testfn(r):
-            val = r[col]
-            return beg <= val and val <= end
-        return self.filter(testfn)
-
-    def ge(self, col, beg):
-        "greater than or equal to"
-        return self.filter(lambda r: beg <= r[col])
-
-    def le(self, col, end):
-        "less than or equal to"
-        return self.filter(lambda r: r[col] <= end)
 
     def num(self, cols):
         "another simplified filtering, numbers only"
         cols = listify(cols)
-        return self.filter(lambda r: all(isnum(r[col]) for col in cols))
+        return self.where(lambda r: all(isnum(r[col]) for col in cols))
 
     def text(self, cols):
         "another simplified filtering, texts(string) only"
         cols = listify(cols)
-        return self.filter(lambda r: all(istext(r[col]) for col in cols))
-
-    def equals(self, col, val):
-        return self.filter(lambda r: r[col] == val)
-
-    def contains(self, col, vals):
-        vals = listify(vals)
-        return self.filter(lambda r: r[col] in vals)
+        return self.where(lambda r: all(istext(r[col]) for col in cols))
 
     def ols(self, model):
         left, right = model.split('~')
@@ -219,6 +182,13 @@ class Rows(list):
         Y = self[yvar]
         X = sm.add_constant(self[xvars])
         return sm.OLS(Y, X).fit()
+
+    def truncate(self, col, limit=0.01):
+        "Truncate extreme values, defalut 1 percent on both sides"
+        xs = self[col]
+        lower = np.percentile(xs, limit * 100)
+        higher = np.percentile(xs, (1 - limit) * 100)
+        return self.where(lambda r: r[col] >= lower and r[col] <= higher)
 
     def group(self, key):
         yield from _gby(self, key)
