@@ -521,20 +521,17 @@ def _csv_reel(csv_file):
         columns = _gen_valid_column_names(listify(first_line))
         ncol = len(columns)
 
-        def rows():
-            for line_no, line in enumerate(csv.reader(fin), 2):
-                if len(line) != ncol:
-                    if is_empty_line(line):
-                        continue
-                    raise ValueError(
-                        """%s at line %s column count not matched %s != %s: %s
-                        """ % (csv_file, line_no, ncol, len(line), line))
-                row1 = Row()
-                for col, val in zip(columns, line):
-                    row1[col] = val
-                yield row1
-
-        yield from rows()
+        for line_no, line in enumerate(csv.reader(fin), 2):
+            if len(line) != ncol:
+                if is_empty_line(line):
+                    continue
+                raise ValueError(
+                    """%s at line %s column count not matched %s != %s: %s
+                    """ % (csv_file, line_no, ncol, len(line), line))
+            row1 = Row()
+            for col, val in zip(columns, line):
+                row1[col] = val
+            yield row1
 
 
 # I don't like the name
