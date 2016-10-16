@@ -259,15 +259,15 @@ class Rows(list):
     def group(self, key):
         yield from _gby(self, key)
 
-    def show(self, n=30, cols=None, filename=None):
+    def show(self, n=30, cols=None):
         if self == []:
             print(self)
         else:
-            _show(self, n=n, cols=cols, filename=filename)
+            _show(self, n, cols, None)
 
     # Simpler version of show (when you write it to a file)
-    def write(self, filename):
-        _show(self, n=None, filename=filename)
+    def write(self, filename, cols=None):
+        _show(self, None, cols, filename)
 
     # Use this when you need to see what's inside
     # for example, when you want to see the distribution of data.
@@ -339,27 +339,17 @@ class SQLPlus:
     def rows(self, query, args=()):
         return Rows(self.reel(query, args))
 
-    def save(self, seq, name=None, fn=None, args=()):
+    def save(self, x, name=None, fn=None, args=()):
         """create a table from an iterator.
 
-        Note:<%=  %>
-            if seq is a generator function and 'name' is not given,
-            the function name is going to be the table name.
-
         Args:
-            seq (str or iter or GF[* -> Row])
+            x (str or iter or GF[* -> Row])
             name (str): table name in DB
             args (List[type]): args for seq (GF)
             fn (FN[Row -> Row])
         """
-        if isinstance(seq, str):
-            name = name or seq.split('.')[0].strip()
-            seq = _csv_reel(seq)
-        # if 'seq' is a generator function, it is executed to make an iterator
-        elif hasattr(seq, '__call__'):
-            name = name or seq.__name__
-            seq = seq(*args)
-
+        name1, rows = _x2rows(x, self._cursor, args)
+        name = name or name1
         if name is None:
             raise ValueError('table name required')
 
@@ -367,14 +357,11 @@ class SQLPlus:
         if name.lower() in self.tables:
             return
 
-        if fn:
-            seq1 = (fn(r) for r in seq)
-        else:
-            seq1 = seq
+        rows1 =(fn(r) for r in rows) if fn else rows
 
-        row0, rows1 = peek_first(seq1)
-        colnames = row0.columns
-        values1 = _safe_values(rows1, colnames)
+        row0, rows2 = peek_first(rows1)
+        cols = row0.columns
+        values = _safe_values(rows2, cols)
 
         # You can't save the iterator directly because
         # once you execute a table creation query,
@@ -389,58 +376,38 @@ class SQLPlus:
             conn = sqlite3.connect(f.name)
             cursor = conn.cursor()
 
-            _sqlite3_save(cursor, values1, name, colnames)
-            _sqlite3_save(self._cursor, _sqlite3_reel(cursor, name, colnames),
-                          name, colnames)
+            _sqlite3_save(cursor, values, name, cols)
+            _sqlite3_save(self._cursor, _sqlite3_reel(cursor, name, cols),
+                          name, cols)
             # no need to commit and close the connection,
             # it's going to be erased anyway
 
         self.tables = self._list_tables()
 
     # Be careful so that you don't overwrite the file
-    def show(self, query, n=30, cols=None, filename=None, args=()):
+    def show(self, x, n=30, cols=None, args=()):
         """Printing to a screen or saving to a file
 
         Args:
-            query (str or Iter[Row] or GF)
+            x (str or Iter[Row] or GF)
             args (List[type] or Tuple[type]): args for query (GF)
             n (int): maximum number of lines to show
             cols (str or List[str]): columns to show
             filename (str): filename to save
         """
-        # so that you can easily maintain code
-        # Searching nrows is easier than searching n in editors
-        nrows = n
+        _, rows = _x2rows(x, self._cursor, args)
+        _show(rows, n, cols, None)
 
-        if isinstance(query, str):
-            if query.endswith('.csv'):
-                rows = _csv_reel(query)
-            else:
-                seq_rvals = self._cursor.execute(_select_statement(query), args)
-                colnames = [c[0] for c in seq_rvals.description]
-                rows = _build_rows(seq_rvals, colnames)
-
-        # then query is an iterator of rows, or a list of rows
-        # of course it can be just a generator function of rows
-        else:
-            if hasattr(query, '__call__'):
-                rows = query(*args)
-
-        _show(rows, n=nrows, cols=cols, filename=filename)
-
-    # Simpler version of show (when you write it to a file)
-    # so you make less mistakes.
-    def write(self, query, filename=None, args=()):
+    def write(self, x, filename=None, cols=None, args=()):
         """
         Args:
-            query (str or Iter[Row] or GF)
+            x (str or Iter[Row] or GF)
             args (List[type] or Tuple[type]): args for query (GF)
             filename (str): filename to save
         """
-        if isinstance(query, str) and \
-           _is_oneword(query) and filename is None:
-            filename = query
-        self.show(query, filename=filename, args=args, n=None)
+        name, rows = _x2rows(x, self._cursor, args)
+        filename = filename or name
+        _show(rows, None, cols, filename)
 
     def drop(self, tables):
         """
@@ -496,6 +463,32 @@ def set_workspace(path):
     global WORKSPACE
 
     WORKSPACE = path if os.path.isabs(path) else os.path.join(os.getcwd(), path)
+
+
+def _x2rows(x, cursor, args):
+    """
+    x can be either a string or a generator
+    if it is a string it can be either a csv file name or a sql statement
+
+    returns an appropriate name and an iterator or rows
+    """
+    if isinstance(x, str):
+        # csv file name
+        if x.endswith('.csv'):
+            name = x.split('.')[0].strip()
+            return name, _csv_reel(x)
+        # sql statement
+        else:
+            seq_rvals = cursor.execute(_select_statement(x), args)
+            colnames = [c[0] for c in seq_rvals.description]
+            name = x if _is_oneword(x) else None
+            return name, _build_rows(seq_rvals, colnames)
+    # if it's a generator
+    elif hasattr(x, '__call__'):
+        return x.__name__, x(*args)
+    # x is an iterable then
+    else:
+        return None, x
 
 
 # EVERY COLUMN IS A STRING!!!
@@ -736,7 +729,7 @@ def _sqlite3_save(cursor, srows, table_name, column_names):
         cursor.execute(istmt, r)
 
 
-def _show(rows, n=30, cols=None, filename=None):
+def _show(rows, n, cols, filename):
     """Printing to a screen or saving to a file
 
     Args:
