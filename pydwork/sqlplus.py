@@ -265,6 +265,22 @@ class SQLPlus:
         "Returns a 'Rows' instance"
         return Rows(self.reel(query, args))
 
+    def df(self, query, cols=None, args=()):
+        return self.rows(query, args=args).df(cols)
+
+    def describe(self, query, cols=None, percentile=None, args=()):
+        "Summary"
+        percentile = percentile if percentile else \
+            [x / 10 for x in range(1, 10)]
+        df = self.rows(query, args).df(cols)
+        print('Table Description')
+        print('-----------------')
+        print(df.describe(percentile, include='all'))
+        print()
+        print('Corr Matrix')
+        print('-----------')
+        print(df.corr())
+
     def save(self, x, name=None, fn=None, args=()):
         """create a table from an iterator.
 
