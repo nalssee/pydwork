@@ -280,6 +280,7 @@ class SQLPlus:
         print('Corr Matrix')
         print('-----------')
         print(df.corr())
+        print()
 
     def save(self, x, name=None, fn=None, args=()):
         """create a table from an iterator.
