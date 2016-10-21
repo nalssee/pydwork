@@ -271,7 +271,7 @@ class SQLPlus:
     def describe(self, query, cols=None, percentile=None, args=()):
         "Summary"
         percentile = percentile if percentile else \
-            [x / 10 for x in range(1, 10)]
+            [0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99]
         df = self.rows(query, args).df(cols)
         print('Table Description')
         print('-----------------')
