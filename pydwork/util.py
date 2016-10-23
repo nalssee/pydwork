@@ -273,6 +273,11 @@ def istext(x):
     return isinstance(x, str)
 
 
+def yyyymm(date, n):
+    d1 = datetime.strptime(str(date), '%Y%m') + relativedelta(months=n)
+    return int(d1.strftime('%Y%m'))
+    
+
 def yyyymmdd(date, n, periods):
     """example: yyyymmdd(19810101, 2, 'd') => 19810103
 

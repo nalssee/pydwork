@@ -282,6 +282,9 @@ class TestMisc(unittest.TestCase):
         self.assertEqual(yyyymmdd(19991230, 2, 'm'), 20000229)
         self.assertEqual(yyyymmdd(19991231, -2, 'm'), 19991031)
 
+        # not 19990531
+        self.assertEqual(yyyymmdd(19990430, 1, 'm'), 19990530)
+
         self.assertEqual(yyyymmdd(19991231, 2, 'd'), 20000102)
         self.assertEqual(yyyymmdd(19991231, -2, 'd'), 19991229)
 

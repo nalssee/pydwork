@@ -19,7 +19,7 @@ import pandas as pd
 import numpy as np
 import statsmodels.api as sm
 
-from .util import isnum, istext, yyyymmdd, \
+from .util import isnum, istext, yyyymm, yyyymmdd, \
                   listify, camel2snake, peek_first
 
 
@@ -232,7 +232,9 @@ class SQLPlus:
         # load some user-defined functions from helpers.py
         self.conn.create_function('isnum', 1, isnum)
         self.conn.create_function('istext', 1, istext)
+        self.conn.create_function('yyyymm', 2, yyyymm)
         self.conn.create_function('yyyymmdd', 3, yyyymmdd)
+
 
     # args can be a list, a tuple or a dictionary
     def run(self, query, args=()):
