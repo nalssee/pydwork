@@ -9,7 +9,7 @@ PYPATH = os.path.join(TESTPATH, '..', '..')
 sys.path.append(PYPATH)
 
 from pydwork.sqlplus import *
-from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd, \
+from pydwork.util import mpairs, isnum, istext, yyyymmdd, \
     prepend_header, pmap
 
 
@@ -279,11 +279,11 @@ class TestMisc(unittest.TestCase):
         self.assertFalse(istext(3))
         self.assertTrue(istext('32.3'))
 
-        self.assertEqual(yyyymm(199912, 2), 200002)
-        self.assertEqual(yyyymm(199912, -2), 199910)
+        self.assertEqual(yyyymmdd(19991230, 2, 'm'), 20000229)
+        self.assertEqual(yyyymmdd(19991231, -2, 'm'), 19991031)
 
-        self.assertEqual(yyyymmdd(19991231, 2), 20000102)
-        self.assertEqual(yyyymmdd(19991231, -2), 19991229)
+        self.assertEqual(yyyymmdd(19991231, 2, 'd'), 20000102)
+        self.assertEqual(yyyymmdd(19991231, -2, 'd'), 19991229)
 
 
 class TestPmap(unittest.TestCase):
@@ -462,12 +462,12 @@ class TestUserDefinedFunctions(unittest.TestCase):
 
             r = next(c.reel(
                 """
-                select *, yyyymm(substr(date, 1, 6), 12) as yyyymm1,
-                yyyymmdd(date, 365) as yyyymmdd1
+                select *, yyyymmdd(date, 12, 'm') as yyyymm1,
+                yyyymmdd(date, 365, 'd') as yyyymmdd1
                 from indport
                 where date >= 20160801
                 """))
-            self.assertEqual(r.yyyymm1, 201708)
+            self.assertEqual(r.yyyymm1, 20170801)
             self.assertEqual(r.yyyymmdd1, 20170801)
 
 
