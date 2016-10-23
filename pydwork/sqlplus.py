@@ -23,7 +23,7 @@ from .util import isnum, istext, yyyymmdd, \
                   listify, camel2snake, peek_first
 
 
-__all__ = ['dbopen', 'Row', 'set_workspace']
+__all__ = ['dbopen', 'Row', 'Rows', 'set_workspace']
 
 
 WORKSPACE = ''
