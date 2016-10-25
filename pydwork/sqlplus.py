@@ -195,6 +195,12 @@ class Rows(list):
         else:
             _show(self, n, cols, None)
 
+    def describe(self, n=30, cols=None, percentile=None):
+        if self == []:
+            print(self)
+        else:
+            _describe(self, n, cols, percentile)
+
     # Simpler version of show (when you write it to a file)
     def write(self, filename, cols=None):
         _show(self, None, cols, filename)
@@ -269,20 +275,6 @@ class SQLPlus:
     def df(self, query, cols=None, args=()):
         return self.rows(query, args=args).df(cols)
 
-    def describe(self, query, cols=None, percentile=None, args=()):
-        "Summary"
-        percentile = percentile if percentile else \
-            [0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99]
-        df = self.rows(query, args).df(cols)
-        print('Table Description')
-        print('-----------------')
-        print(df.describe(percentile, include='all'))
-        print()
-        print('Corr Matrix')
-        print('-----------')
-        print(df.corr())
-        print()
-
     def save(self, x, name=None, fn=None, args=()):
         """create a table from an iterator.
 
@@ -333,6 +325,11 @@ class SQLPlus:
         "Printing to a screen or saving to a file "
         _, rows = _x2rows(x, self._cursor, args)
         _show(rows, n, cols, None)
+
+    def describe(self, query, n=30, cols=None, percentile=None, args=()):
+        "Summary"
+        _, rows = _x2rows(query, self._cursor, args)
+        _describe(rows, n, cols, percentile)
 
     def write(self, x, filename=None, cols=None, args=()):
         "writes to a file(csv)"
@@ -634,6 +631,28 @@ def _show(rows, n, cols, filename):
             print(pd.DataFrame(list_values[:nrows], columns=cols))
             if len(list_values) > nrows:
                 print("...more rows...")
+
+
+def _describe(rows, n, cols, percentile):
+    print('Table Description')
+    print('-----------------')
+    print('Sample Rows')
+
+    rows1 = Rows(rows)
+    _show(rows1, n, cols, None)
+
+    percentile = percentile if percentile else \
+        [0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99]
+    df = rows1.df(cols)
+    print('-----------------')
+    print()
+    print('Summary Stats')
+    print(df.describe(percentile, include='all'))
+    print()
+    print('Corr Matrix')
+    print('-----------')
+    print(df.corr())
+    print()
 
 
 # sequence of row values to rows
