@@ -295,7 +295,7 @@ class SQLPlus:
         """
         name1, rows = _x2rows(x, self._cursor, args)
         name = name or name1
-        if name is None:
+        if not name:
             raise ValueError('table name required')
 
         # always overwrites
@@ -331,10 +331,6 @@ class SQLPlus:
     # Be careful so that you don't overwrite the file
     def show(self, x, n=30, cols=None, args=()):
         "Printing to a screen or saving to a file "
-        if isinstance(x, str) \
-            and x.strip().split(' ')[0].lower() != 'select' \
-            and not x.strip().split(' ')[0].endswith('.csv'):
-            x = 'select * from ' + x
         _, rows = _x2rows(x, self._cursor, args)
         _show(rows, n, cols, None)
 
@@ -397,7 +393,7 @@ def _x2rows(x, cursor, args):
         else:
             seq_rvals = cursor.execute(_select_statement(x, '*'), args)
             colnames = [c[0] for c in seq_rvals.description]
-            name = x if _is_oneword(x) else None
+            name = _starts_with_table_name(x)
             return name, _build_rows(seq_rvals, colnames)
     # if it's a generator
     elif hasattr(x, '__call__'):
@@ -565,14 +561,17 @@ def _insert_statement(name, ncol):
     return "insert into %s values (%s)" % (name.lower(), qmarks)
 
 
-def _is_oneword(query):
-    " tests if query is one word "
-    return len(query.strip().split(' ')) == 1
+def _starts_with_table_name(query):
+    first_word = query.strip().split(' ')[0]
+    if first_word != 'select' and not first_word.endswith('.csv'):
+        return first_word
+    else:
+        return False
 
 
 def _select_statement(query, cols):
-    "If query is just one word, turn it to a select stmt "
-    if _is_oneword(query):
+    "turn it to a select stmt "
+    if _starts_with_table_name(query):
         return "select %s from %s" % (', '.join(listify(cols)), query)
     return query
 
