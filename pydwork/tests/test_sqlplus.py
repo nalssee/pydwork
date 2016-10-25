@@ -9,7 +9,7 @@ PYPATH = os.path.join(TESTPATH, '..', '..')
 sys.path.append(PYPATH)
 
 from pydwork.sqlplus import *
-from pydwork.util import mpairs, isnum, istext, yyyymmdd, \
+from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd, \
     prepend_header, pmap
 
 

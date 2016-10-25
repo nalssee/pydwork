@@ -286,6 +286,8 @@ class SQLPlus:
     def save(self, x, name=None, fn=None, args=()):
         """create a table from an iterator.
 
+        CAUTION!! OVERWIRTES A TABLE IF EXISTS
+
         x (str or iter or GF[* -> Row])
         name (str): table name in DB
         fn: function that takes a row(all elements are strings)
@@ -296,9 +298,8 @@ class SQLPlus:
         if name is None:
             raise ValueError('table name required')
 
-        # table names are case insensitive
-        if name.lower() in self.tables:
-            return
+        # always overwrites
+        self.drop(name)
 
         rows1 = (fn(r) for r in rows) if fn else rows
 
