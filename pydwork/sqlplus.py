@@ -195,7 +195,7 @@ class Rows(list):
         else:
             _show(self, n, cols, None)
 
-    def describe(self, n=30, cols=None, percentile=None):
+    def desc(self, n=30, cols=None, percentile=None):
         if self == []:
             print(self)
         else:
@@ -326,7 +326,7 @@ class SQLPlus:
         _, rows = _x2rows(x, self._cursor, args)
         _show(rows, n, cols, None)
 
-    def describe(self, query, n=30, cols=None, percentile=None, args=()):
+    def desc(self, query, n=30, cols=None, percentile=None, args=()):
         "Summary"
         _, rows = _x2rows(query, self._cursor, args)
         _describe(rows, n, cols, percentile)

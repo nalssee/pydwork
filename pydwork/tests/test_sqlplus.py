@@ -529,8 +529,8 @@ class TestDFMisc(unittest.TestCase):
         with dbopen(':memory:') as c:
             c.save('iris.csv')
             print("IRIS")
-            c.describe("""select sepal_length, sepal_width, petal_length,
-                       petal_width from iris""")
+            c.desc("""select sepal_length, sepal_width, petal_length,
+                   petal_width from iris""")
 
 # class TestSample(unittest.TestCase):
 #     def test_hist(self):
