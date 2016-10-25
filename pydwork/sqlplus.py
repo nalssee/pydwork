@@ -331,6 +331,10 @@ class SQLPlus:
     # Be careful so that you don't overwrite the file
     def show(self, x, n=30, cols=None, args=()):
         "Printing to a screen or saving to a file "
+        if isinstance(x, str) \
+            and x.strip().split(' ')[0].lower() != 'select' \
+            and not x.strip().split(' ')[0].endswith('.csv'):
+            x = 'select * from ' + x
         _, rows = _x2rows(x, self._cursor, args)
         _show(rows, n, cols, None)
 
