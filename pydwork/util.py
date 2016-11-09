@@ -276,24 +276,29 @@ def istext(x):
 def yyyymm(date, n):
     d1 = datetime.strptime(str(date), '%Y%m') + relativedelta(months=n)
     return int(d1.strftime('%Y%m'))
-    
 
-def yyyymmdd(date, n, periods):
-    """example: yyyymmdd(19810101, 2, 'd') => 19810103
 
-    periods can be 'y', 'm', 'w', or 'd'
+def yyyymmdd(date, nextstep):
+    """example: yyyymmdd(19810101, '2 days') => 19810103
+
+    year(s), month(s), week(s), or day(s)
     """
+    if isinstance(nextstep, int):
+        n, period = nextstep, 'days'
+    else:
+        n, period = nextstep.split()
+        n = int(n)
 
-    if periods == 'y':
+    if period.startswith('year'):
         rd = relativedelta(years=n)
-    elif periods == 'm':
+    elif period.startswith('month'):
         rd = relativedelta(months=n)
-    elif periods == 'w':
+    elif period.startswith('week'):
         rd = relativedelta(weeks=n)
-    elif periods == 'd':
+    elif period.startswith('day'):
         rd = relativedelta(days=n)
     else:
-        raise ValueError("Unknown periods", periods)
+        raise ValueError("Unknown periods", period)
 
     d1 = datetime.strptime(str(date), '%Y%m%d') + rd
     return int(d1.strftime('%Y%m%d'))

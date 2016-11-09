@@ -11,6 +11,7 @@ sys.path.append(PYPATH)
 from pydwork.sqlplus import *
 from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd, \
     prepend_header, pmap
+from pydwork import fin
 
 
 set_workspace('data')
@@ -279,18 +280,18 @@ class TestMisc(unittest.TestCase):
         self.assertFalse(istext(3))
         self.assertTrue(istext('32.3'))
 
-        self.assertEqual(yyyymmdd(19991230, 2, 'm'), 20000229)
-        self.assertEqual(yyyymmdd(19991231, -2, 'm'), 19991031)
+        self.assertEqual(yyyymmdd(19991230, '2 months'), 20000229)
+        self.assertEqual(yyyymmdd(19991231, '-2 months'), 19991031)
 
         self.assertEqual(yyyymm(199912, 2), 200002)
         self.assertEqual(yyyymm(199912, -2), 199910)
 
 
         # not 19990531
-        self.assertEqual(yyyymmdd(19990430, 1, 'm'), 19990530)
+        self.assertEqual(yyyymmdd(19990430, '1 month'), 19990530)
 
-        self.assertEqual(yyyymmdd(19991231, 2, 'd'), 20000102)
-        self.assertEqual(yyyymmdd(19991231, -2, 'd'), 19991229)
+        self.assertEqual(yyyymmdd(19991231, '2 days'), 20000102)
+        self.assertEqual(yyyymmdd(19991231, '-2 days'), 19991229)
 
 
 class TestPmap(unittest.TestCase):
@@ -469,8 +470,8 @@ class TestUserDefinedFunctions(unittest.TestCase):
 
             r = next(c.reel(
                 """
-                select *, yyyymmdd(date, 12, 'm') as yyyymm1,
-                yyyymmdd(date, 365, 'd') as yyyymmdd1
+                select *, yyyymmdd(date, '12 months') as yyyymm1,
+                yyyymmdd(date, '365 days') as yyyymmdd1
                 from indport
                 where date >= 20160801
                 """))
@@ -532,18 +533,90 @@ class TestDFMisc(unittest.TestCase):
             c.desc("""select sepal_length, sepal_width, petal_length,
                    petal_width from iris""")
 
-# class TestSample(unittest.TestCase):
-#     def test_hist(self):
-#         with dbopen(':memory:') as c:
-#             import matplotlib.pyplot as plt
-#             c.save('iris.csv')
-#             iris = c.rows('iris')
-#             print(iris.df().describe(include='all'))
-#
-#             iris.df().plot.scatter('petal_length', 'petal_width')
-#             plt.show()
-#             for g in iris.group('species'):
-#                 g.df()['sepal_length'].plot.hist(bins=20, legend=True)
-#             plt.show()
+
+
+class TestFin(unittest.TestCase):
+    def setUp(self):
+        self.rs1 = []
+        for year in range(2001, 2011):
+            r = Row()
+            r.yyyy = year
+            self.rs1.append(r)
+        self.rs1 = Rows(self.rs1)
+
+        self.rs2 = []
+        start_month = 200101
+        for i in range(36):
+            r = Row()
+            r.yyyymm = yyyymm(start_month, i)
+            self.rs2.append(r)
+        self.rs2 = Rows(self.rs2)
+
+        self.rs3 = []
+        start_date = 20010101
+        for i in range(30):
+            r = Row()
+            r.yyyymmdd = yyyymmdd(start_date, i)
+            self.rs3.append(r)
+        self.rs3 = Rows(self.rs3)
+
+        with dbopen(':memory:') as c:
+            c.save('indport.csv')
+            # to pseudo monthly data
+            rs = []
+            for rs1 in c.reel('indport order by date', group=lambda r: str(r.date)[0:4]):
+                for r in rs1:
+                    r.yyyy = int(str(r.date)[0:4])
+                    r.fcode = 'A' + str(r.date)[4:]
+                    del r.date
+                    rs.append(r)
+            self.indport = Rows(rs)
+
+
+    def test_rollover(self):
+        lengths = []
+        for rs0 in fin.overlap(self.rs1, 'yyyy', 3, 2):
+            lengths.append(len(rs0))
+        self.assertEqual(lengths, [3, 3, 3, 3, 2])
+
+        lengths = []
+        for rs0 in fin.overlap(self.rs2.where(lambda r: r.yyyymm > 200103), 'yyyymm', 12, 12):
+            lengths.append(len(rs0))
+        self.assertEqual(lengths, [12, 12, 9])
+
+        lengths = []
+        for rs0 in fin.overlap(self.rs2.where(lambda r: r.yyyymm > 200103), 'yyyymm', 24, 12):
+            lengths.append(len(rs0))
+        self.assertEqual(lengths, [24, 21, 9])
+
+        lengths = []
+        for rs0 in fin.overlap(self.rs3, 'yyyymmdd', '2 weeks', '1 week'):
+            lengths.append(len(rs0))
+        self.assertEqual(lengths, [14, 14, 14, 9, 2])
+
+    def test_assign_pn(self):
+        fin.assign_pn(self.indport, 'yyyy', 'cnsmr', 2)
+        fin.assign_pn(self.indport, 'yyyy', 'manuf', 3)
+        fin.assign_pn(self.indport, 'yyyy', 'hlth', 2)
+
+        avgport = fin.avg_pt(self.indport, 'yyyy', 'pn_manuf', 'other')
+        # fin.avg_pts(avgport, 'yyyy').show(n=1000)
+        fin.ppattern(fin.avg_pts(avgport, 'yyyy'))
+
+        # self.indport.desc()
+
+    def test_dassign_pn(self):
+        fin.assign_pn(self.indport, 'yyyy', 'cnsmr', 4)
+        fin.dassign_pn(self.indport, 'yyyy', 'pn_cnsmr', 'manuf', 3)
+        fin.dassign_pn(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'hlth', 2)
+
+        avgport = fin.avg_pt(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'other')
+        # avgport.show(n=1000)
+        fin.ppattern(fin.avg_pts(avgport, 'yyyy'))
+        # self.indport.desc()
+
+    def test_famac(self):
+        fin.famac(self.indport, 'other ~ cnsmr + manuf + hi_tec + hlth', 'yyyy').show()
+
 
 unittest.main()

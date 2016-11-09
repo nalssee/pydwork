@@ -161,6 +161,7 @@ class Rows(list):
         pred = _build_keyfn(pred)
         return Rows(r for r in self if pred(r))
 
+    # num and text, I don't like the naming
     def num(self, cols):
         "another simplified filtering, numbers only"
         cols = listify(cols)
@@ -195,7 +196,7 @@ class Rows(list):
         else:
             _show(self, n, cols, None)
 
-    def desc(self, n=30, cols=None, percentile=None):
+    def desc(self, n=5, cols=None, percentile=None):
         if self == []:
             print(self)
         else:
@@ -239,7 +240,7 @@ class SQLPlus:
         self.conn.create_function('isnum', 1, isnum)
         self.conn.create_function('istext', 1, istext)
         self.conn.create_function('yyyymm', 2, yyyymm)
-        self.conn.create_function('yyyymmdd', 3, yyyymmdd)
+        self.conn.create_function('yyyymmdd', 2, yyyymmdd)
 
 
     # args can be a list, a tuple or a dictionary
@@ -326,7 +327,7 @@ class SQLPlus:
         _, rows = _x2rows(x, self._cursor, args)
         _show(rows, n, cols, None)
 
-    def desc(self, query, n=30, cols=None, percentile=None, args=()):
+    def desc(self, query, n=5, cols=None, percentile=None, args=()):
         "Summary"
         _, rows = _x2rows(query, self._cursor, args)
         _describe(rows, n, cols, percentile)
