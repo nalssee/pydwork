@@ -618,6 +618,11 @@ class TestFin(unittest.TestCase):
         c = avgall[6].avg
         self.assertEqual(b - a, c)
 
+    def test_assign_pn1(self):
+        fi.assign_pn(self.indport, 'yyyy', 'cnsmr', 5)
+        avgport = fi.avg_pt(self.indport, 'yyyy', 'pn_cnsmr', 'other', 'manuf')
+        self.assertEqual(round(avgport[0].avg, 4), -0.0255)
+
     def test_dassign_pn(self):
         fi.assign_pn(self.indport, 'yyyy', 'cnsmr', 4)
         fi.dassign_pn(self.indport, 'yyyy', 'pn_cnsmr', 'manuf', 3)
