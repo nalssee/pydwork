@@ -11,7 +11,7 @@ sys.path.append(PYPATH)
 from pydwork.sqlplus import *
 from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd, \
     prepend_header, pmap
-from pydwork import fin
+from pydwork import fi
 
 
 set_workspace('data')
@@ -575,33 +575,33 @@ class TestFin(unittest.TestCase):
 
     def test_rollover(self):
         lengths = []
-        for rs0 in fin.overlap(self.rs1, 'yyyy', 3, 2):
+        for rs0 in fi.overlap(self.rs1, 'yyyy', 3, 2):
             lengths.append(len(rs0))
         self.assertEqual(lengths, [3, 3, 3, 3, 2])
 
         lengths = []
-        for rs0 in fin.overlap(self.rs2.where(lambda r: r.yyyymm > 200103), 'yyyymm', 12, 12):
+        for rs0 in fi.overlap(self.rs2.where(lambda r: r.yyyymm > 200103), 'yyyymm', 12, 12):
             lengths.append(len(rs0))
         self.assertEqual(lengths, [12, 12, 9])
 
         lengths = []
-        for rs0 in fin.overlap(self.rs2.where(lambda r: r.yyyymm > 200103), 'yyyymm', 24, 12):
+        for rs0 in fi.overlap(self.rs2.where(lambda r: r.yyyymm > 200103), 'yyyymm', 24, 12):
             lengths.append(len(rs0))
         self.assertEqual(lengths, [24, 21, 9])
 
         lengths = []
-        for rs0 in fin.overlap(self.rs3, 'yyyymmdd', '2 weeks', '1 week'):
+        for rs0 in fi.overlap(self.rs3, 'yyyymmdd', '2 weeks', '1 week'):
             lengths.append(len(rs0))
         self.assertEqual(lengths, [14, 14, 14, 9, 2])
 
     def test_assign_pn(self):
-        fin.assign_pn(self.indport, 'yyyy', 'cnsmr', 2)
-        fin.assign_pn(self.indport, 'yyyy', 'manuf', 3)
+        fi.assign_pn(self.indport, 'yyyy', 'cnsmr', 2)
+        fi.assign_pn(self.indport, 'yyyy', 'manuf', 3)
         with self.assertRaises(ValueError):
             # there are not enough element to make portfolios in 2009
-            fin.avg_pt(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'other')
+            fi.avg_pt(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'other')
 
-        avgport = fin.avg_pt(self.indport.where(lambda r: r.yyyy < 2009),
+        avgport = fi.avg_pt(self.indport.where(lambda r: r.yyyy < 2009),
                              'yyyy', 'pn_cnsmr, pn_manuf', 'other')
         self.assertEqual(avgport[0].n, 76)
         self.assertEqual(avgport[1].n, 45)
@@ -612,23 +612,23 @@ class TestFin(unittest.TestCase):
 
         self.assertEqual(round(avgport[0].avg, 2), -0.63)
 
-        avgall = fin.avg_pts(avgport, 'yyyy')
+        avgall = fi.avg_pts(avgport, 'yyyy')
         a = avgall[0].avg
         b = avgall[2].avg
         c = avgall[6].avg
         self.assertEqual(b - a, c)
 
     def test_dassign_pn(self):
-        fin.assign_pn(self.indport, 'yyyy', 'cnsmr', 4)
-        fin.dassign_pn(self.indport, 'yyyy', 'pn_cnsmr', 'manuf', 3)
-        fin.dassign_pn(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'hlth', 2)
+        fi.assign_pn(self.indport, 'yyyy', 'cnsmr', 4)
+        fi.dassign_pn(self.indport, 'yyyy', 'pn_cnsmr', 'manuf', 3)
+        fi.dassign_pn(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'hlth', 2)
 
-        avgport = fin.avg_pt(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'other')
+        avgport = fi.avg_pt(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'other')
 
         for r in avgport.where(lambda r: r.yyyy < 2016):
             self.assertTrue(r.n == 20 or r.n == 21 or r.n == 22)
 
-        avgall = fin.avg_pts(avgport, 'yyyy')
+        avgall = fi.avg_pts(avgport, 'yyyy')
         self.assertEqual(round(avgport[0].avg, 2), -1.33)
         a = avgall[0].avg
         b = avgall[2].avg
@@ -636,7 +636,7 @@ class TestFin(unittest.TestCase):
         self.assertEqual(b - a, c)
 
     def test_famac(self):
-        fit = fin.famac(self.indport, 'other ~ cnsmr + manuf + hi_tec + hlth', 'yyyy', False)
+        fit = fi.famac(self.indport, 'other ~ cnsmr + manuf + hi_tec + hlth', 'yyyy', False)
         self.assertEqual(round(fit[0].intercept, 2), 0.02)
         self.assertEqual(round(fit[0].cnsmr, 2), 0.44)
         self.assertEqual(round(fit[0].manuf, 2), 0.16)
