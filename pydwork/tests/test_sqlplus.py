@@ -597,13 +597,26 @@ class TestFin(unittest.TestCase):
     def test_assign_pn(self):
         fin.assign_pn(self.indport, 'yyyy', 'cnsmr', 2)
         fin.assign_pn(self.indport, 'yyyy', 'manuf', 3)
-        fin.assign_pn(self.indport, 'yyyy', 'hlth', 2)
+        with self.assertRaises(ValueError):
+            # there are not enough element to make portfolios in 2009
+            fin.avg_pt(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'other')
 
-        avgport = fin.avg_pt(self.indport, 'yyyy', 'pn_manuf', 'other')
-        # fin.avg_pts(avgport, 'yyyy').show(n=1000)
-        fin.ppattern(fin.avg_pts(avgport, 'yyyy'))
+        avgport = fin.avg_pt(self.indport.where(lambda r: r.yyyy < 2009),
+                             'yyyy', 'pn_cnsmr, pn_manuf', 'other')
+        self.assertEqual(avgport[0].n, 76)
+        self.assertEqual(avgport[1].n, 45)
+        self.assertEqual(avgport[2].n, 3)
+        self.assertEqual(avgport[3].n, 7)
+        self.assertEqual(avgport[4].n, 37)
+        self.assertEqual(avgport[5].n, 80)
 
-        # self.indport.desc()
+        self.assertEqual(round(avgport[0].avg, 2), -0.63)
+
+        avgall = fin.avg_pts(avgport, 'yyyy')
+        a = avgall[0].avg
+        b = avgall[2].avg
+        c = avgall[6].avg
+        self.assertEqual(b - a, c)
 
     def test_dassign_pn(self):
         fin.assign_pn(self.indport, 'yyyy', 'cnsmr', 4)
@@ -611,12 +624,24 @@ class TestFin(unittest.TestCase):
         fin.dassign_pn(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'hlth', 2)
 
         avgport = fin.avg_pt(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'other')
-        # avgport.show(n=1000)
-        fin.ppattern(fin.avg_pts(avgport, 'yyyy'))
-        # self.indport.desc()
+
+        for r in avgport.where(lambda r: r.yyyy < 2016):
+            self.assertTrue(r.n == 20 or r.n == 21 or r.n == 22)
+
+        avgall = fin.avg_pts(avgport, 'yyyy')
+        self.assertEqual(round(avgport[0].avg, 2), -1.33)
+        a = avgall[0].avg
+        b = avgall[2].avg
+        c = avgall[12].avg
+        self.assertEqual(b - a, c)
 
     def test_famac(self):
-        fin.famac(self.indport, 'other ~ cnsmr + manuf + hi_tec + hlth', 'yyyy').show()
+        fit = fin.famac(self.indport, 'other ~ cnsmr + manuf + hi_tec + hlth', 'yyyy', False)
+        self.assertEqual(round(fit[0].intercept, 2), 0.02)
+        self.assertEqual(round(fit[0].cnsmr, 2), 0.44)
+        self.assertEqual(round(fit[0].manuf, 2), 0.16)
+        self.assertEqual(round(fit[0].hi_tec, 2), 0.03)
+        self.assertEqual(round(fit[0].hlth, 2), 0.10)
 
 
 unittest.main()

@@ -169,7 +169,7 @@ def famac(rs, model, datecol, show=True):
     params = Rows(params)
 
     if show:
-        print('var,mean,tval')
+        print('var,avg,tval')
         for var in xvs:
             seq = params[var]
             tval = ttest_1samp(seq, 0)
@@ -192,37 +192,52 @@ def star(val, pval):
         return str(round(val, 3))
 
 
-def ppattern(rs):
-    def hilo(rs):
-        return rs.where(lambda r: '-' in r.pn)
-    def nonhilo(rs):
-        return rs.where(lambda r: '-' not in r.pn)
+def _dim1print(rs):
+    print('', end=',')
+    for i in range(1, len(rs)):
+        print(i, end=',')
+    print('high - low (tval)')
+    print('avg', end=',')
+    for r in rs[:-1]:
+        print(star(r.avg, r.pval), end=',')
+    r0 = rs[-1]
+    print('%s (%s)' % (star(r0.avg, r0.pval), round(r0.tval, 2)))
 
+
+def _dim2print(rs):
+    rs1, rs2 = _nonhilo(rs), _hilo(rs)
+    grs = list(_nonhilo(rs1).group(lambda r: r.pn[:3]))
+    n, k = len(grs), len(grs[0])
+    print('', end=',')
+    for i in range(1, k + 1):
+        print(i, end=',')
+    print('high - low (tval)')
+    for i, (rs0, hl) in enumerate(zip(grs, rs2), 1):
+        print(i, end=',')
+        for r in rs0:
+            print(star(r.avg, r.pval), end=',')
+        print('%s (%s)' % (star(hl.avg, hl.pval), round(hl.tval, 2)))
+    print('high - low', end=',')
+    for r in rs2[n:]:
+        print('%s (%s)' % (star(r.avg, r.pval), round(r.tval, 2)), end=',')
+    print()
+
+
+def _hilo(rs):
+    return rs.where(lambda r: '-' in r.pn)
+
+
+def _nonhilo(rs):
+    return rs.where(lambda r: '-' not in r.pn)
+
+
+# pattern print
+def pprint(rs):
     dim = len(rs[0].pn.split('/')) - 1
     if dim == 1:
-        for i in range(1, len(rs)):
-            print(i, end=',')
-        print('hilo')
-        for r in rs:
-            print(star(r.avg, r.pval), end=',')
-        print()
+        _dim1print(rs)
     elif dim == 2:
-        rs1, rs2 = nonhilo(rs), hilo(rs)
-        grs = list(nonhilo(rs1).group(lambda r: r.pn[:3]))
-        n, k = len(grs), len(grs[0])
-        print('', end=',')
-        for i in range(1, k + 1):
-            print(i, end=',')
-        print('hilo')
-        for i, (rs0, hl) in enumerate(zip(grs, rs2), 1):
-            print(i, end=',')
-            for r in rs0:
-                print(star(r.avg, r.pval), end=',')
-            print(star(hl.avg, hl.pval))
-        print('hilo', end=',')
-        for r in rs2[n:]:
-            print(star(r.avg, r.pval), end=',')
-        print()
+        _dim2print(rs)
     else:
         raise ValueError('Dimension must be 1 or 2')
 
