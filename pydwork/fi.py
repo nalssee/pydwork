@@ -2,16 +2,14 @@
 Frequently used financial data work
 """
 
-from scipy.stats import ttest_1samp
+import statistics as st
+
 from itertools import combinations, takewhile, dropwhile, product
 
-from datetime import datetime
-from dateutil.relativedelta import relativedelta
+from scipy.stats import ttest_1samp
 
-from pydwork.sqlplus import *
+from pydwork.sqlplus import Rows, Row
 from .util import nchunks, listify, yyyymm, yyyymmdd
-
-import statistics as st
 
 
 def assign_pn(rs, datecol, col, n):
@@ -46,6 +44,7 @@ def dassign_pn(rs, datecol, prepns, col, n):
 
 
 def weighted_avg(rs, col, weightcol):
+    "compute weigthed average"
     total = sum(r[weightcol] for r in rs)
     return st.mean(r[col] * r[weightcol] / total for r in rs)
 
@@ -92,10 +91,12 @@ def avg_pt(rs, datecol, pncols, col, weightcol=None):
 
 
 def _encode_pns(pns):
+    "[1, 2, 3] => 'p/1/2/3'"
     return 'p/' + '/'.join(str(pn) for pn in pns)
 
 
 def _decode_pns(pns):
+    "p/1/2/3 => ['p', '1', '2', '3']"
     return pns.split('/')
 
 
@@ -170,18 +171,18 @@ def famac(rs, model, datecol, show=True):
         r.r2 = reg.rsquared
         params.append(r)
 
-    params = Rows(params)
+    params1 = Rows(params)
 
     if show:
         print('var,avg,tval')
         for var in xvs:
-            seq = params[var]
+            seq = params1[var]
             tval = ttest_1samp(seq, 0)
             print(var, end=',')
             print(star(st.mean(seq), tval[1]), end=',')
             print(round(tval[0], 2))
 
-    return params
+    return params1
 
 
 def star(val, pval):
@@ -197,6 +198,7 @@ def star(val, pval):
 
 
 def _dim1print(rs):
+    "1 dim print"
     print('', end=',')
     for i in range(1, len(rs)):
         print(i, end=',')
@@ -209,6 +211,7 @@ def _dim1print(rs):
 
 
 def _dim2print(rs):
+    "2 dim print"
     rs1, rs2 = _nonhilo(rs), _hilo(rs)
     grs = list(_nonhilo(rs1).group(lambda r: r.pn[:3]))
     n, k = len(grs), len(grs[0])
@@ -228,15 +231,17 @@ def _dim2print(rs):
 
 
 def _hilo(rs):
+    "(high - low) rows"
     return rs.where(lambda r: '-' in r.pn)
 
 
 def _nonhilo(rs):
+    "non (high - low) rows, ordinary rows"
     return rs.where(lambda r: '-' not in r.pn)
 
 
-# pattern print
 def pprint(rs):
+    "pattern print, 1d and 2d"
     dim = len(rs[0].pn.split('/')) - 1
     if dim == 1:
         _dim1print(rs)
@@ -249,6 +254,7 @@ def pprint(rs):
 def overlap(rs, datecol, period, jump):
     "group rows over time, allowing overlaps"
     def get_nextdate(date, period):
+        "date after the period"
         if len(date) == 8:
             return yyyymmdd(date, period)
         elif len(date) == 6:
@@ -259,6 +265,7 @@ def overlap(rs, datecol, period, jump):
             raise ValueError('Invalid date', date)
 
     def rows_for(rs, date, period):
+        "rows from the date for the period"
         enddate = get_nextdate(date, period)
         return Rows(takewhile(lambda r: r[datecol] < enddate, rs))
 
@@ -266,4 +273,4 @@ def overlap(rs, datecol, period, jump):
         startdate = str(rs[0][datecol])
         enddate = get_nextdate(startdate, jump)
         yield rows_for(rs, startdate, period)
-        rs = Rows(dropwhile(lambda r: r[datecol] <  enddate, rs))
+        rs = Rows(dropwhile(lambda r: r[datecol] < enddate, rs))
