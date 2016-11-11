@@ -60,7 +60,11 @@ def avg_pt(rs, datecol, pncols, col, weightcol=None):
 
     pncols = listify(pncols)
 
-    rs = rs.order(datecol)
+    if weightcol:
+        rs = rs.num(pncols + [col, weightcol]).order(datecol)
+    else:
+        rs = rs.num(pncols + [col]).order(datecol)
+
     ns = [range(1, n + 1) for n in get_ns(next(rs.group(datecol)))]
 
     result = []
