@@ -148,6 +148,7 @@ class PRows(Rows):
             prows.pshow(pncols[-2:])
 
     def tshow(self, cols=None):
+        "show time series average"
         cols = listify(cols) if cols else self[0].columns
         print(','.join(cols))
         print(','.join(aseq(self[col], True) for col in cols))
