@@ -580,11 +580,14 @@ def _csv_reel(csv_file):
 
             except csv.Error:
                 line_no += 1
+                print(line)
+                print(next(reader))
+
                 raise ValueError(line_no)
 
             except StopIteration:
                 break
-                
+
         # for line_no, line in enumerate(csv.reader(fin), 2):
         #     if len(line) != ncol:
         #         if is_empty_line(line):
