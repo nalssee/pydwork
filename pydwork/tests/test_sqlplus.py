@@ -11,7 +11,7 @@ sys.path.append(PYPATH)
 from pydwork.sqlplus import *
 from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd, \
     prepend_header, pmap
-from pydwork import fi
+from pydwork.fi import PRows
 
 
 set_workspace('data')
@@ -359,6 +359,10 @@ class TestRows(unittest.TestCase):
         with dbopen(':memory:') as c:
             c.save('iris.csv')
             iris = c.rows('iris')
+
+            # rows must be iterable
+            self.assertEqual(sum(1 for _ in iris), 150)
+
             self.assertTrue(isinstance(iris[0], Row))
             self.assertTrue(hasattr(iris[2:3], 'order'))
             # hasattr doesn't work correctly for Row
@@ -399,27 +403,29 @@ class TestRows(unittest.TestCase):
             col1 = iris.where(lambda r: r['species'] == 'versicolor')[0].col
 
             self.assertEqual(col1, 51)
-            # filter is non-destructive
-            self.assertEqual(iris[0].col, 132)
+            # where is destructive
+            self.assertEqual(iris[0].col, 51)
+
+            iris = c.rows('iris')
+            iris.order('sepal_length, sepal_width', reverse=True)
 
             self.assertEqual(len(next(iris.group('species'))), 12)
-
             # just because..
             sum = 0
             for rs in iris.group('species'):
                 sum += len(rs)
             self.assertEqual(sum, 150)
 
-            # iris = Rows(c.reel('iris'))
+            iris = c.rows('iris')
 
-            self.assertEqual(len(iris.num('species')), 0)
-            self.assertEqual(len(iris.text('species')), 150)
+            self.assertEqual(len(iris[:].num('species')), 0)
+            self.assertEqual(len(iris[:].text('species')), 150)
 
-            self.assertEqual(len(iris.num('sepal_length, sepal_width')), 150)
-            self.assertEqual(len(iris.where(lambda r: r.species in
+            self.assertEqual(len(iris[:].num('sepal_length, sepal_width')), 150)
+            self.assertEqual(len(iris[:].where(lambda r: r.species in
                                             ['versicolor', 'virginica'])),
                              100)
-            self.assertEqual(len(iris.where(lambda r: r.sepal_length == 5.0)), 10)
+            self.assertEqual(len(iris[:].where(lambda r: r.sepal_length == 5.0)), 10)
 
             rs = []
             for x in range(10):
@@ -535,7 +541,122 @@ class TestDFMisc(unittest.TestCase):
 
 
 
-class TestFin(unittest.TestCase):
+# class TestFin(unittest.TestCase):
+#     def setUp(self):
+#         self.rs1 = []
+#         for year in range(2001, 2011):
+#             r = Row()
+#             r.yyyy = year
+#             self.rs1.append(r)
+#         self.rs1 = Rows(self.rs1)
+#
+#         self.rs2 = []
+#         start_month = 200101
+#         for i in range(36):
+#             r = Row()
+#             r.yyyymm = yyyymm(start_month, i)
+#             self.rs2.append(r)
+#         self.rs2 = Rows(self.rs2)
+#
+#         self.rs3 = []
+#         start_date = 20010101
+#         for i in range(30):
+#             r = Row()
+#             r.yyyymmdd = yyyymmdd(start_date, i)
+#             self.rs3.append(r)
+#         self.rs3 = Rows(self.rs3)
+#
+#         with dbopen(':memory:') as c:
+#             c.save('indport.csv')
+#             # to pseudo monthly data
+#             rs = []
+#             for rs1 in c.reel('indport order by date', group=lambda r: str(r.date)[0:4]):
+#                 for r in rs1:
+#                     r.yyyy = int(str(r.date)[0:4])
+#                     r.fcode = 'A' + str(r.date)[4:]
+#                     del r.date
+#                     rs.append(r)
+#             self.indport = Rows(rs)
+#
+# #
+#     def test_rollover(self):
+#         lengths = []
+#         for rs0 in fi.overlap(self.rs1, 'yyyy', 3, 2):
+#             lengths.append(len(rs0))
+#         self.assertEqual(lengths, [3, 3, 3, 3, 2])
+#
+#         lengths = []
+#         for rs0 in fi.overlap(self.rs2.where(lambda r: r.yyyymm > 200103), 'yyyymm', 12, 12):
+#             lengths.append(len(rs0))
+#         self.assertEqual(lengths, [12, 12, 9])
+#
+#         lengths = []
+#         for rs0 in fi.overlap(self.rs2.where(lambda r: r.yyyymm > 200103), 'yyyymm', 24, 12):
+#             lengths.append(len(rs0))
+#         self.assertEqual(lengths, [24, 21, 9])
+#
+#         lengths = []
+#         for rs0 in fi.overlap(self.rs3, 'yyyymmdd', '2 weeks', '1 week'):
+#             lengths.append(len(rs0))
+#         self.assertEqual(lengths, [14, 14, 14, 9, 2])
+#
+#     def test_assign_pn(self):
+#         fi.assign_pn(self.indport, 'yyyy', 'cnsmr', 2)
+#         fi.assign_pn(self.indport, 'yyyy', 'manuf', 3)
+#
+#         with self.assertRaises(ValueError):
+#             # there are not enough element to make portfolios in 2009
+#             fi.avg_pt(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'other')
+# #
+#         avgport = fi.avg_pt(self.indport.where(lambda r: r.yyyy < 2009),
+#                              'yyyy', 'pn_cnsmr, pn_manuf', 'other')
+#         self.assertEqual(avgport[0].n, 76)
+#         self.assertEqual(avgport[1].n, 45)
+#         self.assertEqual(avgport[2].n, 3)
+#         self.assertEqual(avgport[3].n, 7)
+#         self.assertEqual(avgport[4].n, 37)
+#         self.assertEqual(avgport[5].n, 80)
+#
+#         self.assertEqual(round(avgport[0].avg, 2), -0.63)
+#
+#         avgall = fi.avg_pts(avgport, 'yyyy')
+#         a = avgall[0].avg
+#         b = avgall[2].avg
+#         c = avgall[6].avg
+#         self.assertEqual(b - a, c)
+#
+#     def test_assign_pn1(self):
+#         fi.assign_pn(self.indport, 'yyyy', 'cnsmr', 5)
+#         avgport = fi.avg_pt(self.indport, 'yyyy', 'pn_cnsmr', 'other', 'manuf')
+#         self.assertEqual(round(avgport[0].avg, 4), -0.0255)
+#
+#     def test_dassign_pn(self):
+#         fi.assign_pn(self.indport, 'yyyy', 'cnsmr', 4)
+#         fi.dassign_pn(self.indport, 'yyyy', 'pn_cnsmr', 'manuf', 3)
+#         fi.dassign_pn(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'hlth', 2)
+#
+#         avgport = fi.avg_pt(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'other')
+#
+#         for r in avgport.where(lambda r: r.yyyy < 2016):
+#             self.assertTrue(r.n == 20 or r.n == 21 or r.n == 22)
+#
+#         avgall = fi.avg_pts(avgport, 'yyyy')
+#         self.assertEqual(round(avgport[0].avg, 2), -1.33)
+#         a = avgall[0].avg
+#         b = avgall[2].avg
+#         c = avgall[12].avg
+#         self.assertEqual(b - a, c)
+#
+#     def test_famac(self):
+#         fit = fi.famac(self.indport, 'other ~ cnsmr + manuf + hi_tec + hlth', 'yyyy', False)
+#         self.assertEqual(round(fit[0].intercept, 2), 0.02)
+#         self.assertEqual(round(fit[0].cnsmr, 2), 0.44)
+#         self.assertEqual(round(fit[0].manuf, 2), 0.16)
+#         self.assertEqual(round(fit[0].hi_tec, 2), 0.03)
+#         self.assertEqual(round(fit[0].hlth, 2), 0.10)
+
+
+class TestPRows(unittest.TestCase):
     def setUp(self):
         self.rs1 = []
         for year in range(2001, 2011):
@@ -570,39 +691,17 @@ class TestFin(unittest.TestCase):
                     r.fcode = 'A' + str(r.date)[4:]
                     del r.date
                     rs.append(r)
-            self.indport = Rows(rs)
+            self.indport = PRows(rs, 'yyyy')
 
-
-    def test_rollover(self):
-        lengths = []
-        for rs0 in fi.overlap(self.rs1, 'yyyy', 3, 2):
-            lengths.append(len(rs0))
-        self.assertEqual(lengths, [3, 3, 3, 3, 2])
-
-        lengths = []
-        for rs0 in fi.overlap(self.rs2.where(lambda r: r.yyyymm > 200103), 'yyyymm', 12, 12):
-            lengths.append(len(rs0))
-        self.assertEqual(lengths, [12, 12, 9])
-
-        lengths = []
-        for rs0 in fi.overlap(self.rs2.where(lambda r: r.yyyymm > 200103), 'yyyymm', 24, 12):
-            lengths.append(len(rs0))
-        self.assertEqual(lengths, [24, 21, 9])
-
-        lengths = []
-        for rs0 in fi.overlap(self.rs3, 'yyyymmdd', '2 weeks', '1 week'):
-            lengths.append(len(rs0))
-        self.assertEqual(lengths, [14, 14, 14, 9, 2])
-
-    def test_assign_pn(self):
-        fi.assign_pn(self.indport, 'yyyy', 'cnsmr', 2)
-        fi.assign_pn(self.indport, 'yyyy', 'manuf', 3)
+    def test_indi_sort(self):
         with self.assertRaises(ValueError):
             # there are not enough element to make portfolios in 2009
-            fi.avg_pt(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'other')
+            self.indport.pn('cnsmr', 2).pn('manuf', 3).avg('other')
 
-        avgport = fi.avg_pt(self.indport.where(lambda r: r.yyyy < 2009),
-                             'yyyy', 'pn_cnsmr, pn_manuf', 'other')
+        self.indport.where(lambda r: r.yyyy < 2009)
+        avgport = self.indport.pn('cnsmr', 2).pn('manuf', 3).avg('other')
+
+
         self.assertEqual(avgport[0].n, 76)
         self.assertEqual(avgport[1].n, 45)
         self.assertEqual(avgport[2].n, 3)
@@ -610,43 +709,16 @@ class TestFin(unittest.TestCase):
         self.assertEqual(avgport[4].n, 37)
         self.assertEqual(avgport[5].n, 80)
 
-        self.assertEqual(round(avgport[0].avg, 2), -0.63)
+        self.assertEqual(round(avgport[0].other, 2), -0.63)
+        avgport.show()
 
-        avgall = fi.avg_pts(avgport, 'yyyy')
-        a = avgall[0].avg
-        b = avgall[2].avg
-        c = avgall[6].avg
-        self.assertEqual(b - a, c)
-
-    def test_assign_pn1(self):
-        fi.assign_pn(self.indport, 'yyyy', 'cnsmr', 5)
-        avgport = fi.avg_pt(self.indport, 'yyyy', 'pn_cnsmr', 'other', 'manuf')
-        self.assertEqual(round(avgport[0].avg, 4), -0.0255)
-
-    def test_dassign_pn(self):
-        fi.assign_pn(self.indport, 'yyyy', 'cnsmr', 4)
-        fi.dassign_pn(self.indport, 'yyyy', 'pn_cnsmr', 'manuf', 3)
-        fi.dassign_pn(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'hlth', 2)
-
-        avgport = fi.avg_pt(self.indport, 'yyyy', 'pn_cnsmr, pn_manuf', 'other')
-
-        for r in avgport.where(lambda r: r.yyyy < 2016):
-            self.assertTrue(r.n == 20 or r.n == 21 or r.n == 22)
-
-        avgall = fi.avg_pts(avgport, 'yyyy')
-        self.assertEqual(round(avgport[0].avg, 2), -1.33)
-        a = avgall[0].avg
-        b = avgall[2].avg
-        c = avgall[12].avg
-        self.assertEqual(b - a, c)
-
-    def test_famac(self):
-        fit = fi.famac(self.indport, 'other ~ cnsmr + manuf + hi_tec + hlth', 'yyyy', False)
-        self.assertEqual(round(fit[0].intercept, 2), 0.02)
-        self.assertEqual(round(fit[0].cnsmr, 2), 0.44)
-        self.assertEqual(round(fit[0].manuf, 2), 0.16)
-        self.assertEqual(round(fit[0].hi_tec, 2), 0.03)
-        self.assertEqual(round(fit[0].hlth, 2), 0.10)
-
+        # avgall = fi.avg_pts(avgport, 'yyyy')
+        # a = avgall[0].avg
+        # b = avgall[2].avg
+        # c = avgall[6].avg
+        # self.assertEqual(b - a, c)
+    def test_indi_sort2(self):
+        # self.indport.show()
+        pass
 
 unittest.main()

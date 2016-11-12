@@ -12,92 +12,121 @@ from pydwork.sqlplus import Rows, Row
 from .util import nchunks, listify, yyyymm, yyyymmdd
 
 
-def assign_pn(rs, datecol, col, n):
-    "Independent sort"
-    pncol = 'pn_' + col
-    for r in rs:
-        r[pncol] = ''
-
-    for rs1 in rs.order(datecol).group(datecol):
-        for pn, rs2 in enumerate(nchunks(rs1.num(col).order(col), n), 1):
-            for r in rs2:
-                r[pncol] = pn
-
-
-def dassign_pn(rs, datecol, prepns, col, n):
+class PRows(Rows):
+    """Rows for portfolio analysis
     """
-    Dependent sort
+    def __init__(self, rows, dcol):
+        Rows.__init__(self, rows)
+        # date column
+        self._dcol = dcol
+        # (computed) average column
+        self._acol = None
+        # portfolio sizes
+        self._pncols = []
 
-    prepns: preceding portfolio numbers
-    'pn_a, pn_b, pn_c' or ['pn_a', 'pn_b', 'pn_c']
-    """
-    pncol = 'pn_' + col
-    for r in rs:
-        r[pncol] = ''
+    def pn(self, col, n):
+        "portfolio numbering for independent sort"
+        pncol = 'pn_' + col
+        for r in self:
+            r[pncol] = ''
 
-    for rs1 in rs.order(datecol).group(datecol):
-        rs2 = rs1.num(listify(prepns) + [col]).order(listify(prepns) + [col])
-        for rs3 in rs2.group(prepns):
-            for pn, rs4 in enumerate(nchunks(rs3, n), 1):
-                for r in rs4:
+        self.num(col)
+        for rs1 in self.order(self._dcol).group(self._dcol):
+            for pn, rs2 in enumerate(nchunks(rs1.order(col), n), 1):
+                for r in rs2:
                     r[pncol] = pn
 
+        if (pncol, n) not in self._pncols:
+            self._pncols.append((pncol, n))
+        return self
 
-def weighted_avg(rs, col, weightcol):
-    "compute weigthed average"
-    total = sum(r[weightcol] for r in rs)
-    return st.mean(r[col] * r[weightcol] / total for r in rs)
+    def dpn(self, col, n):
+        """
+        portfolio numbering for dependent sort
+        """
+        pncol = 'pn_' + col
+
+        for r in self:
+            r[pncol] = ''
+
+        pncols = [pncol for pncol, _ in self._pncols]
+
+        self.num(pncols + [col])
+        for rs1 in self.order(self._dcol).group(self._dcol):
+            for rs2 in rs1.order(pncols + [col]).group(pncols):
+                for pn, rs3 in enumerate(nchunks(rs2, n), 1):
+                    for r in rs3:
+                        r[pncol] = pn
+
+        if (pncol, n) not in self._pncols:
+            self._pncols.append((pncol, n))
+        return self
+
+    def avg(self, col, wcol=None, pncols=None):
+        "wcol: weight column"
+        self.num([col] + [wcol]) if wcol else self.num(col)
+
+        if pncols:
+            pncols = listify(pncols)
+        else:
+            pncols = [pncol for pncol, _ in self._pncols]
+
+        ns = [range(1, n + 1) for pncol, n in self._pncols if pncol in pncols]
+
+        result = []
+        for rs1 in self.group(self._dcol):
+            for pns, rs2 in zip(product(*ns), rs1.order(pncols).group(pncols)):
+                # test if there's any missing portfolio
+                if [rs2[0][pncol] for pncol in pncols] != list(pns):
+                    raise ValueError('missing portfolio no. %s in %s' %  \
+                        (list(pns), rs2[0][self._dcol]))
+
+                r = Row()
+                r[self._dcol] = rs2[0][self._dcol]
+                for pncol, pn in zip(pncols, pns):
+                    r[pncol] = pn
+                r.n = len(rs2)
+
+                if wcol:
+                    r[col] = wavg(rs2, col, wcol)
+                else:
+                    r[col] = st.mean(rs2[col])
+
+                result.append(r)
+
+        prows = PRows(result, self._dcol)
+        prows._pncols = pncols
+        prows._acol = col
+        return prows
+
+    def pshow(self, pncols=None):
+        "show pattern"
+        if pncols:
+            pncols = listify(pncols)
+        else:
+            pncols = [pncol for pncol, _ in self._pncols]
+
+        if len(pncols) == 1:
+            self._phsow()
 
 
-def avg_pt(rs, datecol, pncols, col, weightcol=None):
-    "avg for each portfolio"
-    def get_ns(rs):
-        ns = []
-        for pncol in pncols:
-            ns.append(len(list(rs.order(pncol).group(pncol))))
-        return ns
-
-    pncols = listify(pncols)
-
-    if weightcol:
-        rs = rs.num(pncols + [col, weightcol]).order(datecol)
-    else:
-        rs = rs.num(pncols + [col]).order(datecol)
-
-    ns = [range(1, n + 1) for n in get_ns(next(rs.group(datecol)))]
-
-    result = []
-    for rs1 in rs.group(datecol):
-        for pns, rs2 in zip(product(*ns), rs1.order(pncols).group(pncols)):
-            if [rs2[0][pncol] for pncol in pncols] != list(pns):
-                raise ValueError('missing portfolio no. %s in %s' %  \
-                    (list(pns), rs2[0][datecol]))
-
-            pns = _encode_pns(pns)
-
+        result = []
+        for rs1 in self.order(pncols).group(pncols):
             r = Row()
-            r[datecol] = rs2[0][datecol]
-            r.pn = pns
-            r.n = len(rs2)
-
-            if weightcol:
-                r.avg = weighted_avg(rs2, col, weightcol)
-            else:
-                r.avg = st.mean(rs2[col])
+            seq = [r.avg for r in rs1]
+            r.pn = rs1[0].pn
+            r.avg = st.mean(seq)
+            tstat = ttest_1samp(seq, 0)
+            r.tval = tstat[0]
+            r.pval = tstat[1]
 
             result.append(r)
 
-    return Rows(result)
 
-
-def _encode_pns(pns):
-    "[1, 2, 3] => 'p/1/2/3'"
-    return 'p/' + '/'.join(str(pn) for pn in pns)
-
-
-def _decode_pns(pns):
-    "p/1/2/3 => ['p', '1', '2', '3']"
-    return pns.split('/')
+def wavg(rs, col, wcol):
+    "compute weigthed average"
+    total = sum(r[wcol] for r in rs)
+    return st.mean(r[col] * r[wcol] / total for r in rs)
 
 
 # continues from avg_pn

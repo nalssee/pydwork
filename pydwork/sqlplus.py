@@ -85,40 +85,45 @@ class Row:
     # to an ordinary way. But it is slower
 
 
-class Rows(list):
+class Rows:
     """
     a shallow wrapper of a list of row instances """
     # Don't try to define __getattr__, __setattr__
     # List objects has a lot of useful attributes that can't be overwritten
     # Not the same situation as 'Row' class
+    def __init__(self, rows):
+        self._rows = list(rows)
+
+    def __len__(self):
+        return len(self._rows)
 
     def __getitem__(self, cols):
         "cols: integer or list of strings or comma separated string"
         if isinstance(cols, int):
-            return super().__getitem__(cols)
+            return self._rows[cols]
         elif isinstance(cols, slice):
-            # keep it as Rows
-            return Rows(super().__getitem__(cols))
+            return Rows(self._rows[cols])
 
         cols = listify(cols)
         if len(cols) == 1:
             col = cols[0]
-            return [r[col] for r in self]
+            return [r[col] for r in self._rows]
         else:
-            return [[r[c] for c in cols] for r in self]
+            return [[r[c] for c in cols] for r in self._rows]
 
     def __setitem__(self, cols, vals):
         """vals can be just a list or a list of lists,
         demensions must match
         """
         if isinstance(cols, int) or isinstance(cols, slice):
-            return super().__setitem__(cols, vals)
+            self._rows[cols] = vals
+            return
 
         cols = listify(cols)
         ncols = len(cols)
 
         # validity check,
-        if len(self) != len(vals):
+        if len(self._rows) != len(vals):
             raise ValueError('Number of values to assign inappropriate')
 
         # vals must be rectangular!
@@ -129,37 +134,43 @@ class Rows(list):
 
         if ncols == 1:
             col = cols[0]
-            for r, v in zip(self, vals):
+            for r, v in zip(self._rows, vals):
                 r[col] = v
         else:
-            for r, vs in zip(self, vals):
+            for r, vs in zip(self._rows, vals):
                 for c, v in zip(cols, vs):
                     r[c] = v
 
     def __delitem__(self, cols):
         if isinstance(cols, int) or isinstance(cols, slice):
-            return super().__delitem__(cols)
+            del self._rows[cols]
+            return
 
         cols = listify(cols)
         ncols = len(cols)
 
         if ncols == 1:
             col = cols[0]
-            for r in self:
+            for r in self._rows:
                 del r[col]
         else:
-            for r in self:
+            for r in self._rows:
                 for c in cols:
                     del r[c]
 
+    def append(self, r):
+        self._rows.append(r)
+        return self
+
     def order(self, key, reverse=0):
         key = _build_keyfn(key)
-        self.sort(key=key, reverse=reverse)
+        self._rows.sort(key=key, reverse=reverse)
         return self
 
     def where(self, pred):
         pred = _build_keyfn(pred)
-        return Rows(r for r in self if pred(r))
+        self._rows = [r for r in self._rows if pred(r)]
+        return self
 
     # num and text, I don't like the naming
     def num(self, cols):
@@ -188,36 +199,169 @@ class Rows(list):
         return self.where(lambda r: r[col] >= lower and r[col] <= higher)
 
     def group(self, key):
-        yield from _gby(self, key)
+        yield from _gby(self._rows, key)
 
     def show(self, n=30, cols=None):
         if self == []:
-            print(self)
+            print(self._rows)
         else:
-            _show(self, n, cols, None)
+            _show(self._rows, n, cols, None)
 
     def desc(self, n=5, cols=None, percentile=None):
-        if self == []:
-            print(self)
+        if self._rows == []:
+            print(self._rows)
         else:
-            _describe(self, n, cols, percentile)
+            _describe(self._rows, n, cols, percentile)
 
     # Simpler version of show (when you write it to a file)
     def write(self, filename, cols=None):
-        _show(self, None, cols, filename)
+        _show(self._rows, None, cols, filename)
 
     # Use this when you need to see what's inside
     # for example, when you want to see the distribution of data.
     def df(self, cols=None):
         if cols:
             cols = listify(cols)
-            return pd.DataFrame([[r[col] for col in cols] for r in self],
+            return pd.DataFrame([[r[col] for col in cols] for r in self._rows],
                                 columns=cols)
         else:
             cols = self[0].columns
-            seq = _safe_values(self, cols)
+            seq = _safe_values(self._rows, cols)
             return pd.DataFrame(list(seq), columns=cols)
 
+# class Rows(list):
+#     """
+#     a shallow wrapper of a list of row instances """
+#     # Don't try to define __getattr__, __setattr__
+#     # List objects has a lot of useful attributes that can't be overwritten
+#     # Not the same situation as 'Row' class
+#
+#     def __getitem__(self, cols):
+#         "cols: integer or list of strings or comma separated string"
+#         if isinstance(cols, int):
+#             return super().__getitem__(cols)
+#         elif isinstance(cols, slice):
+#             # keep it as Rows
+#             return Rows(super().__getitem__(cols))
+#
+#         cols = listify(cols)
+#         if len(cols) == 1:
+#             col = cols[0]
+#             return [r[col] for r in self]
+#         else:
+#             return [[r[c] for c in cols] for r in self]
+#
+#     def __setitem__(self, cols, vals):
+#         """vals can be just a list or a list of lists,
+#         demensions must match
+#         """
+#         if isinstance(cols, int) or isinstance(cols, slice):
+#             return super().__setitem__(cols, vals)
+#
+#         cols = listify(cols)
+#         ncols = len(cols)
+#
+#         # validity check,
+#         if len(self) != len(vals):
+#             raise ValueError('Number of values to assign inappropriate')
+#
+#         # vals must be rectangular!
+#         if ncols > 1:
+#             for vs in vals:
+#                 if len(vs) != ncols:
+#                     raise ValueError('Invalid values to assign', vs)
+#
+#         if ncols == 1:
+#             col = cols[0]
+#             for r, v in zip(self, vals):
+#                 r[col] = v
+#         else:
+#             for r, vs in zip(self, vals):
+#                 for c, v in zip(cols, vs):
+#                     r[c] = v
+#
+#     def __delitem__(self, cols):
+#         if isinstance(cols, int) or isinstance(cols, slice):
+#             return super().__delitem__(cols)
+#
+#         cols = listify(cols)
+#         ncols = len(cols)
+#
+#         if ncols == 1:
+#             col = cols[0]
+#             for r in self:
+#                 del r[col]
+#         else:
+#             for r in self:
+#                 for c in cols:
+#                     del r[c]
+#
+#     def order(self, key, reverse=0):
+#         key = _build_keyfn(key)
+#         self.sort(key=key, reverse=reverse)
+#         return self
+#
+#     def where(self, pred):
+#         pred = _build_keyfn(pred)
+#         return Rows(r for r in self if pred(r))
+#
+#     # num and text, I don't like the naming
+#     def num(self, cols):
+#         "another simplified filtering, numbers only"
+#         cols = listify(cols)
+#         return self.where(lambda r: all(isnum(r[col]) for col in cols))
+#
+#     def text(self, cols):
+#         "another simplified filtering, texts(string) only"
+#         cols = listify(cols)
+#         return self.where(lambda r: all(istext(r[col]) for col in cols))
+#
+#     def ols(self, model):
+#         left, right = model.split('~')
+#         yvar = left.strip()
+#         xvars = [x.strip() for x in right.split('+')]
+#         Y = self[yvar]
+#         X = sm.add_constant(self[xvars])
+#         return sm.OLS(Y, X).fit()
+#
+#     def truncate(self, col, limit=0.01):
+#         "Truncate extreme values, defalut 1 percent on both sides"
+#         xs = self[col]
+#         lower = np.percentile(xs, limit * 100)
+#         higher = np.percentile(xs, (1 - limit) * 100)
+#         return self.where(lambda r: r[col] >= lower and r[col] <= higher)
+#
+#     def group(self, key):
+#         yield from _gby(self, key)
+#
+#     def show(self, n=30, cols=None):
+#         if self == []:
+#             print(self)
+#         else:
+#             _show(self, n, cols, None)
+#
+#     def desc(self, n=5, cols=None, percentile=None):
+#         if self == []:
+#             print(self)
+#         else:
+#             _describe(self, n, cols, percentile)
+#
+#     # Simpler version of show (when you write it to a file)
+#     def write(self, filename, cols=None):
+#         _show(self, None, cols, filename)
+#
+#     # Use this when you need to see what's inside
+#     # for example, when you want to see the distribution of data.
+#     def df(self, cols=None):
+#         if cols:
+#             cols = listify(cols)
+#             return pd.DataFrame([[r[col] for col in cols] for r in self],
+#                                 columns=cols)
+#         else:
+#             cols = self[0].columns
+#             seq = _safe_values(self, cols)
+#             return pd.DataFrame(list(seq), columns=cols)
+#
 
 class SQLPlus:
     """
@@ -416,18 +560,43 @@ def _csv_reel(csv_file):
         columns = _gen_valid_column_names(listify(first_line))
         ncol = len(columns)
 
-        for line_no, line in enumerate(csv.reader(fin), 2):
-            if len(line) != ncol:
-                if is_empty_line(line):
-                    continue
-                raise ValueError(
-                    """%s at line %s column count not matched %s != %s: %s
-                    """ % (csv_file, line_no, ncol, len(line), line))
-            row1 = Row()
-            for col, val in zip(columns, line):
-                row1[col] = val
-            yield row1
+        line_no = 1
+        reader = csv.reader(fin)
+        while True:
+            try:
+                line_no += 1
+                line = next(reader)
 
+                if len(line) != ncol:
+                    if is_empty_line(line):
+                        continue
+                    raise ValueError(
+                        """%s at line %s column count not matched %s != %s: %s
+                        """ % (csv_file, line_no, ncol, len(line), line))
+                row1 = Row()
+                for col, val in zip(columns, line):
+                    row1[col] = val
+                yield row1
+
+            except csv.Error:
+                line_no += 1
+                raise ValueError(line_no)
+
+            except StopIteration:
+                break
+                
+        # for line_no, line in enumerate(csv.reader(fin), 2):
+        #     if len(line) != ncol:
+        #         if is_empty_line(line):
+        #             continue
+        #         raise ValueError(
+        #             """%s at line %s column count not matched %s != %s: %s
+        #             """ % (csv_file, line_no, ncol, len(line), line))
+        #     row1 = Row()
+        #     for col, val in zip(columns, line):
+        #         row1[col] = val
+        #     yield row1
+        #
 
 def _safe_values(rows, cols):
     "assert all rows have cols"
