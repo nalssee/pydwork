@@ -555,53 +555,27 @@ def _csv_reel(csv_file):
 
     if not csv_file.endswith('.csv'):
         csv_file += '.csv'
+
     with open(os.path.join(WORKSPACE, csv_file)) as fin:
         first_line = fin.readline()[:-1]
         columns = _gen_valid_column_names(listify(first_line))
         ncol = len(columns)
 
-        line_no = 1
         # reader = csv.reader(fin)
+        # NULL byte error handling
         reader = csv.reader(x.replace('\0', '') for x in fin)
+        for line_no, line in enumerate(reader, 2):
+            if len(line) != ncol:
+                if is_empty_line(line):
+                    continue
+                raise ValueError(
+                    """%s at line %s column count not matched %s != %s: %s
+                    """ % (csv_file, line_no, ncol, len(line), line))
+            row1 = Row()
+            for col, val in zip(columns, line):
+                row1[col] = val
+            yield row1
 
-        while True:
-            try:
-                line_no += 1
-                line = next(reader)
-
-                if len(line) != ncol:
-                    if is_empty_line(line):
-                        continue
-                    raise ValueError(
-                        """%s at line %s column count not matched %s != %s: %s
-                        """ % (csv_file, line_no, ncol, len(line), line))
-                row1 = Row()
-                for col, val in zip(columns, line):
-                    row1[col] = val
-                yield row1
-
-            except csv.Error:
-                line_no += 1
-                print(line)
-                print(next(reader))
-
-                raise ValueError(line_no)
-
-            except StopIteration:
-                break
-
-        # for line_no, line in enumerate(csv.reader(fin), 2):
-        #     if len(line) != ncol:
-        #         if is_empty_line(line):
-        #             continue
-        #         raise ValueError(
-        #             """%s at line %s column count not matched %s != %s: %s
-        #             """ % (csv_file, line_no, ncol, len(line), line))
-        #     row1 = Row()
-        #     for col, val in zip(columns, line):
-        #         row1[col] = val
-        #     yield row1
-        #
 
 def _safe_values(rows, cols):
     "assert all rows have cols"
