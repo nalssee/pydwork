@@ -108,8 +108,8 @@ class Rows:
         if isinstance(cols, int):
             return self.rows[cols]
         elif isinstance(cols, slice):
-            # creating a new object make sense here.
-            return Rows(self.rows[cols])
+            self.rows = self.rows[cols]
+            return self
 
         cols = listify(cols)
         if len(cols) == 1:

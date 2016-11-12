@@ -358,14 +358,16 @@ class TestRows(unittest.TestCase):
     def test_rows1(self):
         with dbopen(':memory:') as c:
             c.save('iris.csv')
-            iris = c.rows('iris')
 
+            iris = c.rows('iris')
             # rows must be iterable
             self.assertEqual(sum(1 for _ in iris), 150)
 
             self.assertTrue(isinstance(iris[0], Row))
             self.assertTrue(hasattr(iris[2:3], 'order'))
             # hasattr doesn't work correctly for Row
+
+            iris = c.rows('iris')
             self.assertFalse('order' in dir(iris[2]))
             del iris[3:]
             self.assertTrue(hasattr(iris, 'order'))
@@ -385,6 +387,7 @@ class TestRows(unittest.TestCase):
                 iris.df()
             iris[:3].df()
 
+            iris.append(Row())
             with self.assertRaises(Exception):
                 c.save(iris, 'iris_sample')
             c.save(iris[:3], 'iris_sample')
@@ -418,14 +421,14 @@ class TestRows(unittest.TestCase):
 
             iris = c.rows('iris')
 
-            self.assertEqual(len(iris[:].num('species')), 0)
-            self.assertEqual(len(iris[:].text('species')), 150)
+            self.assertEqual(len(c.rows('iris').num('species')), 0)
+            self.assertEqual(len(c.rows('iris').text('species')), 150)
 
-            self.assertEqual(len(iris[:].num('sepal_length, sepal_width')), 150)
-            self.assertEqual(len(iris[:].where(lambda r: r.species in
-                                            ['versicolor', 'virginica'])),
+            self.assertEqual(len(c.rows('iris').num('sepal_length, sepal_width')), 150)
+            self.assertEqual(len(c.rows('iris').where(lambda r: r.species in
+                                                      ['versicolor', 'virginica'])),
                              100)
-            self.assertEqual(len(iris[:].where(lambda r: r.sepal_length == 5.0)), 10)
+            self.assertEqual(len(c.rows('iris').where(lambda r: r.sepal_length == 5.0)), 10)
 
             rs = []
             for x in range(10):
