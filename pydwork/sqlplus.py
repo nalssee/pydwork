@@ -562,6 +562,12 @@ def _csv_reel(csv_file):
 
         line_no = 1
         reader = csv.reader(fin)
+
+        if '\0' in fin.read():
+            print "you have null bytes in your input file"
+        else:
+            print "you don't"
+
         while True:
             try:
                 line_no += 1
