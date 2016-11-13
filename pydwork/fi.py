@@ -9,7 +9,7 @@ from collections import OrderedDict
 
 from scipy.stats import ttest_1samp
 
-from .sqlplus import Rows, Row
+from .sqlplus import Rows, Row, Box
 from .util import nchunks, listify, yyyymm, yyyymmdd
 
 
@@ -62,8 +62,8 @@ class PRows(Rows):
         self.pncols[pncol] = n
         return self
 
-    def avg(self, col, wcol=None, pncols=None):
-        "wcol: weight column"
+    def pavg(self, col, wcol=None, pncols=None):
+        "portfolio average,  wcol: weight column"
         self.num([col] + [wcol]) if wcol else self.num(col)
 
         pncols = listify(pncols) if pncols else list(self.pncols)
@@ -93,67 +93,87 @@ class PRows(Rows):
         prows.acol = col
         return prows
 
-    def pshow(self, pncols=None):
-        "show pattern"
+    def pat(self, pncols=None):
+        "average pattern, returns a box"
         pncols = listify(pncols) if pncols else list(self.pncols)
 
         if len(pncols) == 1:
-            self._pshow1(*pncols)
+            return self._pat1(*pncols)
         elif len(pncols) == 2:
-            self._pshow2(*pncols)
+            return self._pat2(*pncols)
         else:
-            self._pshowN(pncols)
+            return self._patn(pncols)
 
-    def _pshow1(self, pncol):
+    def _pat1(self, pncol):
         result = []
         for rs in self.order([pncol, self.dcol]).group(pncol):
             result.append([r[self.acol] for r in rs])
 
-        print(self.acol, end=',')
+        line = []
+        line.append(self.acol)
         for seq in result:
-            print(aseq(seq), end=',')
+            line.append(aseq(seq))
         seq = [h - l for h, l in zip(result[-1], result[0])]
-        print(aseq(seq, True))
+        line.append(aseq(seq, True))
+        return Box([line])
 
-    def _pshow2(self, pncol1, pncol2):
+    def _pat2(self, pncol1, pncol2):
         result = []
         for rs1 in self.order([pncol1, pncol2, self.dcol]).group(pncol1):
-            line = []
+            result1 = []
             for rs2 in rs1.group(pncol2):
-                line.append([r[self.acol] for r in rs2])
-            result.append(line)
-        print("%s\\%s" % (pncol1[3:], pncol2[3:]), end=',')
+                result1.append([r[self.acol] for r in rs2])
+            result.append(result1)
+
+        line = []
+        line.append("%s\\%s" % (pncol1[3:], pncol2[3:]))
         for i in range(1, len(result[0]) + 1):
-            print(i, end=',')
-        print('P%s - P1' % (i, ))
-        for i, line in enumerate(result, 1):
-            print(i, end=',')
-            for seq in line:
-                print(aseq(seq), end=',')
-            seq = [h - l for h, l in zip(line[-1], line[0])]
-            print(aseq(seq, True))
-        print("P%s - P1" % (i,), end=',')
+            line.append(i)
+        line.append('P%s - P1' % (i, ))
+
+        lines = []
+        lines.append(line)
+        for i, result1 in enumerate(result, 1):
+            line = []
+            line.append(i)
+            for seq in result1:
+                line.append(aseq(seq))
+            seq = [h - l for h, l in zip(result1[-1], result1[0])]
+            line.append(aseq(seq, True))
+            lines.append(line)
+
+        line = []
+        line.append("P%s - P1" % (i,))
         for hseq, lseq in zip(result[-1], result[0]):
             seq = [h - l for h, l in zip(hseq, lseq)]
-            print(aseq(seq, True), end=',')
-        print()
+            line.append(aseq(seq, True))
+        lines.append(line)
 
-    def _pshowN(self, pncols):
+        return Box(lines)
+
+    def _patn(self, pncols):
+        lines = []
         for rs in self.order(pncols[:-2]).group(pncols[:-2]):
+            line = []
             for pncol in pncols[:-2]:
-                print(pncol, rs[0][pncol], end=' ')
-            print()
+                line.append(pncol)
+                line.append(rs[0][pncol])
+            lines.append(line)
+
             prows = PRows(rs, self.dcol)
             prows.acol = self.acol
-            prows.pshow(pncols[-2:])
+            lines += prows.pat(pncols[-2:]).lines
+        return Box(lines)
 
-    def tshow(self, cols=None):
+    def tsavg(self, cols=None):
         "show time series average"
         cols = listify(cols) if cols else self[0].columns
-        print(','.join(cols))
-        print(','.join(aseq(self[col], True) for col in cols))
+        lines = []
+        lines.append(cols)
+        lines.append([aseq(self[col], True) for col in cols])
+        return Box(lines)
 
-    def famac(self, model, show=True):
+    def famac(self, model):
         "Fama Macbeth"
         def xvars(model):
             _, right = model.split('~')
@@ -173,8 +193,6 @@ class PRows(Rows):
             params.append(r)
 
         prows = PRows(params, self.dcol)
-        if show:
-            prows.tshow(xvs)
         return prows
 
     def roll(self, period, jump):

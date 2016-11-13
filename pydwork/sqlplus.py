@@ -10,6 +10,7 @@ import csv
 import re
 import sqlite3
 import tempfile
+import io
 
 from collections import Counter, OrderedDict
 from contextlib import contextmanager
@@ -23,7 +24,7 @@ from .util import isnum, istext, yyyymm, yyyymmdd, \
                   listify, camel2snake, peek_first
 
 
-__all__ = ['dbopen', 'Row', 'Rows', 'set_workspace']
+__all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box']
 
 
 WORKSPACE = ''
@@ -235,6 +236,40 @@ class Rows:
             cols = self.rows[0].columns
             seq = _safe_values(self.rows, cols)
             return pd.DataFrame(list(seq), columns=cols)
+
+
+class Box:
+    """We need something very simple and flexible for displaying
+    list of lists
+    """
+    def __init__(self, lines):
+        self.lines = lines
+
+    def csv(self, file=sys.stdout):
+        if file == sys.stdout:
+            # must not close the standard output
+            self._write_all(file)
+
+        elif isinstance(file, str):
+            try:
+                fout = open(os.path.join(WORKSPACE, file), 'w')
+                self._write_all(fout)
+            finally:
+                fout.close()
+
+        elif isinstance(file, io.TextIOBase):
+            try:
+                self._write_all(file)
+            finally:
+                file.close()
+
+        else:
+            raise ValueError('Invalid file', file)
+
+    def _write_all(self, fout):
+        w = csv.writer(fout)
+        for line in self.lines:
+            w.writerow(line)
 
 
 class SQLPlus:

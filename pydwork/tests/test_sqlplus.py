@@ -583,10 +583,10 @@ class TestPRows(unittest.TestCase):
     def test_indi_sort(self):
         with self.assertRaises(ValueError):
             # there are not enough element to make portfolios in 2009
-            self.indport.pn('cnsmr', 2).pn('manuf', 3).avg('other')
+            self.indport.pn('cnsmr', 2).pn('manuf', 3).pavg('other')
 
         self.indport.where(lambda r: r.yyyy < 2009)
-        avgport = self.indport.pn('cnsmr', 2).pn('manuf', 3).avg('other')
+        avgport = self.indport.pn('cnsmr', 2).pn('manuf', 3).pavg('other')
 
         self.assertEqual(avgport[0].n, 76)
         self.assertEqual(avgport[1].n, 45)
@@ -597,14 +597,15 @@ class TestPRows(unittest.TestCase):
 
         self.assertEqual(round(avgport[0].other, 2), -0.63)
 
-        self.indport.pn('cnsmr', 10).avg('other', pncols='pn_cnsmr').pshow('pn_cnsmr')
-        self.indport.pn('cnsmr', 2).pn('manuf', 3).avg('other').pshow()
+        # Add some tests here!!
+        self.indport.pn('cnsmr', 10).pavg('other', pncols='pn_cnsmr').pat('pn_cnsmr').csv()
+        self.indport.pn('cnsmr', 2).pn('manuf', 3).pavg('other').pat().csv()
 
     def test_dpn(self):
-        avgport = self.indport.pn('cnsmr', 4).dpn('manuf', 3).dpn('hlth', 2).avg('other')
+        avgport = self.indport.pn('cnsmr', 4).dpn('manuf', 3).dpn('hlth', 2).pavg('other')
         for r in avgport.where(lambda r: r.yyyy < 2016):
             self.assertTrue(r.n == 10 or r.n == 11)
-        avgport.pshow()
+        avgport.pat().csv()
 
     def test_famac(self):
         fit = self.indport.famac('other ~ cnsmr + manuf + hi_tec + hlth')
@@ -613,6 +614,7 @@ class TestPRows(unittest.TestCase):
         self.assertEqual(round(fit[0].manuf, 2), 0.16)
         self.assertEqual(round(fit[0].hi_tec, 2), 0.03)
         self.assertEqual(round(fit[0].hlth, 2), 0.10)
+        fit.tsavg().csv()
 
     def test_rollover(self):
         lengths = []
