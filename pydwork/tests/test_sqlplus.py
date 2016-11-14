@@ -367,7 +367,6 @@ class TestRows(unittest.TestCase):
             self.assertTrue(hasattr(iris[2:3], 'order'))
             # hasattr doesn't work correctly for Row
 
-            iris = c.rows('iris')
             self.assertFalse('order' in dir(iris[2]))
             del iris[3:]
             self.assertTrue(hasattr(iris, 'order'))
@@ -406,8 +405,8 @@ class TestRows(unittest.TestCase):
             col1 = iris.where(lambda r: r['species'] == 'versicolor')[0].col
 
             self.assertEqual(col1, 51)
-            # where is destructive
-            self.assertEqual(iris[0].col, 51)
+            # where is non-destructive
+            self.assertEqual(iris[0].col, 132)
 
             iris = c.rows('iris')
             iris.order('sepal_length, sepal_width', reverse=True)
@@ -421,14 +420,14 @@ class TestRows(unittest.TestCase):
 
             iris = c.rows('iris')
 
-            self.assertEqual(len(c.rows('iris').num('species')), 0)
-            self.assertEqual(len(c.rows('iris').text('species')), 150)
+            self.assertEqual(len(iris.num('species')), 0)
+            self.assertEqual(len(iris.text('species')), 150)
 
-            self.assertEqual(len(c.rows('iris').num('sepal_length, sepal_width')), 150)
-            self.assertEqual(len(c.rows('iris').where(lambda r: r.species in
-                                                      ['versicolor', 'virginica'])),
+            self.assertEqual(len(iris.num('sepal_length, sepal_width')), 150)
+            self.assertEqual(len(iris.where(lambda r: r.species in
+                                            ['versicolor', 'virginica'])),
                              100)
-            self.assertEqual(len(c.rows('iris').where(lambda r: r.sepal_length == 5.0)), 10)
+            self.assertEqual(len(iris.where(lambda r: r.sepal_length == 5.0)), 10)
 
             rs = []
             for x in range(10):
@@ -583,10 +582,10 @@ class TestPRows(unittest.TestCase):
     def test_indi_sort(self):
         with self.assertRaises(ValueError):
             # there are not enough element to make portfolios in 2009
-            self.indport.pn('cnsmr', 2).pn('manuf', 3).pavg('other')
+            self.indport.dcp().pn('cnsmr', 2).pn('manuf', 3).pavg('other')
 
-        self.indport.where(lambda r: r.yyyy < 2009)
-        avgport = self.indport.pn('cnsmr', 2).pn('manuf', 3).pavg('other')
+        avgport = self.indport.where(lambda r: r.yyyy < 2009)\
+                      .pn('cnsmr', 2).pn('manuf', 3).pavg('other')
 
         self.assertEqual(avgport[0].n, 76)
         self.assertEqual(avgport[1].n, 45)
@@ -598,8 +597,10 @@ class TestPRows(unittest.TestCase):
         self.assertEqual(round(avgport[0].other, 2), -0.63)
 
         # Add some tests here!!
-        self.indport.pn('cnsmr', 10).pavg('other', pncols='pn_cnsmr').pat('pn_cnsmr').csv()
-        self.indport.pn('cnsmr', 2).pn('manuf', 3).pavg('other').pat().csv()
+        self.indport.where(lambda r: r.yyyy < 2009)\
+            .pn('cnsmr', 10).pavg('other', pncols='pn_cnsmr').pat('pn_cnsmr').csv()
+        self.indport.where(lambda r: r.yyyy < 2009)\
+            .pn('cnsmr', 2).pn('manuf', 3).pavg('other').pat().csv()
 
     def test_dpn(self):
         avgport = self.indport.pn('cnsmr', 4).dpn('manuf', 3).dpn('hlth', 2).pavg('other')
@@ -628,7 +629,7 @@ class TestPRows(unittest.TestCase):
         self.assertEqual(lengths, [12, 12, 9])
 
         lengths = []
-        for rs0 in self.rs2.roll(24, 12):
+        for rs0 in self.rs2.where(lambda r: r.yyyymm > 200103).roll(24, 12):
             lengths.append(len(rs0))
         self.assertEqual(lengths, [24, 21, 9])
 

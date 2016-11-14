@@ -11,6 +11,7 @@ import re
 import sqlite3
 import tempfile
 import io
+import copy
 
 from collections import Counter, OrderedDict
 from contextlib import contextmanager
@@ -109,6 +110,8 @@ class Rows:
         if isinstance(cols, int):
             return self.rows[cols]
         elif isinstance(cols, slice):
+            # shallow copy for non-destructive slicing
+            self = self.cp()
             self.rows = self.rows[cols]
             return self
 
@@ -170,12 +173,29 @@ class Rows:
         self.rows.append(r)
         return self
 
+    def cp(self):
+        "shallow copy"
+        return copy.copy(self)
+
+    def dcp(self):
+        "deep copy"
+        self = self.cp()
+        def gnrows():
+            for r in self.rows:
+                r0 = Row()
+                for c, v in zip(r.columns, r.values):
+                    r0[c] = v
+                yield r0
+        self.rows = list(gnrows())
+        return self
+
     def order(self, key, reverse=0):
         key = _build_keyfn(key)
         self.rows.sort(key=key, reverse=reverse)
         return self
 
     def where(self, pred):
+        self = self.cp()
         pred = _build_keyfn(pred)
         self.rows = [r for r in self.rows if pred(r)]
         return self
@@ -691,6 +711,7 @@ def _show(rows, n, cols, filename):
                 print("...more rows...")
 
 
+#  temporary, you need to fix it later
 def _describe(rows, n, cols, percentile):
     print('Table Description')
     print('-----------------')
