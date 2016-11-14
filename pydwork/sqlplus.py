@@ -111,7 +111,7 @@ class Rows:
             return self.rows[cols]
         elif isinstance(cols, slice):
             # shallow copy for non-destructive slicing
-            self = self.cp()
+            self = self.copy()
             self.rows = self.rows[cols]
             return self
 
@@ -173,13 +173,13 @@ class Rows:
         self.rows.append(r)
         return self
 
-    def cp(self):
+    def copy(self):
         "shallow copy"
         return copy.copy(self)
 
-    def dcp(self):
+    def deepcopy(self):
         "deep copy"
-        self = self.cp()
+        self = self.copy()
         def gnrows():
             for r in self.rows:
                 r0 = Row()
@@ -195,7 +195,7 @@ class Rows:
         return self
 
     def where(self, pred):
-        self = self.cp()
+        self = self.copy()
         pred = _build_keyfn(pred)
         self.rows = [r for r in self.rows if pred(r)]
         return self

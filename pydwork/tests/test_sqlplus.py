@@ -582,7 +582,7 @@ class TestPRows(unittest.TestCase):
     def test_indi_sort(self):
         with self.assertRaises(ValueError):
             # there are not enough element to make portfolios in 2009
-            self.indport.dcp().pn('cnsmr', 2).pn('manuf', 3).pavg('other')
+            self.indport.deepcopy().pn('cnsmr', 2).pn('manuf', 3).pavg('other')
 
         avgport = self.indport.where(lambda r: r.yyyy < 2009)\
                       .pn('cnsmr', 2).pn('manuf', 3).pavg('other')
