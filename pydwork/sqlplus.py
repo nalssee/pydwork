@@ -15,7 +15,7 @@ import copy
 
 from collections import Counter, OrderedDict
 from contextlib import contextmanager
-from itertools import groupby, islice
+from itertools import groupby, islice, chain
 
 import pandas as pd
 import numpy as np
@@ -233,7 +233,7 @@ class Rows:
         if self == []:
             print(self.rows)
         else:
-            _show(self.rows, n, cols, None)
+            _show(self.rows, n, cols)
 
     def desc(self, n=5, cols=None, percentile=None):
         if self.rows == []:
@@ -241,9 +241,9 @@ class Rows:
         else:
             _describe(self.rows, n, cols, percentile)
 
-    # Simpler version of show (when you write it to a file)
-    def write(self, filename, cols=None):
-        _show(self.rows, None, cols, filename)
+    # write to csv file
+    def csv(self, file=sys.stdout, cols=None):
+        _csv(self.rows, file, cols)
 
     # Use this when you need to see what's inside
     # for example, when you want to see the distribution of data.
@@ -266,30 +266,7 @@ class Box:
         self.lines = lines
 
     def csv(self, file=sys.stdout):
-        if file == sys.stdout:
-            # must not close the standard output
-            self._write_all(file)
-
-        elif isinstance(file, str):
-            try:
-                fout = open(os.path.join(WORKSPACE, file), 'w')
-                self._write_all(fout)
-            finally:
-                fout.close()
-
-        elif isinstance(file, io.TextIOBase):
-            try:
-                self._write_all(file)
-            finally:
-                file.close()
-
-        else:
-            raise ValueError('Invalid file', file)
-
-    def _write_all(self, fout):
-        w = csv.writer(fout)
-        for line in self.lines:
-            w.writerow(line)
+        _csv(self.lines, file, None)
 
 
 class SQLPlus:
@@ -317,6 +294,8 @@ class SQLPlus:
 
 
     # args can be a list, a tuple or a dictionary
+    # It is unlikely that we need to worry about the security issues
+    # but still there's no harm. So...
     def run(self, query, args=()):
         """Simply executes sql statement and update tables attribute
 
@@ -398,18 +377,16 @@ class SQLPlus:
     def show(self, x, n=30, cols=None, args=()):
         "Printing to a screen or saving to a file "
         _, rows = _x2rows(x, self._cursor, args)
-        _show(rows, n, cols, None)
+        _show(rows, n, cols)
 
     def desc(self, query, n=5, cols=None, percentile=None, args=()):
         "Summary"
         _, rows = _x2rows(query, self._cursor, args)
         _describe(rows, n, cols, percentile)
 
-    def write(self, x, filename=None, cols=None, args=()):
-        "writes to a file(csv)"
-        name, rows = _x2rows(x, self._cursor, args)
-        filename = filename or name
-        _show(rows, None, cols, filename)
+    def csv(self, x, file=sys.stdout, cols=None, args=()):
+        _, rows = _x2rows(x, self._cursor, args)
+        _csv(rows, file, cols)
 
     def drop(self, tables):
         " drop table if exists "
@@ -665,7 +642,41 @@ def _sqlite3_save(cursor, srows, table_name, column_names):
         cursor.execute(istmt, r)
 
 
-def _show(rows, n, cols, filename):
+def _write_all(lines, file):
+    "Write all to csv"
+    w = csv.writer(file)
+    for line in lines:
+        w.writerow(line)
+
+
+def _csv(rows, file, cols):
+    if cols:
+        rows = _pick(cols, rows)
+
+    row0, rows1 = peek_first(rows)
+    if isinstance(row0, Row):
+        seq_values = chain([row0.columns], _safe_values(rows1, row0.columns))
+    else:
+        seq_values = rows1
+
+    if file == sys.stdout:
+        _write_all(seq_values, file)
+    elif isinstance(file, str):
+        try:
+            fout = open(os.path.join(WORKSPACE, file), 'w')
+            _write_all(seq_values, fout)
+        finally:
+            fout.close()
+    elif isinstance(file, io.TextIOBase):
+        try:
+            _write_all(seq_values, file)
+        finally:
+            file.close()
+    else:
+        raise ValueError('Invalid file', file)
+
+
+def _show(rows, n, cols):
     """Printing to a screen or saving to a file
 
     rows: iterator of Row instances
@@ -683,53 +694,34 @@ def _show(rows, n, cols, filename):
     cols = row0.columns
     seq_values = _safe_values(rows1, cols)
 
-    # write to a file
-    if filename:
-        # practically infinite number
-        nrows = nrows or sys.maxsize
-
-        if not filename.endswith('.csv'):
-            filename = filename + '.csv'
-
-        with open(os.path.join(WORKSPACE, filename), 'w') as fout:
-            w = csv.writer(fout)
-            w.writerow(cols)
-            for vs in islice(seq_values, nrows):
-                w.writerow(vs)
-
-    # write to stdout
-    else:
-        # show practically all columns.
-        with pd.option_context("display.max_rows", nrows), \
-                pd.option_context("display.max_columns", 1000):
-            # make use of pandas DataFrame displaying
-            # islice 1 more rows than required
-            # to see if there are more rows left
-            list_values = list(islice(seq_values, nrows + 1))
-            print(pd.DataFrame(list_values[:nrows], columns=cols))
-            if len(list_values) > nrows:
-                print("...more rows...")
+    with pd.option_context("display.max_rows", nrows), \
+            pd.option_context("display.max_columns", 1000):
+        # make use of pandas DataFrame displaying
+        # islice 1 more rows than required
+        # to see if there are more rows left
+        list_values = list(islice(seq_values, nrows + 1))
+        print(pd.DataFrame(list_values[:nrows], columns=cols))
+        if len(list_values) > nrows:
+            print("...more rows...")
 
 
 #  temporary, you need to fix it later
 def _describe(rows, n, cols, percentile):
-    print('Table Description')
-    print('-----------------')
-    print('Sample Rows')
+    print('***** Table Description *****')
+    print()
+    print('===== Sample Rows =====')
 
     rows1 = Rows(rows)
-    _show(rows1, n, cols, None)
+    _show(rows1, n, cols)
 
     percentile = percentile if percentile else \
         [0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99]
     df = rows1.df(cols)
-    print('-----------------')
     print()
-    print('Summary Stats')
+    print('===== Summary Stats =====')
     print(df.describe(percentile, include='all'))
     print()
-    print('Corr Matrix')
-    print('-----------')
+    print('===== Corr Matrix ======')
     print(df.corr())
     print()
 

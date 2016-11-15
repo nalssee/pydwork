@@ -110,7 +110,7 @@ class Testdbopen(unittest.TestCase):
                 for rs in islice(iris, 2):
                     yield from rs
 
-            c.write(first2group, 'sample.csv')
+            c.csv(first2group, 'sample.csv')
             self.assertTrue(os.path.isfile(os.path.join('data', 'sample.csv')))
 
             # each group contains 50 rows, hence 100
@@ -219,21 +219,21 @@ class TestMisc(unittest.TestCase):
         iris2 = os.path.join('data', 'iris2.csv')
         with dbopen(':memory:') as c:
             c.save('iris.csv')
-            c.write(c.reel('iris'), 'iris2.csv')
+            c.csv('iris', 'iris2.csv')
             prepend_header(iris2, 'cnt, sl, sw, pl, pw, sp', drop=20)
             c.drop('iris2')
             c.save('iris2.csv')
             first = next(c.reel('iris2'))
             self.assertEqual(first.cnt, 20)
 
-            c.write(c.reel('iris'), 'iris2.csv')
+            c.csv(c.reel('iris'), 'iris2.csv')
             prepend_header(iris2, 'cnt, sl, sw, pl, pw, sp', drop=1)
             c.drop('iris2')
             c.save('iris2.csv')
             first = next(c.reel('iris2'))
             self.assertEqual(first.cnt, 1)
 
-            c.write(c.reel('iris'), 'iris2.csv')
+            c.csv(c.reel('iris'), 'iris2.csv')
             prepend_header(iris2, 'cnt, sl, sw, pl, pw, sp', drop=0)
             c.drop('iris2')
             c.save('iris2.csv')
@@ -241,7 +241,7 @@ class TestMisc(unittest.TestCase):
             self.assertEqual(first.cnt, 'col')
             self.assertEqual(first.sl, 'sepal_length')
 
-            c.write(c.reel('iris'), 'iris2.csv')
+            c.csv(c.reel('iris'), 'iris2.csv')
             # simply drop the first 5 lines, and do nothing else
             prepend_header(iris2, header=None, drop=5)
             # don't drop any and just write the header
