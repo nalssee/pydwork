@@ -31,8 +31,7 @@ class PRows(Rows):
         for r in self:
             r[pncol] = ''
 
-        self.num(col)
-        for rs1 in self.order(self.dcol).group(self.dcol):
+        for rs1 in self.num(col).order(self.dcol).group(self.dcol):
             for pn, rs2 in enumerate(nchunks(rs1.order(col), n), 1):
                 for r in rs2:
                     r[pncol] = pn
@@ -52,8 +51,7 @@ class PRows(Rows):
 
         pncols = listify(pncols) if pncols else list(self.pncols)
 
-        self.num(pncols + [col])
-        for rs1 in self.order(self.dcol).group(self.dcol):
+        for rs1 in self.num(pncols + [col]).order(self.dcol).group(self.dcol):
             for rs2 in rs1.order(pncols + [col]).group(pncols):
                 for pn, rs3 in enumerate(nchunks(rs2, n), 1):
                     for r in rs3:
@@ -64,13 +62,15 @@ class PRows(Rows):
 
     def pavg(self, col, wcol=None, pncols=None):
         "portfolio average,  wcol: weight column"
-        self.num([col] + [wcol]) if wcol else self.num(col)
 
         pncols = listify(pncols) if pncols else list(self.pncols)
         ns = [self.pncols[pncol] for pncol in pncols]
 
+        newrs = self.num(pncols + [col, wcol]) if wcol \
+                else self.num(pncols + [col])
+
         result = []
-        for rs1 in self.group(self.dcol):
+        for rs1 in newrs.group(self.dcol):
             for pns, rs2 in zip(product(*(range(1, n + 1) for n in ns)),
                                 rs1.order(pncols).group(pncols)):
                 # test if there's any missing portfolio
