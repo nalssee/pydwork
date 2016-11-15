@@ -3,6 +3,7 @@ import sys
 import unittest
 from itertools import islice
 import time
+import statistics as st
 
 TESTPATH = os.path.dirname(os.path.realpath(__file__))
 PYPATH = os.path.join(TESTPATH, '..', '..')
@@ -11,7 +12,7 @@ sys.path.append(PYPATH)
 from pydwork.sqlplus import *
 from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd, \
     prepend_header, pmap
-from pydwork.fi import PRows
+from pydwork.fi import PRows, aseq
 
 
 set_workspace('data')
@@ -596,17 +597,62 @@ class TestPRows(unittest.TestCase):
 
         self.assertEqual(round(avgport[0].other, 2), -0.63)
 
-        # Add some tests here!!
-        self.indport.where(lambda r: r.yyyy < 2009)\
-            .pn('cnsmr', 10).pavg('other', pncols='pn_cnsmr').pat('pn_cnsmr').csv()
-        self.indport.where(lambda r: r.yyyy < 2009)\
-            .pn('cnsmr', 2).pn('manuf', 3).pavg('other').pat().csv()
+        indport = self.indport.where(lambda r: r.yyyy < 2009).pn('cnsmr', 10)
+
+        other1 = []
+        for year in range(2001, 2009):
+            other1.append(aseq(indport.where(lambda r: r.pn_cnsmr == 1 and r.yyyy == year)['other']))
+        self.assertEqual(other1, [-1.249, -1.418, -0.838, -0.98, -0.944, -1.027, -1.75, -4.143])
+
+        other10 = []
+        for year in range(2001, 2009):
+            other10.append(aseq(indport.where(lambda r: r.pn_cnsmr == 10 and r.yyyy == year)['other']))
+        self.assertEqual(other10, [1.415, 1.486, 1.235, 0.96, 1.062, 1.174, 1.34, 4.014])
+
+        pat = self.indport.where(lambda r: r.yyyy < 2009)\
+                  .pn('cnsmr', 10).pavg('other', pncols='pn_cnsmr').pat('pn_cnsmr')
+        self.assertEqual(round(st.mean(other10) - st.mean(other1), 2), float(pat.lines[0][11][:4]))
+
+        indport = self.indport.where(lambda r: r.yyyy < 2009).pn('cnsmr', 2).pn('manuf', 3)
+        # pavg.show()
+        other21 = []
+        other23 = []
+        for year in range(2001, 2009):
+            pavg1 = indport.where(lambda r: r.pn_cnsmr == 2 and r.pn_manuf == 1 and r.yyyy == year)['other']
+            pavg2 = indport.where(lambda r: r.pn_cnsmr == 2 and r.pn_manuf == 3 and r.yyyy == year)['other']
+            other21.append(st.mean(pavg1))
+            other23.append(st.mean(pavg2))
+
+        pat = indport.pavg('other').pat().lines
+        self.assertEqual(round(st.mean(other21), 3), pat[2][1])
+        self.assertEqual(round(st.mean(other23), 3), pat[2][3])
+        self.assertEqual(round(st.mean(other23) - st.mean(other21), 3), float(pat[2][4][:5]))
+
+    def test_indi_sort2(self):
+        "weighted average"
+        avgport = self.indport.where(lambda r: r.yyyy <= 2015).pn('cnsmr', 10)
+        hlth = avgport.where(lambda r: r.yyyy == 2001 and r.pn_cnsmr == 3)['hlth']
+        other = avgport.where(lambda r: r.yyyy == 2001 and r.pn_cnsmr == 3)['other']
+
+        total = sum(hlth)
+        result = []
+        for x, y in zip(other, hlth):
+            result.append(x * y / total)
+        self.assertEqual(st.mean(result),
+                         avgport.pavg('other', 'hlth')\
+                         .where(lambda r: r.yyyy == 2001 and r.pn_cnsmr == 3)['other'][0])
 
     def test_dpn(self):
         avgport = self.indport.pn('cnsmr', 4).dpn('manuf', 3).dpn('hlth', 2).pavg('other')
         for r in avgport.where(lambda r: r.yyyy < 2016):
             self.assertTrue(r.n == 10 or r.n == 11)
-        avgport.pat().csv()
+        seq1 = avgport.where(lambda r: r.pn_cnsmr == 3 and r.pn_manuf == 1 and r.pn_hlth == 2)['other']
+        seq2 = avgport.where(lambda r: r.pn_cnsmr == 3 and r.pn_manuf == 3 and r.pn_hlth == 2)['other']
+
+        pat = avgport.pat().lines
+        self.assertEqual(round(st.mean(seq1), 3), pat[14][2])
+        self.assertEqual(round(st.mean(seq2), 3), pat[16][2])
+        self.assertEqual(round(st.mean(seq2) - st.mean(seq1), 3), float(pat[17][2][:5]))
 
     def test_famac(self):
         fit = self.indport.famac('other ~ cnsmr + manuf + hi_tec + hlth')
@@ -615,7 +661,10 @@ class TestPRows(unittest.TestCase):
         self.assertEqual(round(fit[0].manuf, 2), 0.16)
         self.assertEqual(round(fit[0].hi_tec, 2), 0.03)
         self.assertEqual(round(fit[0].hlth, 2), 0.10)
-        fit.tsavg().csv()
+
+        fitavg = fit.tsavg()
+        for var, val in zip(['cnsmr', 'manuf', 'hi_tec', 'hlth'], fitavg.lines[1][2:]):
+            self.assertEqual(aseq(fit[var], True), val)
 
     def test_rollover(self):
         lengths = []
