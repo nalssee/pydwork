@@ -627,7 +627,8 @@ class TestPRows(unittest.TestCase):
         self.assertEqual(round(st.mean(other21), 3), pat[2][1])
         self.assertEqual(round(st.mean(other23), 3), pat[2][3])
         self.assertEqual(round(st.mean(other23) - st.mean(other21), 3), float(pat[2][4][:5]))
-
+        indport.pavg('other', pncols='pn_cnsmr, pn_manuf').pat().csv()
+        
     def test_indi_sort2(self):
         "weighted average"
         avgport = self.indport.where(lambda r: r.yyyy <= 2015).pn('cnsmr', 10)

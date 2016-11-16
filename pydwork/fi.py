@@ -133,20 +133,28 @@ class PRows(Rows):
 
         lines = []
         lines.append(line)
+
+        seqs1 = []
         for i, result1 in enumerate(result, 1):
             line = []
             line.append(i)
             for seq in result1:
                 line.append(aseq(seq))
             seq = [h - l for h, l in zip(result1[-1], result1[0])]
+            seqs1.append(seq)
             line.append(aseq(seq, True))
             lines.append(line)
 
         line = []
         line.append("P%s - P1" % (i,))
+        seqs = []
         for hseq, lseq in zip(result[-1], result[0]):
             seq = [h - l for h, l in zip(hseq, lseq)]
+            seqs.append(seq)
             line.append(aseq(seq, True))
+        # bottom right corner
+        line.append(aseq([h - l for h, l in zip(seqs[-1], seqs[0])], True))
+
         lines.append(line)
 
         return Box(lines)
@@ -226,7 +234,7 @@ def aseq(seq, tval=False):
     "average of sequence"
     tstat = ttest_1samp(seq, 0)
     if tval:
-        return "%s (%s)" % \
+        return "%s [%s]" % \
                (star(st.mean(seq), tstat[1]), round(tstat[0], 2))
     return round(st.mean(seq), 3)
 
