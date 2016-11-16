@@ -25,21 +25,21 @@ class PRows(Rows):
         # portfolio number columns
         self.pncols = OrderedDict()
 
-    def pn(self, col, n):
+    def pn(self, col, n, chunkfn=nchunks):
         "portfolio numbering for independent sort"
         pncol = 'pn_' + col
         for r in self:
             r[pncol] = ''
 
         for rs1 in self.num(col).order(self.dcol).group(self.dcol):
-            for pn, rs2 in enumerate(nchunks(rs1.order(col), n), 1):
+            for pn, rs2 in enumerate(chunkfn(rs1.order(col), n), 1):
                 for r in rs2:
                     r[pncol] = pn
 
         self.pncols[pncol] = n
         return self
 
-    def dpn(self, col, n, pncols=None):
+    def dpn(self, col, n, pncols=None, chunkfn=nchunks):
         """
         portfolio numbering for dependent sort
         if you don't specify pncols, self.pncols is used
@@ -53,7 +53,7 @@ class PRows(Rows):
 
         for rs1 in self.num(pncols + [col]).order(self.dcol).group(self.dcol):
             for rs2 in rs1.order(pncols + [col]).group(pncols):
-                for pn, rs3 in enumerate(nchunks(rs2, n), 1):
+                for pn, rs3 in enumerate(chunkfn(rs2, n), 1):
                     for r in rs3:
                         r[pncol] = pn
 
