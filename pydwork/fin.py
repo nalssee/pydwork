@@ -135,22 +135,21 @@ class PRows(Rows):
         line.append("%s\\%s" % (pncol1[3:], pncol2[3:]))
         for i in range(1, len(result[0]) + 1):
             line.append(i)
-        line.append('P%s - P1' % (i, ))
+        line.append('P%s - P1' % i)
 
         lines = []
         lines.append(line)
 
-        seqs1 = []
         for i, result1 in enumerate(result, 1):
             line = []
             line.append(i)
             for seq in result1:
                 line.append(aseq(seq))
             seq = [h - l for h, l in zip(result1[-1], result1[0])]
-            seqs1.append(seq)
             line.append(aseq(seq, True))
             lines.append(line)
 
+        # bottom line
         line = []
         line.append("P%s - P1" % (i,))
         seqs = []
@@ -162,7 +161,6 @@ class PRows(Rows):
         line.append(aseq([h - l for h, l in zip(seqs[-1], seqs[0])], True))
 
         lines.append(line)
-
         return Box(lines)
 
     def _patn(self, pncols):
