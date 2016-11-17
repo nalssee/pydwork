@@ -113,14 +113,15 @@ class PRows(Rows):
     def _pat1(self, pncol):
         result = []
         for rs in self.order([pncol, self.dcol]).group(pncol):
-            result.append([r[self.acol] for r in rs])
+            result.append(Rows(rs))
 
         line = []
         line.append(self.acol)
-        for seq in result:
-            line.append(aseq(seq))
-        seq = [h - l for h, l in zip(result[-1], result[0])]
-        line.append(aseq(seq, True))
+        for rs in result:
+            line.append(_mrep(rs, self.acol))
+        seq = [h - l for h, l in \
+               zip(result[-1][self.acol], result[0][self.acol])]
+        line.append(_mrep0(seq))
         return Box([line])
 
     def _pat2(self, pncol1, pncol2):
@@ -128,7 +129,7 @@ class PRows(Rows):
         for rs1 in self.order([pncol1, pncol2, self.dcol]).group(pncol1):
             result1 = []
             for rs2 in rs1.group(pncol2):
-                result1.append([r[self.acol] for r in rs2])
+                result1.append(Rows(rs2))
             result.append(result1)
 
         line = []
@@ -143,10 +144,11 @@ class PRows(Rows):
         for i, result1 in enumerate(result, 1):
             line = []
             line.append(i)
-            for seq in result1:
-                line.append(aseq(seq))
-            seq = [h - l for h, l in zip(result1[-1], result1[0])]
-            line.append(aseq(seq, True))
+            for rs in result1:
+                line.append(_mrep(rs, self.acol))
+            seq = [h - l for h, l in \
+                   zip(result1[-1][self.acol], result1[0][self.acol])]
+            line.append(_mrep0(seq))
             lines.append(line)
 
         # bottom line
@@ -154,11 +156,11 @@ class PRows(Rows):
         line.append("P%s - P1" % (i,))
         seqs = []
         for hseq, lseq in zip(result[-1], result[0]):
-            seq = [h - l for h, l in zip(hseq, lseq)]
+            seq = [h - l for h, l in zip(hseq[self.acol], lseq[self.acol])]
             seqs.append(seq)
-            line.append(aseq(seq, True))
+            line.append(_mrep0(seq))
         # bottom right corner
-        line.append(aseq([h - l for h, l in zip(seqs[-1], seqs[0])], True))
+        line.append(_mrep0([h - l for h, l in zip(seqs[-1], seqs[0])]))
 
         lines.append(line)
         return Box(lines)
@@ -182,7 +184,7 @@ class PRows(Rows):
         cols = listify(cols) if cols else self[0].columns
         lines = []
         lines.append(cols)
-        lines.append([aseq(self[col], True) for col in cols])
+        lines.append([_mrep0(self[col]) for col in cols])
         return Box(lines)
 
     def famac(self, model):
@@ -234,13 +236,17 @@ class PRows(Rows):
             rs = list(dropwhile(lambda r: r[self.dcol] < enddate, rs))
 
 
-def aseq(seq, tval=False):
-    "average of sequence"
+def _mrep(rs, col):
+    "mean representation"
+    m = round(st.mean(r[col] for r in rs), 3)
+    n = round(st.mean(r.n for r in rs))
+    return "%s (%s)" % (m, n)
+
+
+def _mrep0(seq):
+    "sequence of numbers with t val"
     tstat = ttest_1samp(seq, 0)
-    if tval:
-        return "%s [%s]" % \
-               (star(st.mean(seq), tstat[1]), round(tstat[0], 2))
-    return round(st.mean(seq), 3)
+    return "%s [%s]" % (star(st.mean(seq), tstat[1]), round(tstat[0], 2))
 
 
 def wavg(rs, col, wcol):
