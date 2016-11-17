@@ -240,7 +240,7 @@ def _mrep(rs, col):
     "mean representation"
     m = round(st.mean(r[col] for r in rs), 3)
     n = round(st.mean(r.n for r in rs))
-    return "%s (%s)" % (m, n)
+    return "%s (%s) hello" % (m, n)
 
 
 def _mrep0(seq):
