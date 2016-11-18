@@ -665,6 +665,15 @@ class TestPRows(unittest.TestCase):
                          avgport.pavg('other', 'hlth')\
                          .where(lambda r: r.yyyy == 2001 and r.pn_cnsmr == 3)['other'][0])
 
+    def test_indi_sort3(self):
+        def pfn(rs):
+            n = len(rs)
+            half = round(n / 2)
+            return [rs[:half], rs[half:]]
+
+        self.assertEqual(self.indport.pn('cnsmr', 2).pavg('other').pat().lines,
+                         self.indport.pn('cnsmr', pfn).pavg('other').pat().lines)
+
     def test_dpn(self):
         avgport = self.indport.pn('cnsmr', 4).dpn('manuf', 3).dpn('hlth', 2).pavg('other')
         for r in avgport.where(lambda r: r.yyyy < 2016):

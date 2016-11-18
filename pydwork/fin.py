@@ -31,9 +31,9 @@ class PRows(Rows):
         for r in self:
             r[pncol] = ''
 
-        fn = lambda rs: nchunks(rs, n_or_fn) \
+        # parentheses around lambda are necessary
+        fn = (lambda rs: nchunks(rs, n_or_fn)) \
              if isinstance(n_or_fn, int) else n_or_fn
-
         for rs1 in self.num(col).order(self.dcol).group(self.dcol):
             for pn, rs2 in enumerate(fn(rs1.order(col)), 1):
                 for r in rs2:
@@ -52,7 +52,8 @@ class PRows(Rows):
         for r in self:
             r[pncol] = ''
 
-        fn = lambda rs: nchunks(rs, n_or_fn) \
+        # parentheses around lambda are necessary
+        fn = (lambda rs: nchunks(rs, n_or_fn)) \
              if isinstance(n_or_fn, int) else n_or_fn
 
         pncols = listify(pncols) if pncols else list(self.pncols)
