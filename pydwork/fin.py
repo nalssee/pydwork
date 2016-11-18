@@ -35,9 +35,7 @@ class PRows(Rows):
         fn = (lambda rs: nchunks(rs, n_or_fn)) \
              if isinstance(n_or_fn, int) else n_or_fn
         for rs1 in self.num(col).order(self.dcol).group(self.dcol):
-            chunks = list(fn(rs1.order(col)))
-            assert len(chunks) > 0, "Not enough obs for portfolio"
-            for pn, rs2 in enumerate(chunks, 1):
+            for pn, rs2 in enumerate(fn(rs1.order(col)), 1):
                 for r in rs2:
                     r[pncol] = pn
 
@@ -62,9 +60,7 @@ class PRows(Rows):
 
         for rs1 in self.num(pncols + [col]).order(self.dcol).group(self.dcol):
             for rs2 in rs1.order(pncols + [col]).group(pncols):
-                chunks = list(fn(rs2))
-                assert len(chunks) > 0, "Not enough obs for portfolio"
-                for pn, rs3 in enumerate(chunks, 1):
+                for pn, rs3 in enumerate(fn(rs2), 1):
                     for r in rs3:
                         r[pncol] = pn
 
