@@ -10,7 +10,7 @@ from collections import OrderedDict
 from scipy.stats import ttest_1samp
 
 from .sqlplus import Rows, Row, Box
-from .util import nchunks, listify, yyyymm, yyyymmdd
+from .util import nchunks, listify, grouper, yyyymm, yyyymmdd
 
 
 class PRows(Rows):
@@ -24,6 +24,15 @@ class PRows(Rows):
         self.acol = None
         # portfolio number columns
         self.pncols = OrderedDict()
+
+    def reset(self):
+        "Remove pncols and initiate acol and pncols"
+        pncols = [col for col in self.rows[0].columns if col.startswith('pn_')]
+        self.acol = None
+        self.pncols = OrderedDict()
+        for r in self.rows:
+            for pncol in pncols:
+                del r[pncol]
 
     def pn(self, col, n_or_fn):
         "portfolio numbering for independent sort"
@@ -40,6 +49,20 @@ class PRows(Rows):
                     r[pncol] = pn
 
         self.pncols[pncol] = pn
+        return self
+
+    def pns(self, *colns):
+        self.reset()
+        for col, n in grouper(colns, 2):
+            self.pn(col, n)
+        return self
+        
+    def dpns(self, *colns):
+        self.reset()
+        colns1 = list(grouper(colns, 2))
+        self.pn(*colns1[0])
+        for col, n in colns1[1:]:
+            self.dpn(col, n)
         return self
 
     def dpn(self, col, n_or_fn, pncols=None):

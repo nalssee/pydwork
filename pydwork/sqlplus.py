@@ -177,18 +177,6 @@ class Rows:
         "shallow copy"
         return copy.copy(self)
 
-    def deepcopy(self):
-        "deep copy"
-        self = self.copy()
-        def gnrows():
-            for r in self.rows:
-                r0 = Row()
-                for c, v in zip(r.columns, r.values):
-                    r0[c] = v
-                yield r0
-        self.rows = list(gnrows())
-        return self
-
     def order(self, key, reverse=0):
         key = _build_keyfn(key)
         self.rows.sort(key=key, reverse=reverse)

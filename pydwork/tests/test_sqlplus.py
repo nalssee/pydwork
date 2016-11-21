@@ -13,7 +13,7 @@ sys.path.append(PYPATH)
 
 from pydwork.sqlplus import *
 from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd, \
-    prepend_header, pmap
+    prepend_header, pmap, grouper
 from pydwork.fin import PRows
 
 
@@ -605,7 +605,7 @@ class TestPRows(unittest.TestCase):
     def test_indi_sort(self):
         with self.assertRaises(ValueError):
             # there are not enough element to make portfolios in 2009
-            self.indport.deepcopy().pn('cnsmr', 2).pn('manuf', 3).pavg('other')
+            self.indport.pn('cnsmr', 2).pn('manuf', 3).pavg('other')
 
         avgport = self.indport.where(lambda r: r.yyyy < 2009)\
                       .pn('cnsmr', 2).pn('manuf', 3).pavg('other')
@@ -685,6 +685,12 @@ class TestPRows(unittest.TestCase):
         self.assertEqual(round(st.mean(seq1), 3), float(pat[14][2].split()[0]))
         self.assertEqual(round(st.mean(seq2), 3), float(pat[16][2].split()[0]))
         self.assertEqual(round(st.mean(seq2) - st.mean(seq1), 3), float(pat[17][2][:5]))
+
+    def test_pns(self):
+        self.indport.dpns('cnsmr', 4, 'manuf', 3, 'hlth', 2)
+        self.assertEqual(len(self.indport.pncols), 3)
+        self.indport.dpns('cnsmr', 2, 'manuf', 3)
+        self.assertEqual(len(self.indport.pncols), 2)
 
     def test_famac(self):
         fit = self.indport.famac('other ~ cnsmr + manuf + hi_tec + hlth')
