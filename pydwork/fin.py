@@ -253,11 +253,8 @@ class PRows(Rows):
 
         rs = Rows(self.rows)
 
-        # date must be int but just in case
-        typefn = str if isinstance(rs[0][self.dcol], str) else int
-
-        begdate = typefn(begdate) if begdate else rs[0][self.dcol]
-        enddate = typefn(enddate) if enddate else rs[-1][self.dcol]
+        begdate = int(begdate) if begdate else rs[0][self.dcol]
+        enddate = int(enddate) if enddate else rs[-1][self.dcol]
 
         while begdate <= enddate:
             yield rows_between(rs, begdate, get_nextdate(begdate, period))
