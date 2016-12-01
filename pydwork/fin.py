@@ -233,7 +233,7 @@ class PRows(Rows):
         prows = PRows(params, self.dcol)
         return prows
 
-    def roll(self, period, jump):
+    def roll(self, period, jump, begdate=None):
         "group rows over time, allowing overlaps"
         def get_nextdate(date, period):
             "date after the period"
@@ -254,7 +254,7 @@ class PRows(Rows):
 
         rs = self.rows
         while rs != []:
-            startdate = str(rs[0][self.dcol])
+            startdate = str(begdate) if begdate else str(rs[0][self.dcol])
             enddate = get_nextdate(startdate, jump)
             yield rows_for(rs, startdate, period)
             rs = list(dropwhile(lambda r: r[self.dcol] < enddate, rs))
