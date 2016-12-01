@@ -56,7 +56,7 @@ class PRows(Rows):
         for col, n in grouper(colns, 2):
             self.pn(col, n)
         return self
-        
+
     def dpns(self, *colns):
         self.reset()
         colns1 = list(grouper(colns, 2))
@@ -275,6 +275,7 @@ def _mrep0(seq):
 
 def wavg(rs, col, wcol):
     "compute weigthed average"
+    rs = rs.num([col, wcol])
     total = sum(r[wcol] for r in rs)
     return st.mean(r[col] * r[wcol] / total for r in rs)
 
