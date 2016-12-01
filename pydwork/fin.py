@@ -233,10 +233,11 @@ class PRows(Rows):
         prows = PRows(params, self.dcol)
         return prows
 
-    def roll(self, period, jump, begdate=None):
+    def roll(self, period, jump, begdate=None, enddate=None):
         "group rows over time, allowing overlaps"
         def get_nextdate(date, period):
             "date after the period"
+            date = str(date)
             if len(date) == 8:
                 return yyyymmdd(date, period)
             elif len(date) == 6:
@@ -246,18 +247,21 @@ class PRows(Rows):
             else:
                 raise ValueError('Invalid date', date)
 
-        def rows_for(rs, date, period):
-            "rows from the date for the period"
-            enddate = get_nextdate(date, period)
-            return PRows(takewhile(lambda r: r[self.dcol] < enddate, rs),
-                         self.dcol)
+        def rows_between(rs, beg, end):
+            return PRows(rs.where(lambda r: r[self.dcol] >= beg
+                                  and r[self.dcol] < end), self.dcol)
 
-        rs = self.rows
-        while rs != []:
-            startdate = str(begdate) if begdate else str(rs[0][self.dcol])
-            enddate = get_nextdate(startdate, jump)
-            yield rows_for(rs, startdate, period)
-            rs = list(dropwhile(lambda r: r[self.dcol] < enddate, rs))
+        rs = Rows(self.rows)
+
+        # date must be int but just in case
+        typefn = str if isinstance(rs[0][self.dcol], str) else int
+
+        begdate = typefn(begdate) if begdate else rs[0][self.dcol]
+        enddate = typefn(enddate) if enddate else rs[-1][self.dcol]
+
+        while begdate <= enddate:
+            yield rows_between(rs, begdate, get_nextdate(begdate, period))
+            begdate = get_nextdate(begdate, jump)
 
 
 def _mrep(rs, col):
