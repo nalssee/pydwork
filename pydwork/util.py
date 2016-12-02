@@ -10,7 +10,7 @@ import fileinput
 import multiprocessing as mp
 import threading as th
 
-from itertools import dropwhile, chain, zip_longest
+from itertools import dropwhile, chain, zip_longest, accumulate
 from queue import Queue
 
 from datetime import datetime
@@ -29,6 +29,26 @@ def nchunks(xs, n):
             chunksize = round(len(xs[start:]) / (n - i))
             yield xs[start:start + chunksize]
             start += chunksize
+
+
+def breaks(xs, sizes):
+    """ breaks(range(10), [0.3, 0.4, 0.3]) yields
+    [0, 1, 2], [3, 4, 5, 6], [7, 8, 9]
+    """
+    xs = list(xs)
+    n = len(xs)
+    bps = list(accumulate(sizes))
+    assert bps[-1] == 1, "break points invalid"
+    for a, b in zip([0] + bps, bps):
+        yield xs[round(a * n):round(b * n)]
+
+
+# copied from 'itertools'
+def grouper(iterable, n, fillvalue=None):
+    "Collect data into fixed-length chunks or blocks"
+    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
+    args = [iter(iterable)] * n
+    return zip_longest(*args, fillvalue=fillvalue)
 
 
 def prepend_header(filename, header=None, drop=0):
@@ -143,14 +163,6 @@ def listify(x):
         return list(x)
     else:
         return [x]
-
-
-# copied from 'itertools'
-def grouper(iterable, n, fillvalue=None):
-    "Collect data into fixed-length chunks or blocks"
-    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
-    args = [iter(iterable)] * n
-    return zip_longest(*args, fillvalue=fillvalue)
 
 
 # Pool.iamp in multiprocessing doesn't allow

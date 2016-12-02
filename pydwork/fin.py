@@ -10,7 +10,7 @@ from collections import OrderedDict
 from scipy.stats import ttest_1samp
 
 from .sqlplus import Rows, Row, Box
-from .util import nchunks, listify, grouper, yyyymm, yyyymmdd
+from .util import nchunks, listify, grouper, yyyymm, yyyymmdd, breaks
 
 
 class PRows(Rows):
@@ -34,24 +34,25 @@ class PRows(Rows):
             for pncol in pncols:
                 del r[pncol]
 
-    def pn(self, col, n_or_fn):
+    def pn(self, col, n_or_sizes):
         "portfolio numbering for independent sort"
         pncol = 'pn_' + col
         for r in self:
             r[pncol] = ''
 
-        # parentheses around lambda are necessary
-        fn = (lambda rs: nchunks(rs, n_or_fn)) \
-             if isinstance(n_or_fn, int) else n_or_fn
+        fn = nchunks if isinstance(n_or_sizes, int) else breaks
+        fn1 = lambda rs: fn(rs, n_or_sizes)
+
         for rs1 in self.num(col).order(self.dcol).group(self.dcol):
-            for pn, rs2 in enumerate(fn(rs1.order(col)), 1):
+            for pn, rs2 in enumerate(fn1(rs1.order(col)), 1):
                 for r in rs2:
                     r[pncol] = pn
 
-        self.pncols[pncol] = pn
+        self.pncols[pncol] = n_or_sizes if isinstance(n_or_sizes, int) else \
+                             len(n_or_sizes)
         return self
 
-    def pn1(self, col, n_or_fn, fcol):
+    def pn1(self, col, n_or_sizes, fcol):
         """
         fcol: firm id column, like permno, fcode etc
 
@@ -66,7 +67,7 @@ class PRows(Rows):
         # first date rows
         fdrows = next(self.num(col).order(self.dcol).group(self.dcol))
         # assign it first
-        PRows(fdrows, self.dcol).pn(col, n_or_fn)
+        PRows(fdrows, self.dcol).pn(col, n_or_sizes)
 
         for rs1 in self.num(col).order([fcol, self.dcol]).group(fcol):
             pn = rs1[0][pncol]
@@ -74,11 +75,8 @@ class PRows(Rows):
                 for r in rs1[1:]:
                     r[pncol] = pn
 
-        if isinstance(n_or_fn, int):
-            self.pncols[pncol] = n_or_fn
-        else:
-            self.pncols[pncol] = len(n_or_fn(fdrows))
-
+        self.pncols[pncol] = n_or_sizes if isinstance(n_or_sizes, int) else \
+                             len(n_or_sizes)
         return self
 
     def pns(self, *colns):
@@ -87,15 +85,7 @@ class PRows(Rows):
             self.pn(col, n)
         return self
 
-    def dpns(self, *colns):
-        self.reset()
-        colns1 = list(grouper(colns, 2))
-        self.pn(*colns1[0])
-        for col, n in colns1[1:]:
-            self.dpn(col, n)
-        return self
-
-    def dpn(self, col, n_or_fn, pncols=None):
+    def dpn(self, col, n_or_sizes, pncols=None):
         """
         portfolio numbering for dependent sort
         if you don't specify pncols, self.pncols is used
@@ -105,19 +95,27 @@ class PRows(Rows):
         for r in self:
             r[pncol] = ''
 
-        # parentheses around lambda are necessary
-        fn = (lambda rs: nchunks(rs, n_or_fn)) \
-             if isinstance(n_or_fn, int) else n_or_fn
+        fn = nchunks if isinstance(n_or_sizes, int) else breaks
+        fn1 = lambda rs: fn(rs, n_or_sizes)
 
         pncols = listify(pncols) if pncols else list(self.pncols)
 
         for rs1 in self.num(pncols + [col]).order(self.dcol).group(self.dcol):
             for rs2 in rs1.order(pncols + [col]).group(pncols):
-                for pn, rs3 in enumerate(fn(rs2), 1):
+                for pn, rs3 in enumerate(fn1(rs2), 1):
                     for r in rs3:
                         r[pncol] = pn
 
-        self.pncols[pncol] = pn
+        self.pncols[pncol] = n_or_sizes if isinstance(n_or_sizes, int) else \
+                             len(n_or_sizes)
+        return self
+
+    def dpns(self, *colns):
+        self.reset()
+        colns1 = list(grouper(colns, 2))
+        self.pn(*colns1[0])
+        for col, n in colns1[1:]:
+            self.dpn(col, n)
         return self
 
     def pavg(self, col, wcol=None, pncols=None):

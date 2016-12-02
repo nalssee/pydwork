@@ -13,7 +13,7 @@ sys.path.append(PYPATH)
 
 from pydwork.sqlplus import *
 from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd, \
-    prepend_header, pmap, grouper
+    prepend_header, pmap, grouper, breaks
 from pydwork.fin import PRows
 
 
@@ -315,6 +315,10 @@ class TestMisc(unittest.TestCase):
 
         self.assertEqual(yyyymmdd(19991231, '2 days'), 20000102)
         self.assertEqual(yyyymmdd(19991231, '-2 days'), 19991229)
+
+    def test_breaks(self):
+        self.assertEqual(list(breaks(range(10), [0.3, 0.4, 0.3])),
+                         [[0, 1, 2], [3, 4, 5, 6], [7, 8, 9]])
 
 
 class TestPmap(unittest.TestCase):
@@ -666,13 +670,8 @@ class TestPRows(unittest.TestCase):
                          .where(lambda r: r.yyyy == 2001 and r.pn_cnsmr == 3)['other'][0])
 
     def test_indi_sort3(self):
-        def pfn(rs):
-            n = len(rs)
-            half = round(n / 2)
-            return [rs[:half], rs[half:]]
-
         self.assertEqual(self.indport.pn('cnsmr', 2).pavg('other').pat().lines,
-                         self.indport.pn('cnsmr', pfn).pavg('other').pat().lines)
+                         self.indport.pn('cnsmr', [0.5, 0.5]).pavg('other').pat().lines)
 
     def test_dpn(self):
         avgport = self.indport.pn('cnsmr', 4).dpn('manuf', 3).dpn('hlth', 2).pavg('other')
