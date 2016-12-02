@@ -51,6 +51,36 @@ class PRows(Rows):
         self.pncols[pncol] = pn
         return self
 
+    def pn1(self, col, n_or_fn, fcol):
+        """
+        fcol: firm id column, like permno, fcode etc
+
+        Assign portfolios based on the first date numbering
+        Ex) As in making factors
+        """
+        pncol = 'pn_' + col
+        for r in self:
+            r[pncol] = ''
+
+        # Somewhat inefficient.
+        # first date rows
+        fdrows = next(self.num(col).order(self.dcol).group(self.dcol))
+        # assign it first
+        PRows(fdrows, self.dcol).pn(col, n_or_fn)
+
+        for rs1 in self.num(col).order([fcol, self.dcol]).group(fcol):
+            pn = rs1[0][pncol]
+            if isinstance(pn, int):
+                for r in rs1[1:]:
+                    r[pncol] = pn
+
+        if isinstance(n_or_fn, int):
+            self.pncols[pncol] = n_or_fn
+        else:
+            self.pncols[pncol] = len(n_or_fn(fdrows))
+
+        return self
+
     def pns(self, *colns):
         self.reset()
         for col, n in grouper(colns, 2):

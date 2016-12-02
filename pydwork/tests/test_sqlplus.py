@@ -686,6 +686,12 @@ class TestPRows(unittest.TestCase):
         self.assertEqual(round(st.mean(seq2), 3), float(pat[16][2].split()[0]))
         self.assertEqual(round(st.mean(seq2) - st.mean(seq1), 3), float(pat[17][2][:5]))
 
+    def test_pn1(self):
+        for rs in self.indport.roll(5, 5, 2003):
+            rs.pn1('cnsmr', 5, 'fcode')
+            xs = rs.where(lambda r: r.pn_cnsmr == 1)
+            self.assertTrue(all([r.pn_cnsmr == 1 for r in  rs.where(lambda r: r.fcode == xs[0].fcode)]))
+
     def test_pns(self):
         self.indport.dpns('cnsmr', 4, 'manuf', 3, 'hlth', 2)
         self.assertEqual(len(self.indport.pncols), 3)
