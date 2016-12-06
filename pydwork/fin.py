@@ -36,25 +36,24 @@ class PRows(Rows):
             for pncol in pncols:
                 del r[pncol]
 
-    def pn(self, col, n_or_sizes):
+    def pn(self, col, n_or_fn):
         "portfolio numbering for independent sort"
         pncol = 'pn_' + col
         for r in self:
             r[pncol] = ''
 
-        fn = nchunks if isinstance(n_or_sizes, int) else breaks
-        fn1 = lambda rs: fn(rs, n_or_sizes)
-
+        # parentheses around lambda are necessary
+        fn = (lambda rs: nchunks(rs, n_or_fn)) \
+             if isinstance(n_or_fn, int) else n_or_fn
         for rs1 in self.num(col).order(self.dcol).group(self.dcol):
-            for pn, rs2 in enumerate(fn1(rs1.order(col)), 1):
+            for pn, rs2 in enumerate(fn(rs1.order(col)), 1):
                 for r in rs2:
                     r[pncol] = pn
 
-        self.pncols[pncol] = n_or_sizes if isinstance(n_or_sizes, int) else \
-                             len(n_or_sizes)
+        self.pncols[pncol] = pn
         return self
 
-    def dpn(self, col, n_or_sizes, pncols=None):
+    def dpn(self, col, n_or_fn, pncols=None):
         """
         portfolio numbering for dependent sort
         if you don't specify pncols, self.pncols is used
@@ -64,22 +63,22 @@ class PRows(Rows):
         for r in self:
             r[pncol] = ''
 
-        fn = nchunks if isinstance(n_or_sizes, int) else breaks
-        fn1 = lambda rs: fn(rs, n_or_sizes)
+        # parentheses around lambda are necessary
+        fn = (lambda rs: nchunks(rs, n_or_fn)) \
+             if isinstance(n_or_fn, int) else n_or_fn
 
         pncols = listify(pncols) if pncols else list(self.pncols)
 
         for rs1 in self.num(pncols + [col]).order(self.dcol).group(self.dcol):
             for rs2 in rs1.order(pncols + [col]).group(pncols):
-                for pn, rs3 in enumerate(fn1(rs2), 1):
+                for pn, rs3 in enumerate(fn(rs2), 1):
                     for r in rs3:
                         r[pncol] = pn
 
-        self.pncols[pncol] = n_or_sizes if isinstance(n_or_sizes, int) else \
-                             len(n_or_sizes)
+        self.pncols[pncol] = pn
         return self
 
-    def pn1(self, col, n_or_sizes):
+    def pn1(self, col, n_or_fn):
         """
         Assign portfolios based on the first date numbering
         Ex) As in making factors
@@ -90,13 +89,13 @@ class PRows(Rows):
         # first date rows
         fdrows = next(self.num(col).order(self.dcol).group(self.dcol))
         # assign it first
-        PRows(fdrows, self.dcol, self.fcol).pn(col, n_or_sizes)
+        PRows(fdrows, self.dcol, self.fcol).pn(col, n_or_fn)
         self._assign_follow_ups(col)
-        self.pncols[pncol] = n_or_sizes if isinstance(n_or_sizes, int) else \
-                             len(n_or_sizes)
+        self.pncols[pncol] = n_or_fn if isinstance(n_or_fn, int) else \
+                             len(n_or_fn(fdrows))
         return self
 
-    def dpn1(self, col, n_or_sizes, pncols=None):
+    def dpn1(self, col, n_or_fn, pncols=None):
         """
         dependent version of pn1
         """
@@ -108,10 +107,11 @@ class PRows(Rows):
         # first date rows
         fdrows = next(self.num(col).order(self.dcol).group(self.dcol))
         # assign it first
-        PRows(fdrows, self.dcol, self.fcol).dpn(col, n_or_sizes, self.pncols)
+        PRows(fdrows, self.dcol, self.fcol).dpn(col, n_or_fn, pncols)
         self._assign_follow_ups(col)
-        self.pncols[pncol] = n_or_sizes if isinstance(n_or_sizes, int) else \
-                             len(n_or_sizes)
+        self.pncols[pncol] = n_or_fn if isinstance(n_or_fn, int) else \
+                             len(n_or_fn(fdrows))
+
         return self
 
     def pns(self, *colns):
