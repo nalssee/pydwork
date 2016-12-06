@@ -604,7 +604,7 @@ class TestPRows(unittest.TestCase):
                     r.fcode = 'A' + str(r.date)[4:]
                     del r.date
                     rs.append(r)
-            self.indport = PRows(rs, 'yyyy')
+            self.indport = PRows(rs, 'yyyy', 'fcode')
 
     def test_indi_sort(self):
         with self.assertRaises(ValueError):
@@ -687,10 +687,19 @@ class TestPRows(unittest.TestCase):
 
     def test_pn1(self):
         for rs in self.indport.roll(5, 5, 2003):
-            rs.pn1('cnsmr', 5, 'fcode')
+            rs.pn1('cnsmr', 5)
             xs = rs.where(lambda r: r.pn_cnsmr == 1)
-            self.assertTrue(all([r.pn_cnsmr == 1 for r in  rs.where(lambda r: r.fcode == xs[0].fcode)]))
+            self.assertTrue(all([r.pn_cnsmr == 1 for r in rs.where(lambda r: r.fcode == xs[0].fcode)]))
 
+    # def test_dpns1(self):
+    #     for rs in self.indport.roll(5, 5, 2003):
+    #         rs.dpns1('cnsmr', 5, 'manuf', 5).num('pn_cnsmr, pn_manuf').order('yyyy, pn_cnsmr, pn_manuf').csv()
+    #
+    # def test_pns1(self):
+    #     # self.indport.pn1('cnsmr', 5).pn1('manuf', 5).num('pn_manuf, pn_cnsmr').order('yyyy, pn_cnsmr, pn_manuf').csv()
+    #     self.indport.pns1('cnsmr', 5, 'manuf', 5).num('pn_manuf, pn_cnsmr')\
+    #     .order('yyyy, pn_cnsmr, pn_manuf').csv()
+    #
     def test_pns(self):
         self.indport.dpns('cnsmr', 4, 'manuf', 3, 'hlth', 2)
         self.assertEqual(len(self.indport.pncols), 3)

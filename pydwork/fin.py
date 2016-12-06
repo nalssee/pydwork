@@ -16,10 +16,12 @@ from .util import nchunks, listify, grouper, yyyymm, yyyymmdd, breaks
 class PRows(Rows):
     """Rows for portfolio analysis
     """
-    def __init__(self, rows, dcol):
+    def __init__(self, rows, dcol, fcol=None):
         Rows.__init__(self, rows)
         # date column
         self.dcol = dcol
+        # firm id column
+        self.fcol = fcol
         # (computed) average column
         self.acol = None
         # portfolio number columns
@@ -52,39 +54,6 @@ class PRows(Rows):
                              len(n_or_sizes)
         return self
 
-    def pn1(self, col, n_or_sizes, fcol):
-        """
-        fcol: firm id column, like permno, fcode etc
-
-        Assign portfolios based on the first date numbering
-        Ex) As in making factors
-        """
-        pncol = 'pn_' + col
-        for r in self:
-            r[pncol] = ''
-
-        # Somewhat inefficient.
-        # first date rows
-        fdrows = next(self.num(col).order(self.dcol).group(self.dcol))
-        # assign it first
-        PRows(fdrows, self.dcol).pn(col, n_or_sizes)
-
-        for rs1 in self.num(col).order([fcol, self.dcol]).group(fcol):
-            pn = rs1[0][pncol]
-            if isinstance(pn, int):
-                for r in rs1[1:]:
-                    r[pncol] = pn
-
-        self.pncols[pncol] = n_or_sizes if isinstance(n_or_sizes, int) else \
-                             len(n_or_sizes)
-        return self
-
-    def pns(self, *colns):
-        self.reset()
-        for col, n in grouper(colns, 2):
-            self.pn(col, n)
-        return self
-
     def dpn(self, col, n_or_sizes, pncols=None):
         """
         portfolio numbering for dependent sort
@@ -110,12 +79,59 @@ class PRows(Rows):
                              len(n_or_sizes)
         return self
 
+    def pn1(self, col, n_or_sizes):
+        """
+        Assign portfolios based on the first date numbering
+        Ex) As in making factors
+        """
+        pncol = 'pn_' + col
+        for r in self:
+            r[pncol] = ''
+        # first date rows
+        fdrows = next(self.num(col).order(self.dcol).group(self.dcol))
+        # assign it first
+        PRows(fdrows, self.dcol, self.fcol).pn(col, n_or_sizes)
+        self._assign_follow_ups(col)
+        self.pncols[pncol] = n_or_sizes if isinstance(n_or_sizes, int) else \
+                             len(n_or_sizes)
+        return self
+
+    def dpn1(self, col, n_or_sizes, pncols=None):
+        """
+        dependent version of pn1
+        """
+        # most of the code is just a dups with pn1 but they are simple enough
+        # not to cut out in other places.
+        pncol = 'pn_' + col
+        for r in self:
+            r[pncol] = ''
+        # first date rows
+        fdrows = next(self.num(col).order(self.dcol).group(self.dcol))
+        # assign it first
+        PRows(fdrows, self.dcol, self.fcol).dpn(col, n_or_sizes, self.pncols)
+        self._assign_follow_ups(col)
+        self.pncols[pncol] = n_or_sizes if isinstance(n_or_sizes, int) else \
+                             len(n_or_sizes)
+        return self
+
+    def pns(self, *colns):
+        return self._pns_helper(self.pn, colns)
+
     def dpns(self, *colns):
+        return self._pns_helper(self.dpn, colns)
+
+    def pns1(self, *colns):
+        return self._pns_helper(self.pn1, colns)
+
+    def dpns1(self, *colns):
+        return self._pns_helper(self.dpn1, colns)
+
+    def _pns_helper(self, pnfn, colns):
         self.reset()
         colns1 = list(grouper(colns, 2))
-        self.pn(*colns1[0])
+        pnfn(*colns1[0])
         for col, n in colns1[1:]:
-            self.dpn(col, n)
+            pnfn(col, n)
         return self
 
     def pavg(self, col, wcol=None, pncols=None):
@@ -275,18 +291,29 @@ class PRows(Rows):
             else:
                 raise ValueError('Invalid date', date)
 
-        def rows_between(rs, beg, end):
-            return PRows(rs.where(lambda r: r[self.dcol] >= beg
-                                  and r[self.dcol] < end), self.dcol)
-
-        rs = Rows(self.rows)
-
-        begdate = int(begdate) if begdate else rs[0][self.dcol]
-        enddate = int(enddate) if enddate else rs[-1][self.dcol]
+        begdate = int(begdate) if begdate else self.rows[0][self.dcol]
+        enddate = int(enddate) if enddate else self.rows[-1][self.dcol]
 
         while begdate <= enddate:
-            yield rows_between(rs, begdate, get_nextdate(begdate, period))
+            yield self.between(begdate, get_nextdate(begdate, period))
             begdate = get_nextdate(begdate, jump)
+
+    def between(self, beg, end):
+        "begdate <= x <  enddate"
+        return self.where(lambda r: r[self.dcol] >= beg and r[self.dcol] < end)
+
+    def _assign_follow_ups(self, col):
+        """assign portfolio numbers based on the first date values
+
+        col: column to assign portfolio number
+        fcol: firm id column name
+        """
+        pncol = 'pn_' + col
+        for rs1 in self.num(col).order([self.fcol, self.dcol]).group(self.fcol):
+            pn = rs1[0][pncol]
+            if isinstance(pn, int):
+                for r in rs1[1:]:
+                    r[pncol] = pn
 
 
 def _mrep(rs, col):

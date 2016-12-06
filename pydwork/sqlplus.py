@@ -215,7 +215,10 @@ class Rows:
         return self.where(lambda r: r[col] >= lower and r[col] <= higher)
 
     def group(self, key):
-        yield from _gby(self.rows, key)
+        for rs in _gby(self.rows, key):
+            other = self.copy()
+            other.rows = rs.rows
+            yield other
 
     def show(self, n=30, cols=None):
         if self == []:
