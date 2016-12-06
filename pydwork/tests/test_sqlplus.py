@@ -665,7 +665,7 @@ class TestPRows(unittest.TestCase):
         result = []
         for x, y in zip(other, hlth):
             result.append(x * y / total)
-        self.assertEqual(st.mean(result),
+        self.assertEqual(sum(result),
                          avgport.pavg('other', 'hlth')\
                          .where(lambda r: r.yyyy == 2001 and r.pn_cnsmr == 3)['other'][0])
 

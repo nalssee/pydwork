@@ -333,7 +333,7 @@ def wavg(rs, col, wcol):
     "compute weigthed average"
     rs = [r for r in rs if isnum(r[col]) and isnum(r[wcol])]
     total = sum(r[wcol] for r in rs)
-    return st.mean(r[col] * r[wcol] / total for r in rs)
+    return sum(r[col] * r[wcol] / total for r in rs)
 
 
 def star(val, pval):
