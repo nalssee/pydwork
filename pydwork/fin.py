@@ -257,23 +257,24 @@ class PRows(Rows):
 
     def famac(self, model):
         "Fama Macbeth"
-        def xvars(model):
-            _, right = model.split('~')
-            return [x.strip() for x in right.split('+')]
+        def allvars(model):
+            left, right = model.split('~')
+            return [left.strip()] + [x.strip() for x in right.split('+')]
 
-        xvs = ['intercept'] + xvars(model)
+        xvs = ['intercept'] + allvars(model)[1:]
 
         params = []
         for rs1 in self.order(self.dcol).group(self.dcol):
-            reg = rs1.ols(model)
-            r = Row()
-            r[self.dcol] = rs1[0][self.dcol]
-            for var, p in zip(xvs, reg.params):
-                r[var] = p
-            r.n = int(reg.nobs)
-            r.r2 = reg.rsquared
-            params.append(r)
-
+            rs1 = rs1.num(allvars(model))
+            if len(rs1) >= 2:
+                reg = rs1.ols(model)
+                r = Row()
+                r[self.dcol] = rs1[0][self.dcol]
+                for var, p in zip(xvs, reg.params):
+                    r[var] = p
+                r.n = int(reg.nobs)
+                r.r2 = reg.rsquared
+                params.append(r)
         prows = PRows(params, self.dcol)
         return prows
 
