@@ -10,7 +10,7 @@ from collections import OrderedDict
 from scipy.stats import ttest_1samp
 
 from .sqlplus import Rows, Row, Box
-from .util import nchunks, listify, grouper, yyyymm, yyyymmdd, breaks
+from .util import nchunks, listify, grouper, yyyymm, yyyymmdd, breaks, isnum
 
 
 class PRows(Rows):
@@ -331,7 +331,7 @@ def _mrep0(seq):
 
 def wavg(rs, col, wcol):
     "compute weigthed average"
-    rs = rs.num([col, wcol])
+    rs = [r for r in rs if isnum(r[col]) and isnum(r[wcol])]
     total = sum(r[wcol] for r in rs)
     return st.mean(r[col] * r[wcol] / total for r in rs)
 
