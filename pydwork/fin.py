@@ -92,7 +92,7 @@ class PRows(Rows):
         PRows(fdrows, self.dcol, self.fcol).pn(col, n_or_fn)
         self._assign_follow_ups(col)
         self.pncols[pncol] = n_or_fn if isinstance(n_or_fn, int) else \
-                             len(n_or_fn(fdrows))
+                             len(list(n_or_fn(fdrows)))
         return self
 
     def dpn1(self, col, n_or_fn, pncols=None):
@@ -110,7 +110,7 @@ class PRows(Rows):
         PRows(fdrows, self.dcol, self.fcol).dpn(col, n_or_fn, pncols)
         self._assign_follow_ups(col)
         self.pncols[pncol] = n_or_fn if isinstance(n_or_fn, int) else \
-                             len(n_or_fn(fdrows))
+                             len(list(n_or_fn(fdrows)))
 
         return self
 
