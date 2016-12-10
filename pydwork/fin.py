@@ -27,143 +27,86 @@ class PRows(Rows):
         # portfolio number columns
         self.pncols = OrderedDict()
 
-    def reset(self):
-        "Remove pncols and initiate acol and pncols"
-        pncols = [col for col in self.rows[0].columns if col.startswith('pn_')]
-        self.acol = None
-        self.pncols = OrderedDict()
-        if pncols:
-            for r in self.rows:
-                for pncol in pncols:
-                    del r[pncol]
-
-    def pn(self, col, n_or_fn):
-        "portfolio numbering for independent sort"
-        pncol = 'pn_' + col
-        for r in self:
-            r[pncol] = ''
-
-        # parentheses around lambda are necessary
-        fn = (lambda rs: nchunks(rs, n_or_fn)) \
-             if isinstance(n_or_fn, int) else n_or_fn
-        for rs1 in self.num(col).order(self.dcol).group(self.dcol):
-            for pn, rs2 in enumerate(fn(rs1.order(col)), 1):
-                for r in rs2:
-                    r[pncol] = pn
-
-        self.pncols[pncol] = pn
+    def pn(self, *colns):
+        for col, n in grouper(colns, 2):
+            self._pn(col, n)
         return self
 
-    def dpn(self, col, n_or_fn, pncols=None):
+    def _pn(self, col, nfn):
+        "portfolio numbering for independent sort"
+        pncol = 'pn_' + col
+        self[pncol] = ''
+
+        if isinstance(nfn, int):
+            nfn = (lambda nfn: lambda rs: nchunks(rs, nfn))(nfn)
+        for rs1 in self.num(col).order(self.dcol).group(self.dcol):
+            for pn, rs2 in enumerate(nfn(rs1.order(col)), 1):
+                for r in rs2:
+                    r[pncol] = pn
+        try:
+            self.pncols[pncol] = pn
+            return self
+        except:
+            raise ValueError('No rows to make portfolios')
+
+    def dpn(self, *colns):
+        for col, n in grouper(colns, 2):
+            self._dpn(col, n)
+        return self
+
+    def _dpn(self, col, nfn):
         """
         portfolio numbering for dependent sort
         if you don't specify pncols, self.pncols is used
         """
         pncol = 'pn_' + col
+        self[pncol] = ''
 
-        for r in self:
-            r[pncol] = ''
-
-        # parentheses around lambda are necessary
-        fn = (lambda rs: nchunks(rs, n_or_fn)) \
-             if isinstance(n_or_fn, int) else n_or_fn
-
-        pncols = listify(pncols) if pncols else list(self.pncols)
-
+        if isinstance(nfn, int):
+            nfn = (lambda nfn: lambda rs: nchunks(rs, nfn))(nfn)
+        pncols = list(self.pncols)
         for rs1 in self.num(pncols + [col]).order(self.dcol).group(self.dcol):
             for rs2 in rs1.order(pncols + [col]).group(pncols):
-                for pn, rs3 in enumerate(fn(rs2), 1):
+                for pn, rs3 in enumerate(nfn(rs2), 1):
                     for r in rs3:
                         r[pncol] = pn
+        try:
+            self.pncols[pncol] = pn
+            return self
+        except:
+            raise ValueError('No rows to make portfolios')
 
-        self.pncols[pncol] = pn
-        return self
-
+    # Number portfolios as you roll
+    # Just this time portfolio numbers are based on the first date values
+    # all the others simply follows the first one
+    # This will be useful when you make factor portfolios
     def pnroll(self, period, *colns):
-        return self._pnroll_helper('i1', period, colns)
+        return self._pnroll('i', period, colns)
 
     def dpnroll(self, period, *colns):
-        return self._pnroll_helper('d1', period, colns)
+        return self._pnroll('d', period, colns)
 
-    def _pnroll_helper(self, dori, period, colns):
-        # for safety, a bit inefficient
-        self.blank(['pn_' + col for col, _ in grouper(colns, 2)])
-        for rs in self.roll(period, period):
-            rs._pns_helper(dori, colns)
-        self.follow(rs)
-        return self
-
-    def pn1(self, col, n_or_fn):
-        """
-        Assign portfolios based on the first date numbering
-        Ex) As in making factors
-        """
-        return self._pn1_helper(col, n_or_fn, 'i', None)
-
-    def dpn1(self, col, n_or_fn, pncols=None):
-        """
-        dependent version of pn1
-        """
-        return self._pn1_helper(col, n_or_fn, 'd', pncols)
-
-    def _pn1_helper(self, col, n_or_fn, dori, pncols):
-        """dori: dependent or independent, 'd' or 'i'
-        """
+    def _pnroll(self, di, period, colns):
+        "di: 'd' or 'i' dependent or independent"
         assert self.fcol is not None, "fcol required"
 
-        pncol = 'pn_' + col
-        for r in self:
-            r[pncol] = ''
-        # first date rows
-        fdrows = next(self.num(col).order(self.dcol).group(self.dcol))
-        # assign it first
-        if dori == 'd':
-            PRows(fdrows, self.dcol, self.fcol).follow(self).dpn(col, n_or_fn, pncols)
-        else:
-            PRows(fdrows, self.dcol, self.fcol).follow(self).pn(col, n_or_fn)
-
-        self._assign_follow_ups(col)
-        self.pncols[pncol] = n_or_fn if isinstance(n_or_fn, int) else \
-                             len(list(n_or_fn(fdrows)))
-        return self
-
-    def follow(self, other):
-        "copy, attributes except for rows"
-        self.dcol = other.dcol
-        self.fcol = other.fcol
-        self.pncols = other.pncols
-        self.acol = other.acol
-        return self
-
-    def pns(self, *colns):
-        return self._pns_helper('i', colns)
-
-    def dpns(self, *colns):
-        return self._pns_helper('d', colns)
-
-    def pns1(self, *colns):
-        return self._pns_helper('i1', colns)
-
-    def dpns1(self, *colns):
-        return self._pns_helper('d1', colns)
-
-    def _pns_helper(self, dori, colns):
-        def _dori2pnfn(dori):
-            if dori == 'd':
-                return  self.dpn
-            elif dori == 'd1':
-                return self.dpn1
-            elif dori == 'i':
-                return  self.pn
-            elif dori == 'i1':
-                return self.pn1
+        cols = [col for col, _ in grouper(colns, 2)]
+        pncols = ['pn_' + col for col in cols]
+        self[pncols] = ''
+        for rs in self.order(self.dcol).roll(period, period):
+            # first date rows
+            fdrows = PRows(next(rs.group(self.dcol)), self.dcol, self.fcol)
+            if di == 'd':
+                fdrows.dpn(*colns)
             else:
-                raise ValueError('Unknown direction', dori)
-        self.reset()
-        pnfn = _dori2pnfn(dori)
-        for col, n in grouper(colns, 2):
-            pnfn(col, n)
-        return self
+                fdrows.pn(*colns)
+            for rs1 in rs.order([self.fcol, self.dcol]).group(self.fcol):
+                rs1[pncols] = [rs1[0][pncol] for pncol in pncols]
+        try:
+            self.pncols = fdrows.pncols
+            return self
+        except:
+            raise ValueError('No rows to make portfolios')
 
     def pavg(self, col, wcol=None, pncols=None):
         "portfolio average,  wcol: weight column"
@@ -338,19 +281,6 @@ class PRows(Rows):
             return self.where(lambda r: r[self.dcol] >= beg and r[self.dcol] < end)
         else:
             return self.where(lambda r: r[self.dcol] >= beg)
-
-    def _assign_follow_ups(self, col):
-        """assign portfolio numbers based on the first date values
-
-        col: column to assign portfolio number
-        fcol: firm id column name
-        """
-        pncol = 'pn_' + col
-        for rs1 in self.order([self.fcol, self.dcol]).group(self.fcol):
-            pn = rs1[0][pncol]
-            if isinstance(pn, int):
-                for r in rs1[1:]:
-                    r[pncol] = pn
 
 
 def _mrep(rs, col):

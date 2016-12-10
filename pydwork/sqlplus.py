@@ -133,24 +133,42 @@ class Rows:
         cols = listify(cols)
         ncols = len(cols)
 
-        # validity check,
-        if len(self.rows) != len(vals):
-            raise ValueError('Number of values to assign inappropriate')
+        if not isinstance(vals, list):
+            if ncols == 1:
+                col = cols[0]
+                for r in self.rows:
+                    r[col] = vals
+            else:
+                for r in self.rows:
+                    for c in cols:
+                        r[c] = vals
 
-        # vals must be rectangular!
-        if ncols > 1:
-            for vs in vals:
-                if len(vs) != ncols:
-                    raise ValueError('Invalid values to assign', vs)
-
-        if ncols == 1:
-            col = cols[0]
-            for r, v in zip(self.rows, vals):
-                r[col] = v
-        else:
-            for r, vs in zip(self.rows, vals):
-                for c, v in zip(cols, vs):
+        elif not isinstance(vals[0], list):
+            if ncols != len(vals):
+                raise ValueError('Number of values to assign inappropriate')
+            for r in self.rows:
+                for c, v in zip(cols, vals):
                     r[c] = v
+
+        else:
+            # validity check,
+            if len(self.rows) != len(vals):
+                raise ValueError('Number of values to assign inappropriate')
+
+            # vals must be rectangular!
+            if ncols > 1:
+                for vs in vals:
+                    if len(vs) != ncols:
+                        raise ValueError('Invalid values to assign', vs)
+
+            if ncols == 1:
+                col = cols[0]
+                for r, v in zip(self.rows, vals):
+                    r[col] = v
+            else:
+                for r, vs in zip(self.rows, vals):
+                    for c, v in zip(cols, vs):
+                        r[c] = v
 
     def __delitem__(self, cols):
         if isinstance(cols, int) or isinstance(cols, slice):
@@ -187,36 +205,15 @@ class Rows:
         "shallow copy"
         return copy.copy(self)
 
-    def order(self, key, reverse=0):
-        if hasattr(key, '__call__'):
-            self.rows.sort(key=key, reverse=reverse)
-            return self
-        else:
-            # empty_rows to the back
-            empty_rows = []
-            non_empty_rows = []
-            for r in self.rows:
-                if any(r[col] == '' for col in listify(key)):
-                    empty_rows.append(r)
-                else:
-                    non_empty_rows.append(r)
-            non_empty_rows.sort(key=_build_keyfn(key), reverse=reverse)
-            self.rows = non_empty_rows + empty_rows
-            return self
-            
+    def order(self, key, reverse=False):
+        self.rows.sort(key=_build_keyfn(key), reverse=reverse)
+        return self
+
     def where(self, pred):
         other = self.copy()
         pred = _build_keyfn(pred)
         other.rows = [r for r in self.rows if pred(r)]
         return other
-
-    def blank(self, cols):
-        "Prepare empty columns for assignment"
-        cols = listify(cols)
-        for r in self:
-            for col in cols:
-                r[col] = ''
-        return self
 
     # num and text, I don't like the naming
     def num(self, cols):

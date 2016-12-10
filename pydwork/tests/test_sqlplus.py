@@ -399,8 +399,6 @@ class TestRows(unittest.TestCase):
             self.assertTrue(hasattr(iris, 'order'))
             self.assertEqual(iris['sepal_length, sepal_width, species'][2][2],
                              'setosa')
-            with self.assertRaises(Exception):
-                iris['one'] = [1]
             iris['one, two'] = [[1, 2] for _ in range(3)]
             self.assertEqual(iris['one, two'], [[1, 2] for _ in range(3)])
             del iris['one, col']
@@ -465,6 +463,19 @@ class TestRows(unittest.TestCase):
             rs = c.rows('temp')
             self.assertEqual(rs.truncate('x', 0.2)['x'],
                              [2, 3, 4, 5, 6, 7])
+
+    def test_rows3(self):
+        rs = Rows([Row(), Row(), Row()])
+        rs['a'] = 10
+        self.assertEqual(rs['a'], [10, 10, 10])
+        rs['a, b'] = [3, 4]
+        self.assertEqual(rs['a, b'], [[3, 4], [3, 4], [3, 4]])
+        with self.assertRaises(Exception):
+            rs['a, b'] = [3, 4, 5]
+        rs[1:]['a, b'] = [[1, 2], [3, 40]]
+        self.assertEqual(rs['a, b'], [[3, 4], [1, 2], [3, 40]])
+        with self.assertRaises(Exception):
+            rs['a, b'] = [[1, 2], [3, 40], [10, 100, 100]]
 
     def test_describe(self):
         with dbopen(':memory:') as c:
@@ -686,7 +697,7 @@ class TestPRows(unittest.TestCase):
                          self.indport.pn('cnsmr', fn).pavg('other').pat().lines)
 
     def test_dpn(self):
-        avgport = self.indport.pn('cnsmr', 4).dpn('manuf', 3).dpn('hlth', 2).pavg('other')
+        avgport = self.indport.pn('cnsmr', 4).dpn('manuf', 3, 'hlth', 2).pavg('other')
         for r in avgport.where(lambda r: r.yyyy < 2016):
             self.assertTrue(r.n == 10 or r.n == 11)
         seq1 = avgport.where(lambda r: r.pn_cnsmr == 3 and r.pn_manuf == 1 and r.pn_hlth == 2)['other']
@@ -698,10 +709,13 @@ class TestPRows(unittest.TestCase):
         self.assertEqual(round(st.mean(seq2) - st.mean(seq1), 3), float(pat[17][2][:5]))
 
     def test_pnroll(self):
-        a = self.indport.between(2003).dpnroll(5, 'cnsmr', 5, 'manuf', 4, 'hi_tec', 3)
+        a = self.indport.between(2003).dpnroll(5, 'cnsmr', 5, 'manuf', 4)
         for rs in a.roll(5, 5):
             for rs1 in rs.order('fcode, yyyy').group('fcode'):
-                self.assertTrue(same(rs1['pn_cnsmr, pn_manuf, pn_hi_tec']))
+                self.assertTrue(same(rs1['pn_cnsmr, pn_manuf']))
+        xs = a.pavg('other')
+        self.assertEqual(round(xs[0].other, 3), -1.013)
+        self.assertEqual(round(xs[-1].other, 3), -0.426)
 
         a = self.indport.between(2003).pnroll(5, 'cnsmr', 5, 'manuf', 4, 'hi_tec', 3)
         for rs in a.roll(5, 5):
@@ -716,10 +730,17 @@ class TestPRows(unittest.TestCase):
         with self.assertRaises(Exception):
             a.pavg('other')
 
+        a = self.indport.between(2003).pnroll(5, 'cnsmr', 2, 'manuf', 2)
+        xs = a.pavg('other')
+        self.assertEqual(round(xs[0].other, 3), -0.338)
+        self.assertEqual(round(xs[-1].other, 3), -0.014)
+
     def test_pns(self):
-        self.indport.dpns('cnsmr', 4, 'manuf', 3, 'hlth', 2)
+        self.indport.dpn('cnsmr', 4, 'manuf', 3, 'hlth', 2)
         self.assertEqual(len(self.indport.pncols), 3)
-        self.indport.dpns('cnsmr', 2, 'manuf', 3)
+
+        self.indport.pncols.clear()
+        self.indport.dpn('cnsmr', 2, 'manuf', 3)
         self.assertEqual(len(self.indport.pncols), 2)
 
     def test_famac(self):
