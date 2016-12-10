@@ -28,12 +28,13 @@ class PRows(Rows):
         self.pncols = OrderedDict()
 
     def pn(self, *colns):
+        """indenpendent sort,
+        ex) self.pn('a', 10, 'b', lambda rs: [rs[:4], rs[4:]])"""
         for col, n in grouper(colns, 2):
             self._pn(col, n)
         return self
 
     def _pn(self, col, nfn):
-        "portfolio numbering for independent sort"
         pncol = 'pn_' + col
         self[pncol] = ''
 
@@ -43,22 +44,16 @@ class PRows(Rows):
             for pn, rs2 in enumerate(nfn(rs1.order(col)), 1):
                 for r in rs2:
                     r[pncol] = pn
-        try:
-            self.pncols[pncol] = pn
-            return self
-        except:
-            raise ValueError('No rows to make portfolios')
+        self.pncols[pncol] = pn
+        return self
 
     def dpn(self, *colns):
+        "dependent sort"
         for col, n in grouper(colns, 2):
             self._dpn(col, n)
         return self
 
     def _dpn(self, col, nfn):
-        """
-        portfolio numbering for dependent sort
-        if you don't specify pncols, self.pncols is used
-        """
         pncol = 'pn_' + col
         self[pncol] = ''
 
@@ -70,24 +65,21 @@ class PRows(Rows):
                 for pn, rs3 in enumerate(nfn(rs2), 1):
                     for r in rs3:
                         r[pncol] = pn
-        try:
-            self.pncols[pncol] = pn
-            return self
-        except:
-            raise ValueError('No rows to make portfolios')
+        self.pncols[pncol] = pn
+        return self
 
     # Number portfolios as you roll
     # Just this time portfolio numbers are based on the first date values
-    # all the others simply follows the first one
+    # all the others simply follow the first one
     # This will be useful when you make factor portfolios
     def pnroll(self, period, *colns):
-        return self._pnroll('i', period, colns)
+        return self._pnroll('pn', period, colns)
 
     def dpnroll(self, period, *colns):
-        return self._pnroll('d', period, colns)
+        return self._pnroll('dpn', period, colns)
 
-    def _pnroll(self, di, period, colns):
-        "di: 'd' or 'i' dependent or independent"
+    def _pnroll(self, pnfn, period, colns):
+        "pnfn: method name string, dpn or pn"
         assert self.fcol is not None, "fcol required"
 
         cols = [col for col, _ in grouper(colns, 2)]
@@ -96,17 +88,11 @@ class PRows(Rows):
         for rs in self.order(self.dcol).roll(period, period):
             # first date rows
             fdrows = PRows(next(rs.group(self.dcol)), self.dcol, self.fcol)
-            if di == 'd':
-                fdrows.dpn(*colns)
-            else:
-                fdrows.pn(*colns)
+            getattr(fdrows, pnfn)(*colns)
             for rs1 in rs.order([self.fcol, self.dcol]).group(self.fcol):
                 rs1[pncols] = [rs1[0][pncol] for pncol in pncols]
-        try:
-            self.pncols = fdrows.pncols
-            return self
-        except:
-            raise ValueError('No rows to make portfolios')
+        self.pncols = fdrows.pncols
+        return self
 
     def pavg(self, col, wcol=None, pncols=None):
         "portfolio average,  wcol: weight column"
