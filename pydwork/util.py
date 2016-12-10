@@ -314,3 +314,12 @@ def yyyymmdd(date, nextstep):
 
     d1 = datetime.strptime(str(date), '%Y%m%d') + rd
     return int(d1.strftime('%Y%m%d'))
+
+
+def same(iterator):
+    iterator = iter(iterator)
+    try:
+        first = next(iterator)
+    except StopIteration:
+        return True
+    return all(first == rest for rest in iterator)

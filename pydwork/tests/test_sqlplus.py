@@ -13,7 +13,7 @@ sys.path.append(PYPATH)
 
 from pydwork.sqlplus import *
 from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd, \
-    prepend_header, pmap, grouper, breaks
+    prepend_header, pmap, grouper, breaks, same
 from pydwork.fin import PRows
 
 
@@ -606,6 +606,15 @@ class TestPRows(unittest.TestCase):
                     rs.append(r)
             self.indport = PRows(rs, 'yyyy', 'fcode')
 
+            rs = []
+            for rs1 in c.reel('indport order by date', group=lambda r: str(r.date)[0:6]):
+                for r in rs1:
+                    r.yyyymm = int(str(r.date)[0:6])
+                    r.fcode = 'A' + str(r.date)[6:]
+                    del r.date
+                    rs.append(r)
+            self.indport1 = PRows(rs, 'yyyymm', 'fcode')
+
     def test_indi_sort(self):
         with self.assertRaises(ValueError):
             # there are not enough element to make portfolios in 2009
@@ -688,21 +697,25 @@ class TestPRows(unittest.TestCase):
         self.assertEqual(round(st.mean(seq2), 3), float(pat[16][2].split()[0]))
         self.assertEqual(round(st.mean(seq2) - st.mean(seq1), 3), float(pat[17][2][:5]))
 
-    def test_pn1(self):
-        for rs in self.indport.roll(5, 5, 2003):
-            rs.pn1('cnsmr', 5)
-            xs = rs.where(lambda r: r.pn_cnsmr == 1)
-            self.assertTrue(all([r.pn_cnsmr == 1 for r in rs.where(lambda r: r.fcode == xs[0].fcode)]))
+    def test_pnroll(self):
+        a = self.indport.between(2003).dpnroll(5, 'cnsmr', 5, 'manuf', 4, 'hi_tec', 3)
+        for rs in a.roll(5, 5):
+            for rs1 in rs.order('fcode, yyyy').group('fcode'):
+                self.assertTrue(same(rs1['pn_cnsmr, pn_manuf, pn_hi_tec']))
 
-    # def test_dpns1(self):
-    #     for rs in self.indport.roll(5, 5, 2003):
-    #         rs.dpns1('cnsmr', 5, 'manuf', 5).num('pn_cnsmr, pn_manuf').order('yyyy, pn_cnsmr, pn_manuf').csv()
-    #
-    # def test_pns1(self):
-    #     # self.indport.pn1('cnsmr', 5).pn1('manuf', 5).num('pn_manuf, pn_cnsmr').order('yyyy, pn_cnsmr, pn_manuf').csv()
-    #     self.indport.pns1('cnsmr', 5, 'manuf', 5).num('pn_manuf, pn_cnsmr')\
-    #     .order('yyyy, pn_cnsmr, pn_manuf').csv()
-    #
+        a = self.indport.between(2003).pnroll(5, 'cnsmr', 5, 'manuf', 4, 'hi_tec', 3)
+        for rs in a.roll(5, 5):
+            for rs1 in rs.order('fcode, yyyy').group('fcode'):
+                self.assertTrue(same(rs1['pn_cnsmr, pn_manuf, pn_hi_tec']))
+
+        with self.assertRaises(Exception):
+            a.pavg('other')
+
+        a = self.indport.between(2003).pnroll(5, 'cnsmr', 5, 'manuf', 4)
+        # independent sort raises exception because there is not enough elements
+        with self.assertRaises(Exception):
+            a.pavg('other')
+
     def test_pns(self):
         self.indport.dpns('cnsmr', 4, 'manuf', 3, 'hlth', 2)
         self.assertEqual(len(self.indport.pncols), 3)

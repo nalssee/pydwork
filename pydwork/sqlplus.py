@@ -169,6 +169,16 @@ class Rows:
                 for c in cols:
                     del r[c]
 
+    def __add__(self, other):
+        self.rows = self.rows + other.rows
+        return self
+
+    def is_valid(self):
+        cols = self[0].columns
+        for r in self[1:]:
+            assert r.columns == cols, str(r)
+        return self
+
     def append(self, r):
         self.rows.append(r)
         return self
@@ -178,14 +188,34 @@ class Rows:
         return copy.copy(self)
 
     def order(self, key, reverse=0):
-        key = _build_keyfn(key)
-        self.rows.sort(key=key, reverse=reverse)
-        return self
-
+        if hasattr(key, '__call__'):
+            self.rows.sort(key=key, reverse=reverse)
+            return self
+        else:
+            # empty_rows to the back
+            empty_rows = []
+            non_empty_rows = []
+            for r in self.rows:
+                if any(r[col] == '' for col in listify(key)):
+                    empty_rows.append(r)
+                else:
+                    non_empty_rows.append(r)
+            non_empty_rows.sort(key=_build_keyfn(key), reverse=reverse)
+            self.rows = non_empty_rows + empty_rows
+            return self
+            
     def where(self, pred):
-        self = self.copy()
+        other = self.copy()
         pred = _build_keyfn(pred)
-        self.rows = [r for r in self.rows if pred(r)]
+        other.rows = [r for r in self.rows if pred(r)]
+        return other
+
+    def blank(self, cols):
+        "Prepare empty columns for assignment"
+        cols = listify(cols)
+        for r in self:
+            for col in cols:
+                r[col] = ''
         return self
 
     # num and text, I don't like the naming
