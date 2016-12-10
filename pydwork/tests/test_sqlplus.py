@@ -463,6 +463,9 @@ class TestRows(unittest.TestCase):
             rs = c.rows('temp')
             self.assertEqual(rs.truncate('x', 0.2)['x'],
                              [2, 3, 4, 5, 6, 7])
+            self.assertEqual([int(x * 10) for x in rs.order('x', True).winsorize('x', 0.2)['x']],
+                             [72, 72, 70, 60, 50, 40, 30, 20, 18, 18])
+
 
     def test_rows3(self):
         rs = Rows([Row(), Row(), Row()])

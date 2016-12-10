@@ -192,8 +192,8 @@ class Rows:
         return self
 
     def is_valid(self):
-        cols = self[0].columns
-        for r in self[1:]:
+        cols = self.rows[0].columns
+        for r in self.rows[1:]:
             assert r.columns == cols, str(r)
         return self
 
@@ -241,6 +241,17 @@ class Rows:
         higher = np.percentile(xs, (1 - limit) * 100)
         return self.where(lambda r: r[col] >= lower and r[col] <= higher)
 
+    def winsorize(self, col, limit=0.01):
+        xs = self[col]
+        lower = np.percentile(xs, limit * 100)
+        higher = np.percentile(xs, (1 - limit) * 100)
+        for r in self.rows:
+            if r[col] > higher:
+                r[col] = higher
+            elif r[col] < lower:
+                r[col] = lower
+        return self
+        
     def group(self, key):
         for rs in _gby(self.rows, key):
             other = self.copy()
