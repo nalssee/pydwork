@@ -20,6 +20,7 @@ from itertools import groupby, islice, chain
 import pandas as pd
 import numpy as np
 import statsmodels.api as sm
+import statistics as st
 
 from .util import isnum, istext, yyyymm, yyyymmdd, \
                   listify, camel2snake, peek_first
@@ -221,6 +222,14 @@ class Rows:
         cols = listify(cols)
         return self.where(lambda r: all(isnum(r[col]) for col in cols))
 
+    def wavg(self, col, wcol=None):
+        if wcol:
+            rs = self.num([col, wcol])
+            total = sum(r[wcol] for r in rs)
+            return sum(r[col] * r[wcol] / total for r in rs)
+        else:
+            return st.mean(r[col] for r in self.rows if isnum(r[col]))
+
     def text(self, cols):
         "another simplified filtering, texts(string) only"
         cols = listify(cols)
@@ -251,7 +260,7 @@ class Rows:
             elif r[col] < lower:
                 r[col] = lower
         return self
-        
+
     def group(self, key):
         for rs in _gby(self.rows, key):
             other = self.copy()

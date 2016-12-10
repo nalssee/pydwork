@@ -117,7 +117,7 @@ class PRows(Rows):
                 for pncol, pn in zip(pncols, pns):
                     r[pncol] = pn
                 r.n = len(rs2)
-                r[col] = wavg(rs2, col, wcol) if wcol else st.mean(rs2[col])
+                r[col] = rs2.wavg(col, wcol)
                 result.append(r)
 
         prows = PRows(result, self.dcol)
@@ -280,13 +280,6 @@ def _mrep0(seq):
     "sequence of numbers with t val"
     tstat = ttest_1samp(seq, 0)
     return "%s [%s]" % (star(st.mean(seq), tstat[1]), round(tstat[0], 2))
-
-
-def wavg(rs, col, wcol):
-    "compute weigthed average"
-    rs = [r for r in rs if isnum(r[col]) and isnum(r[wcol])]
-    total = sum(r[wcol] for r in rs)
-    return sum(r[col] * r[wcol] / total for r in rs)
 
 
 def star(val, pval):

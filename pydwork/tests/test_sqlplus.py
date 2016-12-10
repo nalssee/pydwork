@@ -475,10 +475,13 @@ class TestRows(unittest.TestCase):
         self.assertEqual(rs['a, b'], [[3, 4], [3, 4], [3, 4]])
         with self.assertRaises(Exception):
             rs['a, b'] = [3, 4, 5]
-        rs[1:]['a, b'] = [[1, 2], [3, 40]]
-        self.assertEqual(rs['a, b'], [[3, 4], [1, 2], [3, 40]])
+        rs[1:]['a, b'] = [[1, 2], [3, 5]]
+        self.assertEqual(rs['a, b'], [[3, 4], [1, 2], [3, 5]])
         with self.assertRaises(Exception):
             rs['a, b'] = [[1, 2], [3, 40], [10, 100, 100]]
+
+        self.assertEqual(int(rs.wavg('a') * 1000), 2333)
+        self.assertEqual(int(rs.wavg('a', 'b') * 1000), 2636)
 
     def test_describe(self):
         with dbopen(':memory:') as c:
