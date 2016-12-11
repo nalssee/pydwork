@@ -745,23 +745,35 @@ def _show(rows, n, cols):
 
 #  temporary, you need to fix it later
 def _describe(rows, n, cols, percentile):
-    print('***** Table Description *****')
-    print()
-    print('===== Sample Rows =====')
+    def fill(xs, cols):
+        d = {}
+        for a, b in zip(xs.index, xs):
+            d[a] = b
+
+        result = []
+        for c in cols:
+            if c not in d:
+                result.append(float('nan'))
+            else:
+                result.append(d[c])
+        return result
 
     rows1 = Rows(rows)
-    _show(rows1, n, cols)
-
     percentile = percentile if percentile else \
         [0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99]
     df = rows1.df(cols)
-    print()
     print('===== Summary Stats =====')
-    print(df.describe(percentile, include='all'))
+    desc = df.describe(percentile, include='all')
+    desc.loc['skewness'] = fill(df.skew(), desc.columns)
+    desc.loc['kurtosis'] = fill(df.kurtosis(), desc.columns)
+    print(pd.concat([desc, rows1[:n].df()]))
     print()
     print('===== Corr Matrix ======')
+    print('PEARSON')
     print(df.corr())
     print()
+    print('SPEARMAN')
+    print(df.corr('spearman'))
 
 
 # sequence of row values to rows
