@@ -10,7 +10,8 @@ from collections import OrderedDict
 from scipy.stats import ttest_1samp
 
 from .sqlplus import Rows, Row, Box
-from .util import nchunks, listify, grouper, yyyymm, yyyymmdd, breaks, isnum
+from .util import nchunks, listify, grouper, yyyymm, yyyymmdd, breaks, isnum,\
+                  parse_model, star
 
 
 class PRows(Rows):
@@ -219,15 +220,10 @@ class PRows(Rows):
 
     def famac(self, model):
         "Fama Macbeth"
-        def allvars(model):
-            left, right = model.split('~')
-            return [left.strip()] + [x.strip() for x in right.split('+')]
-
-        xvs = ['intercept'] + allvars(model)[1:]
-
+        xvs = ['intercept'] + parse_model(model)[1:]
         params = []
         for rs1 in self.order(self.dcol).group(self.dcol):
-            rs1 = rs1.num(allvars(model))
+            rs1 = rs1.num(parse_model(model))
             if len(rs1) >= 2:
                 reg = rs1.ols(model)
                 r = Row()
@@ -280,15 +276,3 @@ def _mrep0(seq):
     "sequence of numbers with t val"
     tstat = ttest_1samp(seq, 0)
     return "%s [%s]" % (star(st.mean(seq), tstat[1]), round(tstat[0], 2))
-
-
-def star(val, pval):
-    "put stars according to p-value"
-    if pval < 0.001:
-        return str(round(val, 3)) + '***'
-    elif pval < 0.01:
-        return str(round(val, 3)) + '**'
-    elif pval < 0.05:
-        return str(round(val, 3)) + '*'
-    else:
-        return str(round(val, 3))

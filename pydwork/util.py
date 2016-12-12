@@ -323,3 +323,21 @@ def same(iterator):
     except StopIteration:
         return True
     return all(first == rest for rest in iterator)
+
+
+def parse_model(model):
+    "y ~ x1 + x2 => ['y', 'x1', 'x2']"
+    left, right = model.split('~')
+    return [left.strip()] + [x.strip() for x in right.split('+')]
+
+
+def star(val, pval):
+    "put stars according to p-value"
+    if pval < 0.001:
+        return str(round(val, 3)) + '***'
+    elif pval < 0.01:
+        return str(round(val, 3)) + '**'
+    elif pval < 0.05:
+        return str(round(val, 3)) + '*'
+    else:
+        return str(round(val, 3))

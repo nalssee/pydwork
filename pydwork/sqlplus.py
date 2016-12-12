@@ -19,12 +19,12 @@ from itertools import groupby, islice, chain
 
 import pandas as pd
 import numpy as np
-import statsmodels.api as sm
+import statsmodels.formula.api as sm
 import statistics as st
+import warnings
 
 from .util import isnum, istext, yyyymm, yyyymmdd, \
-                  listify, camel2snake, peek_first
-
+                  listify, camel2snake, peek_first, parse_model, star
 
 __all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box']
 
@@ -236,12 +236,28 @@ class Rows:
         return self.where(lambda r: all(istext(r[col]) for col in cols))
 
     def ols(self, model):
-        left, right = model.split('~')
-        yvar = left.strip()
-        xvars = [x.strip() for x in right.split('+')]
-        Y = self[yvar]
-        X = sm.add_constant(self[xvars])
-        return sm.OLS(Y, X).fit()
+        # TODO: patsy raises some annoying warnings
+        # Remove the following later
+        warnings.filterwarnings("ignore")
+        return sm.ols(formula=model, data=self.df()).fit()
+
+    def reg(self, model):
+        "we need some simple printing"
+        result = self.ols(model)
+        r1, r2 = Row(), Row()
+        rows = Rows([r1, r2])
+        for x,  p in zip(result.params.iteritems(), result.pvalues):
+            k, v = x
+            r1[k] = star(v, p)
+        for k, v in result.tvalues.iteritems():
+            r2[k] = "[%s]" % (round(v, 2))
+        rows['n, r2'] = ''
+        r1.n = result.nobs
+        r1.r2 = round(result.rsquared, 3)
+        # You may need more
+        other = self.copy()
+        other.rows = rows.rows
+        return other
 
     def truncate(self, col, limit=0.01):
         "Truncate extreme values, defalut 1 percent on both sides"

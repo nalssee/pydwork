@@ -576,10 +576,16 @@ class TestOLS(unittest.TestCase):
         with dbopen(':memory:') as c:
             c.save('iris.csv')
             for rs in c.reel('iris', group='species'):
-                result =rs.ols('sepal_length ~ petal_length + petal_width')
+                result = rs.ols('sepal_width ~ petal_width + petal_length')
                 # maybe you should test more here
                 self.assertEqual(result.nobs, 50)
                 self.assertEqual(len(result.params), 3)
+
+    def test_reg(self):
+        with dbopen(':memory:') as c:
+            c.save('iris.csv')
+            for rs in c.reel('iris', group='species'):
+                rs.reg('sepal_width ~ petal_width + petal_length').show()
 
 
 class TestDFMisc(unittest.TestCase):
