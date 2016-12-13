@@ -778,21 +778,35 @@ def _describe(rows, n, cols, percentile):
     percentile = percentile if percentile else \
         [0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99]
     df = rows1.df(cols)
-    print('===== Summary Stats =====')
     desc = df.describe(percentile, include='all')
     desc.loc['skewness'] = fill(df.skew(), desc.columns)
     desc.loc['kurtosis'] = fill(df.kurtosis(), desc.columns)
-    print(pd.concat([desc, rows1[:n].df()]))
+
+    r = Row()
+    for c in rows1[0].columns:
+        r[c] = '***'
+
+    rows1.rows = [r] + rows1.rows
     print()
-    print('===== Corr Matrix ======')
-    print('PEARSON')
-    print(df.corr())
+    print(pd.concat([desc, rows1[:n + 1].df()]))
     print()
-    print('SPEARMAN')
-    print(df.corr('spearman'))
+
+    print('PEARSON \\ SPEARMAN')
+    corr1 = df.corr()
+    corr2 = df.corr('spearman')
+    columns = list(corr1.columns.values)
+
+    lcorr1 = corr1.values.tolist()
+    lcorr2 = corr2.values.tolist()
+    for i in range(len(columns)):
+        for j in range(i):
+            lcorr2[i][j] = lcorr1[i][j]
+    for i in range(len(columns)):
+        lcorr2[i][i] = ''
+    print(pd.DataFrame(lcorr2, columns=columns))
 
 
-# sequence of row values to rows
+# sequence row values to rows
 def _build_rows(seq_values, cols):
     "build rows from an iterator of values"
     for vals in seq_values:
