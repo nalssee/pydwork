@@ -240,7 +240,7 @@ class TestMisc(unittest.TestCase):
     def test_sample(self):
         with dbopen(':memory:') as c:
             c.save('iris.csv')
-            # c.desc('iris')
+            c.desc('iris')
 
     def test_prepend_header(self):
         # since prepend_header is a util you need to pass the full path

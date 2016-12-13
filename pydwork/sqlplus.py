@@ -791,7 +791,6 @@ def _describe(rows, n, cols, percentile):
     print(pd.concat([desc, rows1[:n + 1].df()]))
     print()
 
-    print('PEARSON \\ SPEARMAN')
     corr1 = df.corr()
     corr2 = df.corr('spearman')
     columns = list(corr1.columns.values)
@@ -803,7 +802,12 @@ def _describe(rows, n, cols, percentile):
             lcorr2[i][j] = lcorr1[i][j]
     for i in range(len(columns)):
         lcorr2[i][i] = ''
-    print(pd.DataFrame(lcorr2, columns=columns))
+    result = []
+    for c, ls in zip(columns, lcorr2):
+        result.append([c] + ls)
+
+    print(pd.DataFrame(result, columns=['Pearson\\Spearman'] + columns).\
+          to_string(index=False))
 
 
 # sequence row values to rows
