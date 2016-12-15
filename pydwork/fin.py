@@ -4,14 +4,14 @@ Frequently used financial data work
 
 import statistics as st
 
-from itertools import  takewhile, dropwhile, product
+from itertools import product
 from collections import OrderedDict
 
 from scipy.stats import ttest_1samp
 
 from .sqlplus import Rows, Row, Box
-from .util import nchunks, listify, grouper, yyyymm, yyyymmdd, breaks, isnum,\
-                  parse_model, star
+from .util import nchunks, listify, grouper, yyyymm, yyyymmdd,\
+    parse_model, star
 
 
 class PRows(Rows):
@@ -102,7 +102,7 @@ class PRows(Rows):
         ns = [self.pncols[pncol] for pncol in pncols]
 
         newrs = self.num(pncols + [col, wcol]) if wcol \
-                else self.num(pncols + [col])
+            else self.num(pncols + [col])
 
         result = []
         for rs1 in newrs.group(self.dcol):
@@ -110,8 +110,8 @@ class PRows(Rows):
                                 rs1.order(pncols).group(pncols)):
                 # test if there's any missing portfolio
                 if [rs2[0][pncol] for pncol in pncols] != list(pns):
-                    raise ValueError('missing portfolio no. %s in %s' %  \
-                        (list(pns), rs2[0][self.dcol]))
+                    raise ValueError('missing portfolio no. %s in %s' %
+                                     (list(pns), rs2[0][self.dcol]))
 
                 r = Row()
                 r[self.dcol] = rs2[0][self.dcol]
@@ -150,7 +150,7 @@ class PRows(Rows):
         line.append(self.acol)
         for rs in result:
             line.append(_mrep(rs, self.acol))
-        seq = [h - l for h, l in \
+        seq = [h - l for h, l in
                zip(result[-1][self.acol], result[0][self.acol])]
         line.append(_mrep0(seq))
         return Box([line])
@@ -177,7 +177,7 @@ class PRows(Rows):
             line.append(i)
             for rs in result1:
                 line.append(_mrep(rs, self.acol))
-            seq = [h - l for h, l in \
+            seq = [h - l for h, l in
                    zip(result1[-1][self.acol], result1[0][self.acol])]
             line.append(_mrep0(seq))
             lines.append(line)
@@ -260,7 +260,8 @@ class PRows(Rows):
     def between(self, beg, end=None):
         "begdate <= x <  enddate"
         if end:
-            return self.where(lambda r: r[self.dcol] >= beg and r[self.dcol] < end)
+            return self.where(lambda r: r[self.dcol] >= beg and
+                              r[self.dcol] < end)
         else:
             return self.where(lambda r: r[self.dcol] >= beg)
 

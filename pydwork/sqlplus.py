@@ -24,7 +24,7 @@ import statistics as st
 import warnings
 
 from .util import isnum, istext, yyyymm, yyyymmdd, \
-                  listify, camel2snake, peek_first, parse_model, star
+    listify, camel2snake, peek_first, parse_model, star
 
 __all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box']
 
@@ -71,7 +71,7 @@ class Row:
         del self._ordered_dict[name]
 
     def __str__(self):
-        content = ' | '.join(c + ': ' + str(v) for c, v in \
+        content = ' | '.join(c + ': ' + str(v) for c, v in
                              zip(self.columns, self.values))
         return '[' + content + ']'
 
@@ -246,7 +246,7 @@ class Rows:
         result = self.ols(model)
         r1, r2 = Row(), Row()
         rows = Rows([r1, r2])
-        for x,  p in zip(result.params.iteritems(), result.pvalues):
+        for x, p in zip(result.params.iteritems(), result.pvalues):
             k, v = x
             r1[k] = star(v, p)
         for k, v in result.tvalues.iteritems():
@@ -345,7 +345,6 @@ class SQLPlus:
         self.conn.create_function('istext', 1, istext)
         self.conn.create_function('yyyymm', 2, yyyymm)
         self.conn.create_function('yyyymmdd', 2, yyyymmdd)
-
 
     # args can be a list, a tuple or a dictionary
     # It is unlikely that we need to worry about the security issues
@@ -476,7 +475,8 @@ def dbopen(dbfile):
 def set_workspace(path):
     "all the files and dbs are saved in a given path"
     global WORKSPACE
-    WORKSPACE = path if os.path.isabs(path) else os.path.join(os.getcwd(), path)
+    WORKSPACE = path if os.path.isabs(path) else \
+        os.path.join(os.getcwd(), path)
 
 
 def _x2rows(x, cursor, args):
@@ -806,7 +806,7 @@ def _describe(rows, n, cols, percentile):
     for c, ls in zip(columns, lcorr2):
         result.append([c] + ls)
 
-    print(pd.DataFrame(result, columns=['Pearson\\Spearman'] + columns).\
+    print(pd.DataFrame(result, columns=['Pearson\\Spearman'] + columns).
           to_string(index=False))
 
 

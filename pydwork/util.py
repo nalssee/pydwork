@@ -79,7 +79,7 @@ def prepend_header(filename, header=None, drop=0):
 def random_string(nchars=20):
     "Generates a random string of lengh 'n' with alphabets and digits. "
     chars = string.ascii_letters + string.digits
-    return ''.join(random.SystemRandom().choice(chars) \
+    return ''.join(random.SystemRandom().choice(chars)
                    for _ in range(nchars))
 
 
@@ -174,7 +174,8 @@ def listify(x):
 # Be careful! this is very easy to use and may look useful for many cases
 # but actually many of the jobs are better off with just a single process
 # use it when each work requires a lot of computations. (like fib(40))
-# Of course there's not much of a harm in using this but as for many jobs you will be
+# Of course there's not much of a harm in using this but
+# as for many jobs you will be
 # disappointed if you've expected some performance gains
 def pmap(func, seq,
          chunksize=1, nworkers=mp.cpu_count(),
