@@ -45,7 +45,10 @@ class PRows(Rows):
             for pn, rs2 in enumerate(nfn(rs1.order(col)), 1):
                 for r in rs2:
                     r[pncol] = pn
-        self.pncols[pncol] = pn
+        if pn:
+            self.pncols[pncol] = pn
+        else:
+            raise ValueError("No portfolios formed")
         return self
 
     def dpn(self, *colns):
@@ -66,7 +69,10 @@ class PRows(Rows):
                 for pn, rs3 in enumerate(nfn(rs2), 1):
                     for r in rs3:
                         r[pncol] = pn
-        self.pncols[pncol] = pn
+        if pn:
+            self.pncols[pncol] = pn
+        else:
+            raise ValueError("No portfolios formed")
         return self
 
     # Number portfolios as you roll
