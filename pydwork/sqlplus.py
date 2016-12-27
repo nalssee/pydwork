@@ -31,16 +31,13 @@ __all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box']
 
 WORKSPACE = ''
 
-
 class Row:
-    """
-    Mutable version of sqlite3.Row
-    It is not safe but essential I suppose.
-    """
-    # Python 3.6 is expected to use an ordered dict for keyword args
-    # If so, we may consider passing kwargs
-    def __init__(self):
+    "Mutable version of sqlite3.Row"
+    # Works for Python 3.6 and higher
+    def __init__(self, **kwargs):
         super().__setattr__('_ordered_dict', OrderedDict())
+        for k, v in kwargs.items():
+            self._ordered_dict[k] = v
 
     @property
     def columns(self):
@@ -75,7 +72,7 @@ class Row:
                              zip(self.columns, self.values))
         return '[' + content + ']'
 
-    # for pickling
+    # for pickling, very important
     def __getstate__(self):
         return self.__dict__
 

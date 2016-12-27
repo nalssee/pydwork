@@ -235,6 +235,11 @@ class TestRow(unittest.TestCase):
         r1['z'] = r1['x'] - r1['z']
         self.assertEqual(r1.values, [r1['x'], r1['z']])
 
+    def test_row3(self):
+        r1 = Row(x=10, y=20, z=30, w=40)
+        # order must be kept
+        self.assertEqual(r1.columns, ['x', 'y', 'z', 'w'])
+
 
 class TestMisc(unittest.TestCase):
     def test_sample(self):
@@ -461,9 +466,7 @@ class TestRows(unittest.TestCase):
 
             rs = []
             for x in range(10):
-                r = Row()
-                r.x = x
-                rs.append(r)
+                rs.append(Row(x=x))
             c.save(rs, 'temp')
             rs = c.rows('temp')
             self.assertEqual(rs.truncate('x', 0.2)['x'],
@@ -601,25 +604,19 @@ class TestPRows(unittest.TestCase):
     def setUp(self):
         self.rs1 = []
         for year in range(2001, 2011):
-            r = Row()
-            r.yyyy = year
-            self.rs1.append(r)
+            self.rs1.append(Row(yyyy=year))
         self.rs1 = PRows(self.rs1, 'yyyy')
 
         self.rs2 = []
         start_month = 200101
         for i in range(36):
-            r = Row()
-            r.yyyymm = yyyymm(start_month, i)
-            self.rs2.append(r)
+            self.rs2.append(Row(yyyymm=yyyymm(start_month, i)))
         self.rs2 = PRows(self.rs2, 'yyyymm')
 
         self.rs3 = []
         start_date = 20010101
         for i in range(30):
-            r = Row()
-            r.yyyymmdd = yyyymmdd(start_date, i)
-            self.rs3.append(r)
+            self.rs3.append(Row(yyyymmdd=yyyymmdd(start_date, i)))
         self.rs3 = PRows(self.rs3, 'yyyymmdd')
 
         with dbopen(':memory:') as c:
