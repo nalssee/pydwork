@@ -388,7 +388,9 @@ class SQLPlus:
         fn: function that takes a row(all elements are strings)
             and returns a row, used for csv file transformation
         """
-        # handle simple case first
+        # handle simple case first,
+        # if x(string) starts with 'select' then you save it 
+        # (if no name is not given source table name is used for the new table)
         if isinstance(x, str) \
             and x.split()[0].lower() == 'select' \
             and (fn is None):
