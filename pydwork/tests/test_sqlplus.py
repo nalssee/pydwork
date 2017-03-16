@@ -331,8 +331,15 @@ class TestMisc(unittest.TestCase):
                          [[0, 1, 2], [3, 4, 5, 6], [7, 8, 9]])
 
 
-class TestPmap(unittest.TestCase):
+class TestMisc2(unittest.TestCase):
+    def test_save_with_implicit_name(self):
+        with dbopen(':memory:') as c:
+            c.save('iris.csv')
+            c.save('select * from iris where species="setosa"')        
+            self.assertEqual(len(c.rows('iris')), 50)
 
+    
+class TestPmap(unittest.TestCase):
     def test_pmap(self):
         def func(x):
             time.sleep(0.001)

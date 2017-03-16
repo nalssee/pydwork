@@ -24,7 +24,7 @@ import statistics as st
 import warnings
 
 from .util import isnum, istext, yyyymm, yyyymmdd, \
-    listify, camel2snake, peek_first, parse_model, star
+    listify, camel2snake, peek_first, parse_model, star, random_string
 
 __all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box']
 
@@ -354,7 +354,7 @@ class SQLPlus:
         """
         self._cursor.execute(query, args)
         self.tables = self._list_tables()
-
+    
     def reel(self, query, group=False, args=()):
         """Generates a sequence of rows from a query.
 
@@ -388,14 +388,19 @@ class SQLPlus:
         fn: function that takes a row(all elements are strings)
             and returns a row, used for csv file transformation
         """
+        # handle simple case first
+        if isinstance(x, str) \
+            and x.split()[0].lower() == 'select' \
+            and (fn is None):
+            return self._new(x, name, args)
+
         name1, rows = _x2rows(x, self._cursor, args)
         name = name or name1
         if not name:
             raise ValueError('table name required')
 
-        # always overwrites
-        self.drop(name)
-
+        temp_name = 'table_' + random_string(10)
+        
         rows1 = (fn(r) for r in rows) if fn else rows
 
         row0, rows2 = peek_first(rows1)
@@ -415,9 +420,12 @@ class SQLPlus:
             conn = sqlite3.connect(f.name)
             cursor = conn.cursor()
 
-            _sqlite3_save(cursor, seq_values, name, cols)
-            _sqlite3_save(self._cursor, _sqlite3_reel(cursor, name, cols),
-                          name, cols)
+            _sqlite3_save(cursor, seq_values, temp_name, cols)
+            _sqlite3_save(self._cursor, _sqlite3_reel(cursor, temp_name, cols),
+                          temp_name, cols)
+            
+            self.run(f'drop table if exists { name }')
+            self.run(f'alter table { temp_name } rename to { name }') 
             # no need to commit and close the connection,
             # it's going to be erased anyway
 
@@ -435,6 +443,8 @@ class SQLPlus:
         _describe(rows, n, cols, percentile)
 
     def csv(self, x, file=sys.stdout, cols=None, args=()):
+        """ 
+        """
         _, rows = _x2rows(x, self._cursor, args)
         _csv(rows, file, cols)
 
@@ -456,6 +466,22 @@ class SQLPlus:
         # **.lower()
         tables = [row[1].lower() for row in query]
         return sorted(tables)
+
+    def _new(self, query, name=None, args=()):
+        """Create new table from query
+        """
+        def get_name_from_query(query):
+            query_list = query.lower().split()
+            idx = query_list.index('from')
+            return query_list[idx + 1]
+            
+        temp_name = 'table_' + random_string(10)
+        name = name if name else get_name_from_query(query)
+       
+        self.run(f"create table if not exists { temp_name } as { query }", 
+                 args=args)
+        self.run(f'drop table if exists { name }')
+        self.run(f"alter table { temp_name } rename to { name }")
 
 
 @contextmanager
