@@ -354,7 +354,7 @@ class SQLPlus:
         """
         self._cursor.execute(query, args)
         self.tables = self._list_tables()
-    
+
     def reel(self, query, group=False, args=()):
         """Generates a sequence of rows from a query.
 
@@ -387,11 +387,12 @@ class SQLPlus:
             and returns a row, used for csv file transformation
         """
         # handle simple case first,
-        # if x(string) starts with 'select' then you save it 
+        # if x(string) starts with 'select' then you save it
         # (if no name is not given source table name is used for the new table)
         if isinstance(x, str) \
             and x.split()[0].lower() == 'select' \
             and (fn is None):
+
             return self._new(x, name, args)
 
         name1, rows = _x2rows(x, self._cursor, args)
@@ -400,10 +401,10 @@ class SQLPlus:
             raise ValueError('table name required')
 
         if name in self.tables:
-            return    
+            return
 
         temp_name = 'table_' + random_string(10)
-        
+
         rows1 = (fn(r) for r in rows) if fn else rows
 
         row0, rows2 = peek_first(rows1)
@@ -426,9 +427,9 @@ class SQLPlus:
             _sqlite3_save(cursor, seq_values, temp_name, cols)
             _sqlite3_save(self._cursor, _sqlite3_reel(cursor, temp_name, cols),
                           temp_name, cols)
-            
+
             self.run(f'drop table if exists { name }')
-            self.run(f'alter table { temp_name } rename to { name }') 
+            self.run(f'alter table { temp_name } rename to { name }')
             # no need to commit and close the connection,
             # it's going to be erased anyway
 
@@ -446,7 +447,7 @@ class SQLPlus:
         _describe(rows, n, cols, percentile)
 
     def csv(self, x, file=sys.stdout, cols=None, args=()):
-        """ 
+        """
         """
         _, rows = _x2rows(x, self._cursor, args)
         _csv(rows, file, cols)
@@ -477,11 +478,14 @@ class SQLPlus:
             query_list = query.lower().split()
             idx = query_list.index('from')
             return query_list[idx + 1]
-            
+
         temp_name = 'table_' + random_string(10)
         name = name if name else get_name_from_query(query)
-       
-        self.run(f"create table if not exists { temp_name } as { query }", 
+
+        if name in self.tables:
+            return
+
+        self.run(f"create table if not exists { temp_name } as { query }",
                  args=args)
         self.run(f'drop table if exists { name }')
         self.run(f"alter table { temp_name } rename to { name }")
