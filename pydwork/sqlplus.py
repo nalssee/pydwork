@@ -378,7 +378,7 @@ class SQLPlus:
     def df(self, query, cols=None, args=()):
         return self.rows(query, args=args).df(cols)
 
-    def save(self, x, name=None, fn=None, args=()):
+    def save(self, x, name=None, fn=None, overwrite=False, args=()):
         """create a table from an iterator.
 
         x (str or iter or GF[* -> Row])
@@ -393,14 +393,14 @@ class SQLPlus:
             and x.split()[0].lower() == 'select' \
             and (fn is None):
 
-            return self._new(x, name, args)
+            return self._new(x, name, overwrite, args)
 
         name1, rows = _x2rows(x, self._cursor, args)
         name = name or name1
         if not name:
             raise ValueError('table name required')
 
-        if name in self.tables:
+        if (not overwrite) and (name in self.tables):
             return
 
         temp_name = 'table_' + random_string(10)
@@ -471,7 +471,7 @@ class SQLPlus:
         tables = [row[1].lower() for row in query]
         return sorted(tables)
 
-    def _new(self, query, name=None, args=()):
+    def _new(self, query, name, overwrite, args):
         """Create new table from query
         """
         def get_name_from_query(query):
@@ -482,7 +482,7 @@ class SQLPlus:
         temp_name = 'table_' + random_string(10)
         name = name if name else get_name_from_query(query)
 
-        if name in self.tables:
+        if (not overwrite) and (name in self.tables):
             return
 
         self.run(f"create table if not exists { temp_name } as { query }",

@@ -335,10 +335,10 @@ class TestMisc2(unittest.TestCase):
     def test_save_with_implicit_name(self):
         with dbopen(':memory:') as c:
             c.save('iris.csv')
-            c.save('select * from iris where species="setosa"')        
+            c.save('select * from iris where species="setosa"', overwrite=True)
             self.assertEqual(len(c.rows('iris')), 50)
 
-    
+
 class TestPmap(unittest.TestCase):
     def test_pmap(self):
         def func(x):
