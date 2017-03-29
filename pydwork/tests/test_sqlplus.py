@@ -335,7 +335,7 @@ class TestMisc2(unittest.TestCase):
     def test_save_with_implicit_name(self):
         with dbopen(':memory:') as c:
             c.save('iris.csv')
-            c.save('select * from iris where species="setosa"', overwrite=True)
+            c.save('select * from iris where species="setosa"')
             self.assertEqual(len(c.rows('iris')), 50)
 
 
