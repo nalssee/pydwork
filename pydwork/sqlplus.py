@@ -461,6 +461,11 @@ class SQLPlus:
             self.run('drop table if exists %s' % table)
         self.tables = self._list_tables()
 
+    def rename(self, old, new):
+        if old in self.tables:
+            self.run(f'drop table if exists { new }')
+            self.run(f'alter table { old } rename to { new }')
+
     def _list_tables(self):
         "List of table names in the database "
         query = self._cursor.execute("""
