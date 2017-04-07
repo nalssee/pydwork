@@ -114,7 +114,8 @@ class PRows(Rows):
         for rs1 in newrs.group(self.dcol):
             for pns, rs2 in zip(product(*(range(1, n + 1) for n in ns)),
                                 rs1.order(pncols).group(pncols)):
-                print(rs2, pncols)
+                rs2.show()
+                print(pncols)
                 print('hello world')
                 # test if there's any  missing portfolio
                 if [rs2[0][pncol] for pncol in pncols] != list(pns):
