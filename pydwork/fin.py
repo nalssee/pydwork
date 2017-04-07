@@ -116,7 +116,7 @@ class PRows(Rows):
                                 rs1.order(pncols).group(pncols)):
                 # test if there's any missing portfolio
                 if [rs2[0][pncol] for pncol in pncols] != list(pns):
-                    raise ValueError('missing portfolio no. %s %s in %s ' %
+                    raise ValueError('missing portfolio no. %s %s in a%s a ' %
                                      (list(pns),[rs2[0][pncol] for pncol in pncols], rs2[0][self.dcol]))
 
                 r = Row()
