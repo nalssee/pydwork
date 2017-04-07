@@ -112,6 +112,7 @@ class PRows(Rows):
 
         result = []
         for rs1 in newrs.group(self.dcol):
+            rs1.show()
             for pns, rs2 in zip(product(*(range(1, n + 1) for n in ns)),
                                 rs1.order(pncols).group(pncols)):
                 rs2.show()
