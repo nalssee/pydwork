@@ -339,6 +339,22 @@ class TestMisc2(unittest.TestCase):
             self.assertEqual(len(c.rows('iris')), 50)
 
 
+# class TestMisc3(unittest.TestCase):
+#     def test_foo(self):
+#         with dbopen('space.db') as c:
+#             # c.save('monthly.csv')
+#             # c.save('monthly1.csv')
+
+#             rs = PRows(c.reel("""
+#             monthly1 where yyyymm <= 201512 and yyyymm >= 201301 and isnum(size) and isnum(yyyymm)
+#             """), 'yyyymm')
+
+#             rs = rs.pn('size', 10)
+#             # rs.show()
+#             rs.pavg('size').pat().csv()
+#             rs.pavg('ret').pat().csv()
+
+
 class TestPmap(unittest.TestCase):
     def test_pmap(self):
         def func(x):

@@ -41,10 +41,12 @@ class PRows(Rows):
 
         if isinstance(nfn, int):
             nfn = (lambda nfn: lambda rs: nchunks(rs, nfn))(nfn)
-        for rs1 in self.num(col).order(self.dcol).group(self.dcol):
+        # order must come first
+        for rs1 in self.order(self.dcol).num(col).group(self.dcol):
             for pn, rs2 in enumerate(nfn(rs1.order(col)), 1):
                 for r in rs2:
                     r[pncol] = pn
+
         if pn:
             self.pncols[pncol] = pn
         else:
@@ -64,7 +66,8 @@ class PRows(Rows):
         if isinstance(nfn, int):
             nfn = (lambda nfn: lambda rs: nchunks(rs, nfn))(nfn)
         pncols = list(self.pncols)
-        for rs1 in self.num(pncols + [col]).order(self.dcol).group(self.dcol):
+        # order must come first
+        for rs1 in self.order(self.dcol).num(pncols + [col]).group(self.dcol):
             for rs2 in rs1.order(pncols + [col]).group(pncols):
                 for pn, rs3 in enumerate(nfn(rs2), 1):
                     for r in rs3:
