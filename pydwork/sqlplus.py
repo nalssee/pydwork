@@ -447,9 +447,9 @@ class SQLPlus:
             self.run(f'drop table if exists { name }')
             self.run(f'alter table { temp_name } rename to { name }')
 
-            f.close()
 
         finally:
+            f.close()
             os.remove(f.name)
 
             # no need to commit and close the connection,
