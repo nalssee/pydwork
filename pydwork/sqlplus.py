@@ -547,7 +547,7 @@ def _csv_reel(csv_file):
     if not csv_file.endswith('.csv'):
         csv_file += '.csv'
 
-    with open(os.path.join(WORKSPACE, csv_file)) as fin:
+    with open(os.path.join(WORKSPACE, csv_file), encoding='utf8') as fin:
         first_line = fin.readline()[:-1]
         columns = _gen_valid_column_names(listify(first_line))
         ncol = len(columns)
