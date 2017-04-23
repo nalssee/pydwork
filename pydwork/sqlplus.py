@@ -447,6 +447,8 @@ class SQLPlus:
             self.run(f'drop table if exists { name }')
             self.run(f'alter table { temp_name } rename to { name }')
 
+            f.close()
+
         finally:
             os.remove(f.name)
 
