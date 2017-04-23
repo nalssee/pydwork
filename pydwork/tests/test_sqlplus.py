@@ -733,6 +733,7 @@ class TestPRows(unittest.TestCase):
         self.assertEqual(self.indport.pn('cnsmr', 2).pavg('other').pat().lines,
                          self.indport.pn('cnsmr', fn).pavg('other').pat().lines)
 
+
     def test_dpn(self):
         avgport = self.indport.pn('cnsmr', 4).dpn('manuf', 3, 'hlth', 2).pavg('other')
         for r in avgport.where(lambda r: r.yyyy < 2016):

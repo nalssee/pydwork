@@ -106,12 +106,15 @@ class PRows(Rows):
 
     def pavg(self, col, wcol=None, pncols=None):
         "portfolio average,  wcol: weight column"
+        
+
         self.is_valid()
         pncols = listify(pncols) if pncols else list(self.pncols)
         ns = [self.pncols[pncol] for pncol in pncols]
 
         newrs = self.num(pncols + [col, wcol]) if wcol \
             else self.num(pncols + [col])
+
 
         result = []
         for rs1 in newrs.group(self.dcol):
