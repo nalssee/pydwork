@@ -420,22 +420,9 @@ class SQLPlus:
 
         # So you save the iterator up in another query and reel off it
 
-
-        # with tempfile.NamedTemporaryFile() as f:
-        #     conn = sqlite3.connect(f.name)
-        #     cursor = conn.cursor()
-
-        #     _sqlite3_save(cursor, seq_values, temp_name, cols)
-        #     _sqlite3_save(self._cursor, _sqlite3_reel(cursor, temp_name, cols),
-        #                   temp_name, cols)
-
-        #     self.run(f'drop table if exists { name }')
-        #     self.run(f'alter table { temp_name } rename to { name }')
-        #     # no need to commit and close the connection,
-        #     # it's going to be erased anyway
-
+        # not using 'with open' for windows 
         try:
-
+            # delete=false is for windows
             f = tempfile.NamedTemporaryFile(delete=False)
             conn = sqlite3.connect(f.name)
             cursor = conn.cursor()
@@ -447,15 +434,12 @@ class SQLPlus:
             self.run(f'drop table if exists { name }')
             self.run(f'alter table { temp_name } rename to { name }')
 
+            # you need to close to remove the temp file
             conn.close()
             f.close()
 
         finally:
             os.remove(f.name)
-
-            # no need to commit and close the connection,
-            # it's going to be erased anyway
-
 
         self.tables = self._list_tables()
 

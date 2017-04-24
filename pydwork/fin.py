@@ -98,6 +98,8 @@ class PRows(Rows):
         for rs in self.order(self.dcol).roll(period, period):
             # first date rows
             fdrows = PRows(next(rs.group(self.dcol)), self.dcol, self.fcol)
+            # numbering the first rows, it means something like 
+            # fdrows.pn(*colns) or fdrows.dpn(*colns)
             getattr(fdrows, pnfn)(*colns)
             for rs1 in rs.order([self.fcol, self.dcol]).group(self.fcol):
                 rs1[pncols] = [rs1[0][pncol] for pncol in pncols]
