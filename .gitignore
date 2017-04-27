@@ -10,3 +10,4 @@ tests/data/\:memory\:
 tests/ghostdriver.log
 tests/results/
 venv/
+*.whl
