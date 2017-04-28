@@ -165,6 +165,9 @@ def listify(x):
         return [x]
 
 
+# !!!!!!!!!
+# CAUTION: pmap does NOT work on Windows
+
 # Pool.iamp in multiprocessing doesn't allow
 # it to pass locally defined functions
 # I won't define unordered version although it is somewhat faster

@@ -350,64 +350,64 @@ class TestMisc2(unittest.TestCase):
 #             rs.pavg('size').pat().csv()
 #             rs.pavg('ret').pat().csv()
 
-
-class TestPmap(unittest.TestCase):
-    def test_pmap(self):
-        def func(x):
-            time.sleep(0.001)
-            return x
-
-        start = time.time()
-        xs = list(pmap(func, range(10000), chunksize=3, nworkers=8))
-        self.assertEqual(xs, list(range(10000)))
-        end = time.time()
-        self.assertTrue((end - start) < 2)
-
-        # thread version
-        start = time.time()
-        xs = list(pmap(func, range(10000), chunksize=3, nworkers=8,
-                       parallel=False))
-        self.assertEqual(xs, list(range(10000)))
-        end = time.time()
-        self.assertTrue((end - start) < 2)
-
-        def func2(x):
-            if x == 4:
-                10 / 0
-            else:
+if os.name != 'nt':
+    class TestPmap(unittest.TestCase):
+        def test_pmap(self):
+            def func(x):
+                time.sleep(0.001)
                 return x
 
-        # you must see zero division error message
-        # but still you should get 5 elements
-        self.assertEqual(list(pmap(func2, range(100), nworkers=2,
-                                   parallel=True)),
-                         [0, 1, 2, 3])
-        self.assertEqual(list(pmap(func2, range(100), nworkers=2,
-                                   parallel=False)),
-                         [0, 1, 2, 3])
+            start = time.time()
+            xs = list(pmap(func, range(10000), chunksize=3, nworkers=8))
+            self.assertEqual(xs, list(range(10000)))
+            end = time.time()
+            self.assertTrue((end - start) < 2)
 
-        # first arg for each func can be passed
-        def func3(a, x):
-            return a + x
+            # thread version
+            start = time.time()
+            xs = list(pmap(func, range(10000), chunksize=3, nworkers=8,
+                        parallel=False))
+            self.assertEqual(xs, list(range(10000)))
+            end = time.time()
+            self.assertTrue((end - start) < 2)
 
-        self.assertEqual(list(pmap(func3, '12345',
-                                   fargs=['A', 'B'], parallel=True)),
-                         ['A1', 'B2', 'A3', 'B4', 'A5'])
-        self.assertEqual(list(pmap(func3, '12345',
-                                   fargs=['A', 'B'], parallel=False)),
-                         ['A1', 'B2', 'A3', 'B4', 'A5'])
+            def func2(x):
+                if x == 4:
+                    10 / 0
+                else:
+                    return x
 
-    def test_pmap2(self):
-        with dbopen(':memory:') as c:
-            c.save('iris.csv')
+            # you must see zero division error message
+            # but still you should get 5 elements
+            self.assertEqual(list(pmap(func2, range(100), nworkers=2,
+                                    parallel=True)),
+                            [0, 1, 2, 3])
+            self.assertEqual(list(pmap(func2, range(100), nworkers=2,
+                                    parallel=False)),
+                            [0, 1, 2, 3])
 
-            def func(rs):
-                return rs.ols('petal_length ~ petal_width')
+            # first arg for each func can be passed
+            def func3(a, x):
+                return a + x
 
-            params = []
-            for res in pmap(func, c.reel('iris', 'species')):
-                params.append(round(res.params[1] * 100))
-            self.assertEqual(params, [55.0, 187.0, 65.0])
+            self.assertEqual(list(pmap(func3, '12345',
+                                    fargs=['A', 'B'], parallel=True)),
+                            ['A1', 'B2', 'A3', 'B4', 'A5'])
+            self.assertEqual(list(pmap(func3, '12345',
+                                    fargs=['A', 'B'], parallel=False)),
+                            ['A1', 'B2', 'A3', 'B4', 'A5'])
+
+        def test_pmap2(self):
+            with dbopen(':memory:') as c:
+                c.save('iris.csv')
+
+                def func(rs):
+                    return rs.ols('petal_length ~ petal_width')
+
+                params = []
+                for res in pmap(func, c.reel('iris', 'species')):
+                    params.append(round(res.params[1] * 100))
+                self.assertEqual(params, [55.0, 187.0, 65.0])
 
 
 class TestRows(unittest.TestCase):
