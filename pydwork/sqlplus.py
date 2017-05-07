@@ -27,7 +27,7 @@ from .util import isnum, istext, yyyymm, yyyymmdd, grouper, mrepr, \
     listify, camel2snake, peek_first, parse_model, star, random_string, nchunks
 
 
-__all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box']
+__all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box', 'rmap']
 
 
 WORKSPACE = ''
