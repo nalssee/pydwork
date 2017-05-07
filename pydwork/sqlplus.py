@@ -15,7 +15,7 @@ import copy
 
 from collections import Counter, OrderedDict
 from contextlib import contextmanager
-from itertools import groupby, islice, chain
+from itertools import groupby, islice, chain, product
 
 import pandas as pd
 import numpy as np
@@ -23,8 +23,9 @@ import statsmodels.formula.api as sm
 import statistics as st
 import warnings
 
-from .util import isnum, istext, yyyymm, yyyymmdd, \
-    listify, camel2snake, peek_first, parse_model, star, random_string
+from .util import isnum, istext, yyyymm, yyyymmdd, grouper, mrepr, \
+    listify, camel2snake, peek_first, parse_model, star, random_string, nchunks
+
 
 __all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box']
 
@@ -96,8 +97,262 @@ class Rows:
     # when you want to use this as a superclass
     # See 'where' method, you must return 'self' but it's not efficient
     # (at least afaik) if you inherit list
-    def __init__(self, rows):
+
+    def __init__(self, rows, date=None, id=None):
         self.rows = list(rows)
+        # date column name
+        self.date = date
+        # id column name
+        self.id = id
+
+    # modifies 'self'
+    # numbering portfolios
+    def pn(self, *args, **kvargs):
+        """indenpendent sort,
+        ex) self.pn('a', 10, 'b', lambda rs: [rs[:4], rs[4:]])"""
+        def assign(obj, col, nfn):
+            pncol = 'pn_' + col
+            self[pncol] = ''
+
+            # default sort function is an integer
+            if isinstance(nfn, int):
+                nfn = (lambda nfn: lambda rs: nchunks(rs, nfn))(nfn)
+            # order must come first
+            for rs1 in obj.order(obj.date).num(col).group(obj.date):
+                for pn, rs2 in enumerate(nfn(rs1.order(col)), 1):
+                    Rows(rs2)[pncol] = pn
+        
+        for col, n in grouper(args, 2):
+            assign(self, col, n)
+        for col, n in kvargs.items():
+            assign(self, col, n)
+        return self
+
+    # numbering portfolios, dependent sort
+    # rs.dpn('col1', 2, 'col2', 4) 
+    def dpn(self, *args, **kvargs):
+        """dependent sort
+        ex) self.pn('a', 10, 'b', lambda rs: [rs[:4], rs[4:]])"""
+
+        def assign(self, col, nfn, pncols):
+            pncol = 'pn_' + col
+            self[pncol] = ''
+
+            if isinstance(nfn, int):
+                nfn = (lambda nfn: lambda rs: nchunks(rs, nfn))(nfn)
+            # order must come first
+            for rs1 in self.order(self.date).num(pncols + [col]).group(self.date):
+                for rs2 in rs1.order(pncols + [col]).group(pncols):
+                    for pn, rs3 in enumerate(nfn(rs2), 1):
+                        Rows(rs3)[pncol] = pn
+            return self
+        
+        pncols = []
+        for col, n in grouper(args, 2):
+            assign(self, col, n, pncols)
+            pncols.append('pn_' + col)
+        for col, n in kvargs.items(): 
+            assign(self, col, n, pncols)
+            pncols.append('pn_' + col)
+        return self
+
+    # Number portfolios as you roll
+    # Just this time portfolio numbers are based on the first date values
+    # all the others simply follow the first one
+    # This will be useful when you make factor portfolios
+
+    def pnroll(self, period, *colns, **kvargs):
+        colns = list(colns)
+        for k, v in kvargs.items():
+            colns.append(k)
+            colns.append(v)
+        return self._pnroll('pn', period, colns)
+
+    def dpnroll(self, period, *colns, **kvargs):
+        colns = list(colns)
+        for k, v in kvargs.items():
+            colns.append(k)
+            colns.append(v)
+        return self._pnroll('dpn', period, colns)
+
+    def _pnroll(self, pnfn, period, colns):
+        "pnfn: method name string, dpn or pn"
+        cols = [col for col, _ in grouper(colns, 2)]
+        pncols = ['pn_' + col for col in cols]
+
+        self[pncols] = ''
+        for rs in self.order(self.date).roll(period, period):
+            # first date rows
+            fdrows = next(rs.group(self.date))
+            # numbering the first rows, it means something like 
+            # fdrows.pn(*colns) or fdrows.dpn(*colns)
+            getattr(fdrows, pnfn)(*colns)
+            for rs1 in rs.order([self.id, self.date]).group(self.id):
+                rs1[pncols] = [rs1[0][pncol] for pncol in pncols]
+        return self
+
+    def pavg(self, col, wcol=None, pncols=None):
+        "portfolio average,  wcol: weight column"
+        self.is_valid()
+
+        pncols = listify(pncols) if pncols else \
+                 [col for col in self.rows[0].columns if col.startswith('pn_')]
+
+        self.order(self.date)
+        newrs = self.num(pncols + [col, wcol]) if wcol else self.num(pncols + [col])
+
+        result = []
+        for rs in newrs.group(self.date):
+            for pncols1 in product(*([pncol, None] for pncol in pncols)):
+                pncols1 = [pncol for pncol in pncols1 if pncol]
+                for rs1 in rs.order(pncols1).group(pncols1):
+                    r = Row()
+                    r[self.date] = rs[0][self.date]
+                    r.n = len(rs1)
+                    for pncol in pncols:
+                        r[pncol] = rs1[0][pncol] if pncol in pncols1 else 0
+                    r[col] = rs1.wavg(col, wcol)
+                    result.append(r)
+        return Rows(result, self.date)
+
+    def pat(self, col, pncols=None):
+        "average pattern, returns a box"
+        pncols = listify(pncols) if pncols else \
+                 [col for col in self.rows[0].columns if col.startswith('pn_')]
+        ns = [max(r[pncol] for r in self.rows) for pncol in pncols]
+
+        if len(pncols) == 1:
+            return self._pat1(col, pncols[0], ns[0])
+        elif len(pncols) == 2:
+            return self._pat2(col, pncols[0], ns[0], pncols[1], ns[1])
+        else:
+            raise ValueError("Invalid pncols")
+
+    def _pat1(self, col, pncol, n):
+        head = [pncol[3:]]
+        for i in range(1, n + 1):
+            head.append(str(i))
+        head.append(f'P{n}-P1[tval]')
+        head.append('All(ts_avg no of obs)')
+        
+        line = [col]
+        for pn in range(1, n + 1):
+            rs = self.where(pncol, pn)
+            line.append(mrepr(rs[col], rs['n']))
+
+        seq = rmap(lambda r1, r2: r1[col] - r2[col], 
+                   self.where(pncol, n), self.where(pncol, 1))
+
+        line.append(mrepr(seq))
+
+        rs = self.where(pncol, 0)
+        line.append(mrepr(rs[col], rs['n']))
+
+        return Box([head, line]) 
+
+
+    def _pat2(self, col, pncol1, n1, pncol2, n2):
+        def sub(rs1, rs2):
+            return rmap(lambda r1, r2: r1[col] - r2[col], rs1, rs2)
+        def pt(i, j):
+            return self.where(pncol1, i, pncol2, j)
+
+        # write head
+        head = [f'{pncol1[3:]}\\{pncol2[3:]}']
+        for j in range(1, n2 + 1):
+            head.append(str(j))
+        head.append(f'P{n2} - P1')
+        head.append('ALL')
+
+        lines = []
+        for i in range(1, n1 + 1):
+            line = [str(i)]
+            for j in list(range(1, n2 + 1)):
+                rs = pt(i, j)
+                line.append(mrepr(rs[col], rs['n']))
+            line.append(mrepr(sub(pt(i, n2), pt(i, 1))))
+
+            rs = pt(i, 0) 
+            line.append(mrepr(rs[col], rs['n'])) 
+            lines.append(line)
+        
+        # bottom line
+        line = [f'P{n1} - P1']
+        for j in range(1, n2 + 1):
+            line.append(mrepr(sub(pt(n1, j), pt(1, j))))
+
+        diff_diff = rmap(lambda r1, r2, r3, r4: r1[col] - r2[col] - r3[col] + r4[col],
+                         self.where(pncol1, n1, pncol2, n2),
+                         self.where(pncol1, n1, pncol2, 1),
+                         self.where(pncol1, 1, pncol2, n2),
+                         self.where(pncol1, 1, pncol2, 1))
+        line.append(mrepr(diff_diff))
+        line.append(mrepr(sub(pt(n1, 0), pt(1, 0))))
+        lines.append(line)
+
+        line = ['All']
+        for j in range(1, n2 + 1):
+            rs = pt(0, j)
+            line.append(mrepr(rs[col], rs['n']))
+
+        line.append(mrepr(sub(pt(0, n2), pt(0, 1))))
+        rs = pt(0, 0)
+        line.append(mrepr(rs[col], rs['n']))
+        lines.append(line)
+        return Box([head] + lines)
+
+    def tsavg(self, cols=None):
+        "show time series average"
+        cols = listify(cols) if cols else self[0].columns
+        lines = []
+        lines.append(cols)
+        lines.append([mrepr(self[col]) for col in cols])
+        return Box(lines)
+
+    def famac(self, model):
+        "Fama Macbeth"
+        xvs = ['intercept'] + parse_model(model)[1:]
+        params = []
+        for rs1 in self.order(self.date).group(self.date):
+            rs1 = rs1.num(parse_model(model))
+            if len(rs1) >= 2:
+                reg = rs1.ols(model)
+                r = Row()
+                r[self.date] = rs1[0][self.date]
+                for var, p in zip(xvs, reg.params):
+                    r[var] = p
+                r.n = int(reg.nobs)
+                r.r2 = reg.rsquared
+                params.append(r)
+        return Rows(params, self.date)
+
+    def roll(self, period, jump, begdate=None, enddate=None):
+        "group rows over time, allowing overlaps"
+        def get_nextdate(date, period):
+            "date after the period"
+            date = str(date)
+            if len(date) == 8:
+                return yyyymmdd(date, period)
+            elif len(date) == 6:
+                return yyyymm(date, period)
+            elif len(date) == 4:
+                return int(date) + period
+            else:
+                raise ValueError('Invalid date', date)
+
+        begdate = int(begdate) if begdate else self.rows[0][self.date]
+        enddate = int(enddate) if enddate else self.rows[-1][self.date]
+
+        while begdate <= enddate:
+            yield self.between(begdate, get_nextdate(begdate, period))
+            begdate = get_nextdate(begdate, jump)
+
+    def between(self, beg, end=None):
+        "begdate <= x <  enddate"
+        if end:
+            return self.where(lambda r: r[self.date] >= beg and r[self.date] < end)
+        else:
+            return self.where(lambda r: r[self.date] >= beg)
 
     def __len__(self):
         return len(self.rows)
@@ -203,13 +458,26 @@ class Rows:
         "shallow copy"
         return copy.copy(self)
 
+    # destructive!!!
     def order(self, key, reverse=False):
         self.rows.sort(key=_build_keyfn(key), reverse=reverse)
         return self
 
-    def where(self, pred):
+    def where(self, *args, **kvargs):
+        """
+        rs.where(lambda r: r.x == 1)
+        or
+        rs.where('col1', 3, col2, 'hello')
+        """
+        def make_pred(r, args, kvargs):
+            pairs = [(k, v) for k, v in grouper(args, 2)]
+            for k, v in kvargs.items():
+                pairs.append((k, v))
+            return all(r[k] == v or v is None for k, v in pairs) 
+
         other = self.copy()
-        pred = _build_keyfn(pred)
+        pred = _build_keyfn(args[0]) if len(args) == 1 else \
+               (lambda args, kvargs: lambda r: make_pred(r, args, kvargs))(args, kvargs)
         other.rows = [r for r in self.rows if pred(r)]
         return other
 
@@ -859,3 +1127,15 @@ def _build_rows(seq_values, cols):
         for col, val in zip(cols, vals):
             r[col] = val
         yield r
+
+def rmap(fn, *rss):
+    """ rss : a list of Rows with the same 'date' attribute
+    """
+    date = rss[0].date
+    seq = []
+    for rs in zip(*rss):
+        assert len(set(r[date] for r in rs)) == 1
+        seq.append(fn(*rs))
+    return seq
+
+

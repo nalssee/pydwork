@@ -14,8 +14,6 @@ sys.path.append(PYPATH)
 from pydwork.sqlplus import *
 from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd, \
     prepend_header, pmap, grouper, breaks, same
-from pydwork.fin import PRows
-
 
 def mean0(seq):
     return round(st.mean(seq), 3)
@@ -23,7 +21,7 @@ def mean0(seq):
 def mean1(seq):
     "sequence of numbers with t val"
     tstat = ttest_1samp(seq, 0)
-    return "%s [%s]" % (star(st.mean(seq), tstat[1]), round(tstat[0], 2))
+    return "%s [%s]" % (star(st.mean(seq), tstat[1]), round(tstat[0], 3))
 
 def star(val, pval):
     "put stars according to p-value"
@@ -335,6 +333,7 @@ class TestMisc2(unittest.TestCase):
             self.assertEqual(len(c.rows('iris')), 50)
 
 
+
 # class TestMisc3(unittest.TestCase):
 #     def test_foo(self):
 #         with dbopen('space.db') as c:
@@ -349,6 +348,9 @@ class TestMisc2(unittest.TestCase):
 #             # rs.show()
 #             rs.pavg('size').pat().csv()
 #             rs.pavg('ret').pat().csv()
+
+
+
 
 if os.name != 'nt':
     class TestPmap(unittest.TestCase):
@@ -619,24 +621,25 @@ class TestDFMisc(unittest.TestCase):
                    petal_width from iris""")
 
 
+# Test methods for portfolio works
 class TestPRows(unittest.TestCase):
     def setUp(self):
-        self.rs1 = []
+        rs1 = []
         for year in range(2001, 2011):
-            self.rs1.append(Row(yyyy=year))
-        self.rs1 = PRows(self.rs1, 'yyyy')
+            rs1.append(Row(yyyy=year))
+        self.rs1 = Rows(rs1, 'yyyy')
 
-        self.rs2 = []
+        rs2 = []
         start_month = 200101
         for i in range(36):
-            self.rs2.append(Row(yyyymm=yyyymm(start_month, i)))
-        self.rs2 = PRows(self.rs2, 'yyyymm')
+            rs2.append(Row(yyyymm=yyyymm(start_month, i)))
+        self.rs2 = Rows(rs2, 'yyyymm')
 
-        self.rs3 = []
+        rs3 = []
         start_date = 20010101
         for i in range(30):
-            self.rs3.append(Row(yyyymmdd=yyyymmdd(start_date, i)))
-        self.rs3 = PRows(self.rs3, 'yyyymmdd')
+            rs3.append(Row(yyyymmdd=yyyymmdd(start_date, i)))
+        self.rs3 = Rows(rs3, 'yyyymmdd')
 
         with dbopen(':memory:') as c:
             c.save('indport.csv')
@@ -648,134 +651,135 @@ class TestPRows(unittest.TestCase):
                     r.fcode = 'A' + str(r.date)[4:]
                     del r.date
                     rs.append(r)
-            self.indport = PRows(rs, 'yyyy', 'fcode')
+            self.indport = Rows(rs, 'yyyy', 'fcode')
 
-            rs = []
-            for rs1 in c.reel('indport order by date', group=lambda r: str(r.date)[0:6]):
-                for r in rs1:
-                    r.yyyymm = int(str(r.date)[0:6])
-                    r.fcode = 'A' + str(r.date)[6:]
-                    del r.date
-                    rs.append(r)
-            self.indport1 = PRows(rs, 'yyyymm', 'fcode')
 
-    def test_indi_sort(self):
-        with self.assertRaises(ValueError):
-            # there are not enough element to make portfolios in 2009
-            self.indport.pn('cnsmr', 2).pn('manuf', 3).pavg('other')
+    def test_indi_sort1(self):
 
         avgport = self.indport.where(lambda r: r.yyyy < 2009)\
-                      .pn('cnsmr', 2).pn('manuf', 3).pavg('other')
+                      .pn('cnsmr', 2, 'manuf', 3).pavg('other')
+        
+        ap = avgport.order([avgport.date, 'pn_cnsmr', 'pn_manuf'])\
+             .where(lambda r: r.pn_cnsmr > 0 and r.pn_manuf > 0)
 
-        self.assertEqual(avgport[0].n, 76)
-        self.assertEqual(avgport[1].n, 45)
-        self.assertEqual(avgport[2].n, 3)
-        self.assertEqual(avgport[3].n, 7)
-        self.assertEqual(avgport[4].n, 37)
-        self.assertEqual(avgport[5].n, 80)
+        self.assertEqual(ap[0].n, 76)
+        self.assertEqual(ap[1].n, 45)
+        self.assertEqual(ap[2].n, 3)
+        self.assertEqual(ap[3].n, 7)
+        self.assertEqual(ap[4].n, 37)
+        self.assertEqual(ap[5].n, 80)
 
-        self.assertEqual(round(avgport[0].other, 2), -0.63)
+        self.assertEqual(round(ap[0].other, 2), -0.63)
 
         indport = self.indport.where(lambda r: r.yyyy < 2009).pn('cnsmr', 10)
 
         other1 = []
         for year in range(2001, 2009):
-            other1.append(mean0(indport.where(lambda r: r.pn_cnsmr == 1 and r.yyyy == year)['other']))
+            other1.append(mean0(indport.where('pn_cnsmr', 1, 'yyyy', year)['other']))
+
         self.assertEqual(other1, [-1.249, -1.418, -0.838, -0.98, -0.944, -1.027, -1.75, -4.143])
 
+        indport = self.indport.where(lambda r: r.yyyy < 2009).pn('cnsmr', 10)
         other10 = []
         for year in range(2001, 2009):
-            other10.append(mean0(indport.where(lambda r: r.pn_cnsmr == 10 and r.yyyy == year)['other']))
+            other10.append(mean0(indport.where('pn_cnsmr', 10, 'yyyy', year)['other']))
+
         self.assertEqual(other10, [1.415, 1.486, 1.235, 0.96, 1.062, 1.174, 1.34, 4.014])
 
-        pat = self.indport.where(lambda r: r.yyyy < 2009)\
-                  .pn('cnsmr', 10).pavg('other', pncols='pn_cnsmr').pat('pn_cnsmr')
-        self.assertEqual(round(st.mean(other10) - st.mean(other1), 2), float(pat.lines[0][11][:4]))
+        indport.pn('cnsmr', 10)
+        pat = indport.pavg('other', pncols='pn_cnsmr').pat('other', pncols='pn_cnsmr')
+        self.assertEqual(round(st.mean(other10) - st.mean(other1), 2), float(pat.lines[1][11][:4]))
 
-        indport = self.indport.where(lambda r: r.yyyy < 2009).pn('cnsmr', 2).pn('manuf', 3)
-        # pavg.show()
+        indport = self.indport.where(lambda r: r.yyyy < 2009).pn('cnsmr', 2, 'manuf', 3)
+
         other21 = []
         other23 = []
         for year in range(2001, 2009):
-            pavg1 = indport.where(lambda r: r.pn_cnsmr == 2 and r.pn_manuf == 1 and r.yyyy == year)['other']
-            pavg2 = indport.where(lambda r: r.pn_cnsmr == 2 and r.pn_manuf == 3 and r.yyyy == year)['other']
+
+            pavg1 = indport.where('pn_cnsmr', 2, 'pn_manuf', 1, 'yyyy', year)['other']
+            pavg2 = indport.where('pn_cnsmr', 2, 'pn_manuf', 3, 'yyyy', year)['other']
+
             other21.append(st.mean(pavg1))
             other23.append(st.mean(pavg2))
 
-        pat = indport.pavg('other').pat().lines
-        self.assertEqual(round(st.mean(other21), 3), float(pat[2][1].split()[0]))
-        self.assertEqual(round(st.mean(other23), 3), float(pat[2][3].split()[0]))
+        pat = indport.pavg('other').pat('other').lines
+
+        self.assertEqual(round(st.mean(other21), 3), float(pat[2][1].replace('*', '').split()[0]))
+        self.assertEqual(round(st.mean(other23), 3), float(pat[2][3].replace('*', '').split()[0]))
         self.assertEqual(round(st.mean(other23) - st.mean(other21), 3), float(pat[2][4][:5]))
-        indport.pavg('other', pncols='pn_cnsmr, pn_manuf').pat().csv()
+
+        # test for avgs columns!!
+        pat1 = indport.pn('cnsmr', 2, 'manuf', 3)\
+               .pavg('other', pncols='pn_cnsmr, pn_manuf')\
+               .pat('other', pncols='pn_cnsmr, pn_manuf').lines
+
+        pat2 = indport.pn('cnsmr', 2).pavg('other', pncols='pn_cnsmr')\
+                      .pat('other', pncols='pn_cnsmr').lines
+
+        pat3 = indport.pn('manuf', 3).pavg('other', pncols='pn_manuf')\
+                      .pat('other', pncols='pn_manuf').lines
+
+        self.assertEqual(pat2[1][1:], [x[-1] for x in pat1][1:])
+        self.assertEqual(pat1[-1][1:], pat3[1][1:]) 
+
 
     def test_indi_sort2(self):
         "weighted average"
         avgport = self.indport.where(lambda r: r.yyyy <= 2015).pn('cnsmr', 10)
-        hlth = avgport.where(lambda r: r.yyyy == 2001 and r.pn_cnsmr == 3)['hlth']
-        other = avgport.where(lambda r: r.yyyy == 2001 and r.pn_cnsmr == 3)['other']
+        hlth = avgport.where('yyyy', 2001, 'pn_cnsmr', 3)['hlth']
+        other = avgport.where('yyyy', 2001, 'pn_cnsmr', 3)['other']
 
         total = sum(hlth)
         result = []
         for x, y in zip(other, hlth):
             result.append(x * y / total)
-        self.assertEqual(sum(result),
+        self.assertEqual(sum(result), 
                          avgport.pavg('other', 'hlth')\
-                         .where(lambda r: r.yyyy == 2001 and r.pn_cnsmr == 3)['other'][0])
+                         .where('yyyy', 2001, 'pn_cnsmr', 3)['other'][0])
 
     def test_indi_sort3(self):
         def fn(rs):
             n = round(len(rs) / 2)
             return [rs[:n], rs[n:]]
-        self.assertEqual(self.indport.pn('cnsmr', 2).pavg('other').pat().lines,
-                         self.indport.pn('cnsmr', fn).pavg('other').pat().lines)
-
+        self.assertEqual(self.indport.pn('cnsmr', 2).pavg('other').pat('other').lines,
+                         self.indport.pn('cnsmr', fn).pavg('other').pat('other').lines)
 
     def test_dpn(self):
-        avgport = self.indport.pn('cnsmr', 4).dpn('manuf', 3, 'hlth', 2).pavg('other')
-        for r in avgport.where(lambda r: r.yyyy < 2016):
-            self.assertTrue(r.n == 10 or r.n == 11)
-        seq1 = avgport.where(lambda r: r.pn_cnsmr == 3 and r.pn_manuf == 1 and r.pn_hlth == 2)['other']
-        seq2 = avgport.where(lambda r: r.pn_cnsmr == 3 and r.pn_manuf == 3 and r.pn_hlth == 2)['other']
+        avgport = self.indport.dpn(cnsmr=4, manuf=3, hlth=2).pavg('other')
 
-        pat = avgport.pat().lines
-        self.assertEqual(round(st.mean(seq1), 3), float(pat[14][2].split()[0]))
-        self.assertEqual(round(st.mean(seq2), 3), float(pat[16][2].split()[0]))
-        self.assertEqual(round(st.mean(seq2) - st.mean(seq1), 3), float(pat[17][2][:5]))
+        avgport1 = avgport.where(lambda r: r.pn_cnsmr != 0 and r.pn_manuf != 0 and r.pn_hlth != 0)
+        for r in avgport1.where(lambda r: r.yyyy < 2016):
+            # must be about the same size
+            self.assertTrue(r.n == 10 or r.n == 11)
+        
+        seq1 = avgport.where(pn_cnsmr=3, pn_manuf=1, pn_hlth=2)['other']
+        seq2 = avgport.where(pn_cnsmr=3, pn_manuf=3, pn_hlth=2)['other'] 
+    
+        pat = avgport.where(pn_cnsmr=3).pat('other', pncols='pn_manuf, pn_hlth').lines
+
+        self.assertEqual(round(st.mean(seq1), 3), float(pat[1][2].split()[0].replace('*', '')))
+        self.assertEqual(round(st.mean(seq2), 3), float(pat[3][2].split()[0].replace('*', '')))
+        self.assertEqual(round(st.mean(seq2) - st.mean(seq1), 3), float(pat[4][2][:5]))
 
     def test_pnroll(self):
-        a = self.indport.between(2003).dpnroll(5, 'cnsmr', 5, 'manuf', 4)
+        a = self.indport.between(2003).dpnroll(5, cnsmr=5, manuf=4)
         for rs in a.roll(5, 5):
             for rs1 in rs.order('fcode, yyyy').group('fcode'):
                 self.assertTrue(same(rs1['pn_cnsmr, pn_manuf']))
+
         xs = a.pavg('other')
         self.assertEqual(round(xs[0].other, 3), -1.013)
-        self.assertEqual(round(xs[-1].other, 3), -0.426)
+        self.assertEqual(round(xs[-11].other, 3), -0.426)
 
-        a = self.indport.between(2003).pnroll(5, 'cnsmr', 5, 'manuf', 4, 'hi_tec', 3)
+        a = self.indport.between(2003).pnroll(5, cnsmr=5, manuf=4, hi_tec=3)
         for rs in a.roll(5, 5):
             for rs1 in rs.order('fcode, yyyy').group('fcode'):
                 self.assertTrue(same(rs1['pn_cnsmr, pn_manuf, pn_hi_tec']))
 
-        with self.assertRaises(Exception):
-            a.pavg('other')
-
-        a = self.indport.between(2003).pnroll(5, 'cnsmr', 5, 'manuf', 4)
-        # independent sort raises exception because there is not enough elements
-        with self.assertRaises(Exception):
-            a.pavg('other')
-
-        a = self.indport.between(2003).pnroll(5, 'cnsmr', 2, 'manuf', 2)
-        xs = a.pavg('other')
+        a = self.indport.between(2003).pnroll(5, cnsmr=2, manuf=2)
+        xs = a.pavg('other', pncols='pn_cnsmr, pn_manuf')
         self.assertEqual(round(xs[0].other, 3), -0.338)
-        self.assertEqual(round(xs[-1].other, 3), -0.014)
-
-    def test_pns(self):
-        self.indport.dpn('cnsmr', 4, 'manuf', 3, 'hlth', 2)
-        self.assertEqual(len(self.indport.pncols), 3)
-
-        self.indport.pncols.clear()
-        self.indport.dpn('cnsmr', 2, 'manuf', 3)
-        self.assertEqual(len(self.indport.pncols), 2)
+        self.assertEqual(round(xs[-6].other, 3), -0.014)
 
     def test_famac(self):
         fit = self.indport.famac('other ~ cnsmr + manuf + hi_tec + hlth')
@@ -809,6 +813,7 @@ class TestPRows(unittest.TestCase):
         for rs0 in self.rs3.roll('2 weeks', '1 week'):
             lengths.append(len(rs0))
         self.assertEqual(lengths, [14, 14, 14, 9, 2])
+
 
 
 unittest.main()

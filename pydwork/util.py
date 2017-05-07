@@ -9,12 +9,15 @@ import fileinput
 
 import multiprocessing as mp
 import threading as th
+import statistics as st
 
 from itertools import dropwhile, chain, zip_longest, accumulate
 from queue import Queue
 
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+
+from scipy.stats import ttest_1samp
 
 
 def nchunks(xs, n):
@@ -345,3 +348,27 @@ def star(val, pval):
         return str(round(val, 3)) + '*'
     else:
         return str(round(val, 3))
+
+
+
+def mrepr(seq1, seq2=None):
+    """
+    mean representation,
+    if seq2:
+        mean(seq1)[tval]
+    else:
+        mean(seq1)[mean(seq2)]
+    """
+    def rep_n():
+        tstat = ttest_1samp(seq1, 0)
+
+        m = st.mean(seq1)
+        n = round(st.mean(seq2))
+        return f'{star(m, tstat[1])} ({n})'
+
+    def rep_tval():
+        "sequence of numbers with t val"
+        tstat = ttest_1samp(seq1, 0)
+        return f'{star(st.mean(seq1), tstat[1])} [{round(tstat[0], 3)}]'
+
+    return rep_n() if seq2 else rep_tval()
