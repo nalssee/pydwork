@@ -743,6 +743,7 @@ class TestPRows(unittest.TestCase):
             return [rs[:n], rs[n:]]
         self.assertEqual(self.indport.pn('cnsmr', 2).pavg('other').pat('other').lines,
                          self.indport.pn('cnsmr', fn).pavg('other').pat('other').lines)
+    
 
     def test_dpn(self):
         avgport = self.indport.dpn(cnsmr=4, manuf=3, hlth=2).pavg('other')
@@ -760,6 +761,61 @@ class TestPRows(unittest.TestCase):
         self.assertEqual(round(st.mean(seq1), 3), float(pat[1][2].split()[0].replace('*', '')))
         self.assertEqual(round(st.mean(seq2), 3), float(pat[3][2].split()[0].replace('*', '')))
         self.assertEqual(round(st.mean(seq2) - st.mean(seq1), 3), float(pat[4][2][:5]))
+
+
+    # def test_pnref(self):
+    #     with dbopen(':memory:') as c:
+    #         c.save('indport.csv')
+    #         def sample():
+    #             rs = []
+    #             for rs1 in c.reel('indport order by date', group=lambda r: str(r.date)[0:4]):
+    #                 for r in rs1:
+    #                     r.yyyy = int(str(r.date)[0:4])
+    #                     r.fcode = 'A' + str(r.date)[4:]
+    #                     del r.date
+    #                     rs.append(r)
+    #             return Rows(rs, 'yyyy', 'fcode')
+
+    #         rs = sample().where(lambda r: r.yyyy < 2010).pn(cnsmr=2, manuf=3)
+    #         rs.order('yyyy, cnsmr, manuf').csv('foo.csv')
+
+    #         b = sample().where(lambda r: r.yyyy < 2010).pnref(rs)
+    #         b.order('yyyy, cnsmr, manuf').csv('bar.csv')
+            
+    #         rs.pavg('other').pat('other').csv()
+    #         b.pavg('other').pat('other').csv()
+
+    # def test_breaks(self):
+    #     with dbopen(':memory:') as c:
+    #         c.save('indport.csv')
+    #         def sample():
+    #             rs = []
+    #             for rs1 in c.reel('indport order by date', group=lambda r: str(r.date)[0:4]):
+    #                 for r in rs1:
+    #                     r.yyyy = int(str(r.date)[0:4])
+    #                     r.fcode = 'A' + str(r.date)[4:]
+    #                     del r.date
+    #                     rs.append(r)
+    #             return Rows(rs, 'yyyy', 'fcode')
+    #         rs = sample().where(lambda r: r.yyyy < 2010)
+    #         print(rs.breaks('cnsmr', 2, 'manuf', 3))
+
+
+            
+            # cnt = 0
+            # for r1, r2 in zip(rs.rows, b.rows):
+            #     self.assertEqual(r1.cnsmr, r2.cnsmr)
+            #     self.assertEqual(r1.pn_cnsmr, r2.pn_cnsmr)
+
+            #     self.assertEqual(r1.manuf, r2.manuf)
+            #     if r1.pn_manuf != r2.pn_manuf:
+            #         print(r1)
+            #         print(r2)
+
+            #     self.assertEqual(r1.pn_manuf, r2.pn_manuf)
+            #     cnt += 1
+            # sample().where(lambda r: r.yyyy < 2010).pnref(rs).pavg('other').pat('other').csv()
+
 
     def test_pnroll(self):
         a = self.indport.between(2003).dpnroll(5, cnsmr=5, manuf=4)
