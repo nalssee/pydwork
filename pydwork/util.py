@@ -34,18 +34,8 @@ def nchunks(xs, n):
             start += chunksize
 
 
-def breaks(xs, sizes):
-    """ breaks(range(10), [0.3, 0.4, 0.3]) yields
-    [0, 1, 2], [3, 4, 5, 6], [7, 8, 9]
-    """
-    xs = list(xs)
-    n = len(xs)
-    bps = list(accumulate(sizes))
-    assert bps[-1] == 1, "break points invalid"
-    for a, b in zip([0] + bps, bps):
-        yield xs[round(a * n):round(b * n)]
-
-
+   
+   
 # copied from 'itertools'
 def grouper(iterable, n, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"

@@ -1,7 +1,7 @@
 """
-SQLite3 based utils for statistical analysis
+sqlite3 based utils for statistical analysis
 
-Reeling off rows from db(SQLite3) and saving them back to db
+reeling off rows from db(sqlite3) and saving them back to db
 """
 
 import os
@@ -30,11 +30,11 @@ from .util import isnum, istext, yyyymm, yyyymmdd, grouper, mrepr, \
 __all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box', 'rmap']
 
 
-WORKSPACE = ''
+workspace = ''
 
 class Row:
-    "Mutable version of sqlite3.Row"
-    # Works for Python 3.6 and higher
+    "mutable version of sqlite3.row"
+    # works for python 3.6 and higher
     def __init__(self, **kwargs):
         super().__setattr__('_ordered_dict', OrderedDict())
         for k, v in kwargs.items():
@@ -42,12 +42,12 @@ class Row:
 
     @property
     def columns(self):
-        "List[str]: column names"
+        "list[str]: column names"
         return list(self._ordered_dict.keys())
 
     @property
     def values(self):
-        "List[type]"
+        "list[type]"
         return list(self._ordered_dict.values())
 
     def __getattr__(self, name):
@@ -80,22 +80,22 @@ class Row:
     def __setstate__(self, d):
         self.__dict__.update(d)
 
-    # TODO
+    # todo
     # hasattr doesn't for properly
-    # You can't make it work by changing getters and setters
-    # to an ordinary way. But it is slower
+    # you can't make it work by changing getters and setters
+    # to an ordinary way. but it is slower
 
 
 class Rows:
     """
     a shallow wrapper of a list of row instances """
-    # Don't try to define __getattr__, __setattr__
-    # List objects has a lot of useful attributes that can't be overwritten
-    # Not the same situation as 'Row' class
+    # don't try to define __getattr__, __setattr__
+    # list objects has a lot of useful attributes that can't be overwritten
+    # not the same situation as 'row' class
 
-    # Inheriting list can be problemetic
+    # inheriting list can be problemetic
     # when you want to use this as a superclass
-    # See 'where' method, you must return 'self' but it's not efficient
+    # see 'where' method, you must return 'self' but it's not efficient
     # (at least afaik) if you inherit list
 
     def __init__(self, rows, date=None, id=None):
@@ -105,213 +105,97 @@ class Rows:
         # id column name
         self.id = id
 
-    # modifies 'self'
-    # numbering portfolios
-    def pn(self, *args, **kvargs):
-        """indenpendent sort,
-        ex) self.pn('a', 10, 'b', lambda rs: [rs[:4], rs[4:]])"""
-        def assign(obj, col, nfn):
-            pncol = 'pn_' + col
-            self[pncol] = ''
-
-            # default sort function is an integer
-            if isinstance(nfn, int):
-                nfn = (lambda nfn: lambda rs: nchunks(rs, nfn))(nfn)
-            # order must come first
-            for rs1 in obj.order(obj.date).num(col).group(obj.date):
-                for pn, rs2 in enumerate(nfn(rs1.order(col)), 1):
-                    Rows(rs2)[pncol] = pn
+    def breaks(self, *args, **kvargs):
+        """ break points for each date
         
-        for col, n in grouper(args, 2):
-            assign(self, col, n)
-        for col, n in kvargs.items():
-            assign(self, col, n)
-        return self
+        return:
+            {(201012, 1, 2, 4): [(co11, -inf, x1), (col2, 3, 12.3), (col3, -5, 19.3)],
+            ...
+            }
 
-    # def dbreaks(self, *args, **kvargs):
-    #      for k, n in kvargs.items():
-    #         args.append(k)
-    #         if isinstance(n, int):
-    #             n = (lambda n: lambda rs: nchunks(rs, n))(n)
-    #         args.append(n)
-        
-    #     d = OrderedDict()
-        
-    #     for rs in self.order(self.date).group(self.date):
-    #         date = rs[0][self.date]
-    #         for col, nfn in grouper(args, 2):
-    #             for i, rs1 in enumerate(nfn(rs.num(col).order(col)), 1):
+        examples:
 
-                    
-    #                 for i, rs2 in enumerate(valfn(rs1.order(col)), 1):
-    #                     bps.append(rs2[-1][col])
- 
-  
-    # def pnref(self, rs, pncols=None):
-    #     "refer break points of rs, rs is pn numbered rows"
-
-    #     pncols = listify(pncols) if pncols else \
-    #              [col for col in rs[0].columns if col.startswith('pn_')]
-    #     cols = [pncol[3:] for pncol in pncols]
-    #     ns = [max(r[pncol] for r in rs) for pncol in pncols]
-
-    #     for pncol in pncols:
-    #         self[pncol] = ''
- 
-    #     def pt(*args):
-    #         return rs.where(*(b for a in zip(pncols, args) for b in a))
-        
-    #     d = {}
-    #     def findmin(pns, i):
-    #         if pns[i] == 1:
-    #             return float('-inf')
-    #         pns1 = []
-    #         for k, pn in enumerate(pns):
-    #             if k == i:
-    #                 pns1.append(pn - 1)
-    #             else:
-    #                 pns1.append(pn)
-    #         return d[tuple(pns1)][i][1]
-
-    #     def findmax(pns, i, seq):
-    #         return float('inf') if pns[i] == ns[i] else max(seq)
-        
-
-    #     for pns in product(*(range(1, n + 1) for n in ns)):
-    #         rs1 = pt(*pns)
-    #         d[pns] = [(findmin(pns, i), findmax(pns, i, rs1[col]), col) \
-    #                  for i, col in enumerate(cols)]
-            
-    #         print('------------------------')
-    #         print(pns)
-    #         for col in cols:
-    #             print(min(rs1[col]), max(rs1[col]))
-    #         print(d[pns])
-                     
-    #         newrs = self.where(lambda r: all(r[col] > a and r[col] <= b \
-    #                            for a, b, col in d[pns]))
-    #         for pncol, pn in zip(pncols, pns):
-    #             newrs[pncol] = pn 
-
-    #     # for k, v in d.items():
-    #     #     print(k, v)
-
-    #     return self
-
-
-           
-
-    # def breaks(self, *args, **kvargs):
-    #     """Break points"""
-    #     for k, v in kvargs.items():
-    #         args.append(k)
-    #         args.append(v)
-        
-    #     d = OrderedDict()
-
-    #     xxs = []
-
-    #     self.order(self.date)
-    #     for col, valfn in grouper(args, 2):
-    #         pncol = 'pn_' + col
-    #         self[pncol] = ''
-    #         if isinstance(valfn, int):
-    #             valfn = (lambda n: lambda rs: nchunks(rs, n))(valfn)
-    #         bps = []
-            
-    #         for rs1 in self.num(col).group(self.date):
-    #             for i, rs2 in enumerate(valfn(rs1.order(col)), 1):
-    #                 bps.append(rs2[-1][col])
-    #         xs = []
-    #         for a, b in zip([float('-inf')] +  bps, bps[:-1] + [float('inf')]):
-    #             xs.append((a, b))
-    #         xxs.append(xs)
-    #     for x in xxs:
-    #         print(x)
-    #     print(xxs)
-    #     for a in product(*xxs):
-    #         print(a)
-    #         d[tuple(a.keys())] = a.values()
-    #     return d
-
-
-
-        
-    #     pass
-
-
-
-    # numbering portfolios, dependent sort
-    # rs.dpn('col1', 2, 'col2', 4) 
-    def dpn(self, *args, **kvargs):
-        """dependent sort
-        ex) self.pn('a', 10, 'b', lambda rs: [rs[:4], rs[4:]])"""
-
-        def assign(self, col, nfn, pncols):
-            pncol = 'pn_' + col
-            self[pncol] = ''
-
-            if isinstance(nfn, int):
-                nfn = (lambda nfn: lambda rs: nchunks(rs, nfn))(nfn)
-            # order must come first
-            for rs1 in self.order(self.date).num(pncols + [col]).group(self.date):
-                for rs2 in rs1.order(pncols + [col]).group(pncols):
-                    for pn, rs3 in enumerate(nfn(rs2), 1):
-                        Rows(rs3)[pncol] = pn
-            return self
-        
-        pncols = []
-        for col, n in grouper(args, 2):
-            assign(self, col, n, pncols)
-            pncols.append('pn_' + col)
-        for col, n in kvargs.items(): 
-            assign(self, col, n, pncols)
-            pncols.append('pn_' + col)
-        return self
-    
-    def dbps(self, *args, **kvargs):
-        """dependent sort break points"""
-        pass
-
-
-
-    # Number portfolios as you roll
-    # Just this time portfolio numbers are based on the first date values
-    # all the others simply follow the first one
-    # This will be useful when you make factor portfolios
-
-    def pnroll(self, period, *colns, **kvargs):
-        colns = list(colns)
+        """
+        keys = {'dependent', 'jump'}
+        dependent = kvargs['dependent'] if 'dependent' in kvargs else False
+        jump = kvargs['jump'] if 'jump' in kvargs else 1
+        args = list(args)
         for k, v in kvargs.items():
-            colns.append(k)
-            colns.append(v)
-        return self._pnroll('pn', period, colns)
+            if k not in keys:
+                args.append(k)
+                args.append(v)
 
-    def dpnroll(self, period, *colns, **kvargs):
-        colns = list(colns)
-        for k, v in kvargs.items():
-            colns.append(k)
-            colns.append(v)
-        return self._pnroll('dpn', period, colns)
+        newargs = OrderedDict()
+        for col, nfn in grouper(args, 2):
+            if hasattr(nfn, '__call__'):
+                newargs[col] = nfn
+            else:
+                newargs[col] = (lambda nfn: lambda seq: _bps(seq, nfn))(nfn)
 
-    def _pnroll(self, pnfn, period, colns):
-        "pnfn: method name string, dpn or pn"
-        cols = [col for col, _ in grouper(colns, 2)]
-        pncols = ['pn_' + col for col in cols]
+        if dependent:
+            return self._dbps(jump, **newargs)
+        else:
+            return self._ibps(jump, **newargs)
 
-        self[pncols] = ''
-        for rs in self.order(self.date).roll(period, period):
-            # first date rows
-            fdrows = next(rs.group(self.date))
-            # numbering the first rows, it means something like 
-            # fdrows.pn(*colns) or fdrows.dpn(*colns)
-            getattr(fdrows, pnfn)(*colns)
-            for rs1 in rs.order([self.id, self.date]).group(self.id):
-                rs1[pncols] = [rs1[0][pncol] for pncol in pncols]
-        return self
+    # dependent break points
+    def _dbps(self, jump, **kvargs):
+        self.order(self.date)
+        d = {}
 
+        def update(rs, col, fn, prev):
+            if not prev:
+                date = rs[0][self.date]
+                bs = fn(rs.order(col).num(col)[col])
+                cnt = 1 
+                for a, b in zip([float('-inf')] + bs, bs + [float('inf')]):
+                    d[(date, cnt)] = [(col, a, b)]
+                    cnt += 1
+            else:
+                date = rs[0][self.date]
+                newd = {}
+                for k, v in d.items():
+                    if k[0] == date and len(k) == prev + 1:
+                        rs1 = rs._rsbox(v)
+                        bs = fn(rs1.order(col).num(col)[col])
+                        cnt = 1
+                        for a, b in zip([float('-inf')] + bs, bs + [float('inf')]):
+                            newd[(date, *k[1:], cnt)] = v + [(col, a, b)]
+                            cnt += 1
+                for k, v in newd.items():
+                    d[k] = v
 
+        for rs in self.roll(1, jump):
+            date = rs[0][self.date]
+            prev = 0
+            for col, fn in kvargs.items():
+                update(rs, col, fn, prev)
+                prev += 1
 
+        newd = {}
+        n = len(kvargs)
+        for k, v in d.items():
+            if len(k) == n + 1:
+                newd[k] = v
+        return newd
+
+    # independent break points
+    def _ibps(self, jump, **kvargs):
+        self.order(self.date)
+        d = {}
+
+        for rs in self.roll(1, jump):
+            date = rs[0][self.date]
+            boxess = []
+            for col, fn in kvargs.items():
+                bs = fn(rs.order(col).num(col)[col])
+                boxes = []
+                for a, b in zip([float('-inf')] + bs, bs + [float('inf')]):
+                    boxes.append((col, a, b))
+                boxess.append(boxes)
+            pns = [(date, *x) for x in product(*(range(1, len(boxes) + 1) for boxes in boxess))]
+            for pns, box in zip(pns, product(*boxess)):
+                d[pns] = list(box)
+        return d
 
     def pavg(self, col, wcol=None, pncols=None):
         "portfolio average,  wcol: weight column"
@@ -337,6 +221,49 @@ class Rows:
                     result.append(r)
         return Rows(result, self.date)
 
+    def pn(self, *args, **kvargs):
+        """ number portfolios
+        
+        rs.pn(col1=10, col2=30)
+        rs.pn('col1', 10, 'col2', [0.3, 0.7])
+        rs.pn('col1', fn, 'col2', [0.3, 0.7])
+            fn: seq -> [0.3, 0.7]
+        rs.pn(brks, jump=12)
+
+        """
+        if len(args) == 0 or not isinstance(args[0], dict):
+            brks = self.breaks(*args, **kvargs)
+        else:
+            brks = args[0]
+        jump = kvargs['jump'] if 'jump' in kvargs else 1
+
+        cols = [x[0] for x in next(iter(brks.values()))]
+        pncols = ['pn_' + col for col in cols]
+
+        self[pncols] = ''
+
+        for rs in self.num(cols).roll(jump, jump):
+            # first date
+            fdate = rs[0][self.date]
+            
+            rs1 = rs.where(self.date, fdate)
+            
+            for k, v in brks.items():
+                if k[0] == fdate:
+                    rs1._rsbox(v)[pncols] = list(k[1:])
+            
+            for rs2 in rs.order([self.id, self.date]).group(self.id):
+                rs2[pncols] = [rs2[0][pncol] for pncol in pncols]
+        
+        return self
+
+ 
+    def _rsbox(self, box):
+        """
+        box: [('col1', 3, 10), ('col2', -3, 7.8)]
+        """
+        return self.where(lambda r: all([r[c] >= a and r[c] < b for c, a, b in box]))
+   
 
     def pat(self, col, pncols=None):
         "average pattern, returns a box"
@@ -462,6 +389,8 @@ class Rows:
                 return int(date) + period
             else:
                 raise ValueError('Invalid date', date)
+        
+        self.order(self.date)
 
         begdate = int(begdate) if begdate else self.rows[0][self.date]
         enddate = int(enddate) if enddate else self.rows[-1][self.date]
@@ -1265,3 +1194,29 @@ def rmap(fn, *rss):
 
 
 
+def _bps(seq, ps):
+    """ Returns break points from a sequence
+
+    Parameters:
+        seq: a sequence of numbers
+        ps: a squence of percentage break points ([0.3, 0.7])
+            or an integer
+    
+    Return value: a squence of break points
+    
+    Examples:
+        >>> _bps(range(10), [0.3, 0.7])
+        [2, 6]
+
+        # five chunks 
+        >>> _bps(range(10), 5)
+        [1, 3, 5, 7]
+    """
+    n = len(list(seq))
+
+    if isinstance(ps, int):
+        assert n >= ps, "Not enough sequence size to make break points"
+        return [s[-1] for s in nchunks(seq, ps)][:-1]
+    assert n > len(ps),  "Not enough sequence size to make break points"
+    return [seq[round(n * p) - 1] for p in ps]
+ 
