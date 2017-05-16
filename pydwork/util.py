@@ -34,8 +34,34 @@ def nchunks(xs, n):
             start += chunksize
 
 
-   
-   
+def bps(seq, ps):
+    """ Returns break points from a sequence
+
+    Parameters:
+        seq: a sequence of numbers
+        ps: a squence of percentage break points ([0.3, 0.7])
+            or an integer
+
+    Return value: a squence of break points
+
+    Examples:
+        >>> _bps(range(10), [0.3, 0.7])
+        [2, 6]
+
+        # five chunks
+        >>> _bps(range(10), 5)
+        [1, 3, 5, 7]
+    """
+    n = len(list(seq))
+
+    if isinstance(ps, int):
+        assert n >= ps, "Not enough sequence size to make break points"
+        return [s[-1] for s in nchunks(seq, ps)][:-1]
+    assert n > len(ps),  "Not enough sequence size to make break points"
+    return [seq[round(n * p) - 1] for p in ps]
+
+
+
 # copied from 'itertools'
 def grouper(iterable, n, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"

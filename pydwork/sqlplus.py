@@ -24,7 +24,8 @@ import statistics as st
 import warnings
 
 from .util import isnum, istext, yyyymm, yyyymmdd, grouper, mrepr, \
-    listify, camel2snake, peek_first, parse_model, star, random_string, nchunks
+    listify, camel2snake, peek_first, parse_model, star, random_string, \
+    nchunks, bps
 
 
 __all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box', 'rmap']
@@ -107,7 +108,7 @@ class Rows:
 
     def breaks(self, *args, **kvargs):
         """ break points for each date
-        
+
         return:
             {(201012, 1, 2, 4): [(co11, -inf, x1), (col2, 3, 12.3), (col3, -5, 19.3)],
             ...
@@ -130,7 +131,7 @@ class Rows:
             if hasattr(nfn, '__call__'):
                 newargs[col] = nfn
             else:
-                newargs[col] = (lambda nfn: lambda seq: _bps(seq, nfn))(nfn)
+                newargs[col] = (lambda nfn: lambda seq: bps(seq, nfn))(nfn)
 
         if dependent:
             return self._dbps(jump, **newargs)
@@ -146,7 +147,7 @@ class Rows:
             if not prev:
                 date = rs[0][self.date]
                 bs = fn(rs.order(col).num(col)[col])
-                cnt = 1 
+                cnt = 1
                 for a, b in zip([float('-inf')] + bs, bs + [float('inf')]):
                     d[(date, cnt)] = [(col, a, b)]
                     cnt += 1
@@ -223,7 +224,7 @@ class Rows:
 
     def pn(self, *args, **kvargs):
         """ number portfolios
-        
+
         rs.pn(col1=10, col2=30)
         rs.pn('col1', 10, 'col2', [0.3, 0.7])
         rs.pn('col1', fn, 'col2', [0.3, 0.7])
@@ -245,25 +246,25 @@ class Rows:
         for rs in self.num(cols).roll(jump, jump):
             # first date
             fdate = rs[0][self.date]
-            
+
             rs1 = rs.where(self.date, fdate)
-            
+
             for k, v in brks.items():
                 if k[0] == fdate:
                     rs1._rsbox(v)[pncols] = list(k[1:])
-            
+
             for rs2 in rs.order([self.id, self.date]).group(self.id):
                 rs2[pncols] = [rs2[0][pncol] for pncol in pncols]
-        
+
         return self
 
- 
+
     def _rsbox(self, box):
         """
         box: [('col1', 3, 10), ('col2', -3, 7.8)]
         """
         return self.where(lambda r: all([r[c] >= a and r[c] < b for c, a, b in box]))
-   
+
 
     def pat(self, col, pncols=None):
         "average pattern, returns a box"
@@ -284,13 +285,13 @@ class Rows:
             head.append(str(i))
         head.append(f'P{n}-P1[tval]')
         head.append('All(ts_avg no of obs)')
-        
+
         line = [col]
         for pn in range(1, n + 1):
             rs = self.where(pncol, pn)
             line.append(mrepr(rs[col], rs['n']))
 
-        seq = rmap(lambda r1, r2: r1[col] - r2[col], 
+        seq = rmap(lambda r1, r2: r1[col] - r2[col],
                    self.where(pncol, n), self.where(pncol, 1))
 
         line.append(mrepr(seq))
@@ -298,7 +299,7 @@ class Rows:
         rs = self.where(pncol, 0)
         line.append(mrepr(rs[col], rs['n']))
 
-        return Box([head, line]) 
+        return Box([head, line])
 
 
     def _pat2(self, col, pncol1, n1, pncol2, n2):
@@ -322,10 +323,10 @@ class Rows:
                 line.append(mrepr(rs[col], rs['n']))
             line.append(mrepr(sub(pt(i, n2), pt(i, 1))))
 
-            rs = pt(i, 0) 
-            line.append(mrepr(rs[col], rs['n'])) 
+            rs = pt(i, 0)
+            line.append(mrepr(rs[col], rs['n']))
             lines.append(line)
-        
+
         # bottom line
         line = [f'P{n1} - P1']
         for j in range(1, n2 + 1):
@@ -389,7 +390,7 @@ class Rows:
                 return int(date) + period
             else:
                 raise ValueError('Invalid date', date)
-        
+
         self.order(self.date)
 
         begdate = int(begdate) if begdate else self.rows[0][self.date]
@@ -526,11 +527,11 @@ class Rows:
                 pairs = [(k, v) for k, v in grouper(args, 2)]
                 for k, v in kvargs.items():
                     pairs.append((k, v))
-                return all(r[k] == v or v is None for k, v in pairs) 
+                return all(r[k] == v or v is None for k, v in pairs)
             return fn
 
         other = self.copy()
-        pred = _build_keyfn(args[0]) if len(args) == 1 else make_pred(args, kvargs) 
+        pred = _build_keyfn(args[0]) if len(args) == 1 else make_pred(args, kvargs)
         other.rows = [r for r in self.rows if pred(r)]
         return other
 
@@ -741,7 +742,7 @@ class SQLPlus:
 
         # So you save the iterator up in another query and reel off it
 
-        # not using 'with open' for windows 
+        # not using 'with open' for windows
         try:
             # delete=false is for windows
             f = tempfile.NamedTemporaryFile(delete=False)
@@ -1193,30 +1194,3 @@ def rmap(fn, *rss):
     return seq
 
 
-
-def _bps(seq, ps):
-    """ Returns break points from a sequence
-
-    Parameters:
-        seq: a sequence of numbers
-        ps: a squence of percentage break points ([0.3, 0.7])
-            or an integer
-    
-    Return value: a squence of break points
-    
-    Examples:
-        >>> _bps(range(10), [0.3, 0.7])
-        [2, 6]
-
-        # five chunks 
-        >>> _bps(range(10), 5)
-        [1, 3, 5, 7]
-    """
-    n = len(list(seq))
-
-    if isinstance(ps, int):
-        assert n >= ps, "Not enough sequence size to make break points"
-        return [s[-1] for s in nchunks(seq, ps)][:-1]
-    assert n > len(ps),  "Not enough sequence size to make break points"
-    return [seq[round(n * p) - 1] for p in ps]
- 
