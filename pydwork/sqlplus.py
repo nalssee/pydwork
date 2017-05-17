@@ -266,20 +266,23 @@ class Rows:
         return self.where(lambda r: all([r[c] >= a and r[c] < b for c, a, b in box]))
 
 
-    def pat(self, col, pncols=None):
+    def pat(self, col, pncols=None, reprfn=None):
         "average pattern, returns a box"
+
+        reprfn = reprfn if reprfn else lambda rs: mrepr(rs[col], rs['n'])
+
         pncols = listify(pncols) if pncols else \
                  [col for col in self.rows[0].columns if col.startswith('pn_')]
         ns = [max(r[pncol] for r in self.rows) for pncol in pncols]
 
         if len(pncols) == 1:
-            return self._pat1(col, pncols[0], ns[0])
+            return self._pat1(col, pncols[0], ns[0], reprfn)
         elif len(pncols) == 2:
-            return self._pat2(col, pncols[0], ns[0], pncols[1], ns[1])
+            return self._pat2(col, pncols[0], ns[0], pncols[1], ns[1], reprfn)
         else:
             raise ValueError("Invalid pncols")
 
-    def _pat1(self, col, pncol, n):
+    def _pat1(self, col, pncol, n, reprfn):
         head = [pncol[3:]]
         for i in range(1, n + 1):
             head.append(str(i))
@@ -289,7 +292,7 @@ class Rows:
         line = [col]
         for pn in range(1, n + 1):
             rs = self.where(pncol, pn)
-            line.append(mrepr(rs[col], rs['n']))
+            line.append(reprfn(rs)) 
 
         seq = rmap(lambda r1, r2: r1[col] - r2[col],
                    self.where(pncol, n), self.where(pncol, 1))
@@ -297,12 +300,12 @@ class Rows:
         line.append(mrepr(seq))
 
         rs = self.where(pncol, 0)
-        line.append(mrepr(rs[col], rs['n']))
+        line.append(reprfn(rs)) 
 
         return Box([head, line])
 
 
-    def _pat2(self, col, pncol1, n1, pncol2, n2):
+    def _pat2(self, col, pncol1, n1, pncol2, n2, reprfn):
         def sub(rs1, rs2):
             return rmap(lambda r1, r2: r1[col] - r2[col], rs1, rs2)
         def pt(i, j):
@@ -320,11 +323,11 @@ class Rows:
             line = [str(i)]
             for j in list(range(1, n2 + 1)):
                 rs = pt(i, j)
-                line.append(mrepr(rs[col], rs['n']))
+                line.append(reprfn(rs)) 
             line.append(mrepr(sub(pt(i, n2), pt(i, 1))))
 
             rs = pt(i, 0)
-            line.append(mrepr(rs[col], rs['n']))
+            line.append(reprfn(rs)) 
             lines.append(line)
 
         # bottom line
@@ -344,11 +347,11 @@ class Rows:
         line = ['All']
         for j in range(1, n2 + 1):
             rs = pt(0, j)
-            line.append(mrepr(rs[col], rs['n']))
+            line.append(reprfn(rs)) 
 
         line.append(mrepr(sub(pt(0, n2), pt(0, 1))))
         rs = pt(0, 0)
-        line.append(mrepr(rs[col], rs['n']))
+        line.append(reprfn(rs)) 
         lines.append(line)
         return Box([head] + lines)
 
