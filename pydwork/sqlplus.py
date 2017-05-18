@@ -1090,7 +1090,7 @@ def _csv(rows, file, cols):
         _write_all(seq_values, file)
     elif isinstance(file, str):
         try:
-            fout = open(os.path.join(WORKSPACE, file), 'w')
+            fout = open(os.path.join(WORKSPACE, file), 'w', encoding='utf8')
             _write_all(seq_values, fout)
         finally:
             fout.close()
