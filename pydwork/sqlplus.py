@@ -28,7 +28,7 @@ from .util import isnum, istext, yyyymm, yyyymmdd, grouper, mrepr, \
     nchunks, bps
 
 
-__all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box', 'rmap']
+__all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box', 'rmap', 'sql']
 
 
 workspace = ''
@@ -532,6 +532,13 @@ class Rows:
                     pairs.append((k, v))
                 return all(r[k] == v or v is None for k, v in pairs)
             return fn
+
+        if len(args) == 1 and isinstance(args[0], str) and not kvargs:
+            stmt = 'select * from temp where ' + args[0]
+            other = self.copy()
+            rs = sql(stmt, temp=self)
+            other.rows = rs.rows
+            return other
 
         other = self.copy()
         pred = _build_keyfn(args[0]) if len(args) == 1 else make_pred(args, kvargs)
@@ -1197,3 +1204,10 @@ def rmap(fn, *rss):
     return seq
 
 
+def sql(stmt, **kvargs):
+    with dbopen(':memory:') as c:
+        for k, v in kvargs.items():
+            c.save(v, k)
+        return c.rows(stmt)
+
+    
