@@ -1070,7 +1070,8 @@ def _sqlite3_save(cursor, srows, table_name, column_names):
 
 def _write_all(lines, file):
     "Write all to csv"
-    w = csv.writer(file)
+    # you need to pass newline for Windows
+    w = csv.writer(file, lineterminator='\n')
     for line in lines:
         w.writerow(line)
 
@@ -1089,8 +1090,7 @@ def _csv(rows, file, cols):
         _write_all(seq_values, file)
     elif isinstance(file, str):
         try:
-            # you need to pass newline for Windows
-            fout = open(os.path.join(WORKSPACE, file), 'w', newline='')
+            fout = open(os.path.join(WORKSPACE, file), 'w')
             _write_all(seq_values, fout)
         finally:
             fout.close()
