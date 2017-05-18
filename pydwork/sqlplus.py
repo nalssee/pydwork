@@ -33,6 +33,8 @@ __all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box', 'rmap', 'sql']
 
 workspace = ''
 
+ENCODING = 'cp949' if os.name == 'nt' else 'utf8'
+
 class Row:
     "mutable version of sqlite3.row"
     # works for python 3.6 and higher
@@ -888,7 +890,7 @@ def _csv_reel(csv_file):
     if not csv_file.endswith('.csv'):
         csv_file += '.csv'
 
-    with open(os.path.join(WORKSPACE, csv_file), encoding='utf8') as fin:
+    with open(os.path.join(WORKSPACE, csv_file), encoding=ENCODING) as fin:
         first_line = fin.readline()[:-1]
         columns = _gen_valid_column_names(listify(first_line))
         ncol = len(columns)
@@ -1090,7 +1092,7 @@ def _csv(rows, file, cols):
         _write_all(seq_values, file)
     elif isinstance(file, str):
         try:
-            fout = open(os.path.join(WORKSPACE, file), 'w', encoding='cp949')
+            fout = open(os.path.join(WORKSPACE, file), 'w', encoding=ENCODING)
             _write_all(seq_values, fout)
         finally:
             fout.close()
