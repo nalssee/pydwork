@@ -380,7 +380,7 @@ def mrepr(seq1, seq2=None):
 
         m = st.mean(seq1)
         n = round(st.mean(seq2))
-        return f'{star(m, tstat[1])} [{n}]'
+        return f'{star(m, tstat[1])} <{n}>'
 
     def rep_tval():
         "sequence of numbers with t val"
