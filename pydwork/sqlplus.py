@@ -28,10 +28,12 @@ from .util import isnum, istext, yyyymm, yyyymmdd, grouper, mrepr, \
     nchunks, bps
 
 
-__all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box', 'rmap']
+__all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box', 'rmap', 'sql']
 
 
 workspace = ''
+
+ENCODING = 'cp949' if os.name == 'nt' else 'utf8'
 
 class Row:
     "mutable version of sqlite3.row"
@@ -533,6 +535,13 @@ class Rows:
                 return all(r[k] == v or v is None for k, v in pairs)
             return fn
 
+        if len(args) == 1 and isinstance(args[0], str) and not kvargs:
+            stmt = 'select * from temp where ' + args[0]
+            other = self.copy()
+            rs = sql(stmt, temp=self)
+            other.rows = rs.rows
+            return other
+
         other = self.copy()
         pred = _build_keyfn(args[0]) if len(args) == 1 else make_pred(args, kvargs)
         other.rows = [r for r in self.rows if pred(r)]
@@ -881,7 +890,7 @@ def _csv_reel(csv_file):
     if not csv_file.endswith('.csv'):
         csv_file += '.csv'
 
-    with open(os.path.join(WORKSPACE, csv_file), encoding='utf8') as fin:
+    with open(os.path.join(WORKSPACE, csv_file), encoding=ENCODING) as fin:
         first_line = fin.readline()[:-1]
         columns = _gen_valid_column_names(listify(first_line))
         ncol = len(columns)
@@ -1063,7 +1072,8 @@ def _sqlite3_save(cursor, srows, table_name, column_names):
 
 def _write_all(lines, file):
     "Write all to csv"
-    w = csv.writer(file)
+    # you need to pass newline for Windows
+    w = csv.writer(file, lineterminator='\n')
     for line in lines:
         w.writerow(line)
 
@@ -1082,8 +1092,7 @@ def _csv(rows, file, cols):
         _write_all(seq_values, file)
     elif isinstance(file, str):
         try:
-            # you need to pass newline for Windows
-            fout = open(os.path.join(WORKSPACE, file), 'w', newline='')
+            fout = open(os.path.join(WORKSPACE, file), 'w', encoding=ENCODING)
             _write_all(seq_values, fout)
         finally:
             fout.close()
@@ -1197,3 +1206,10 @@ def rmap(fn, *rss):
     return seq
 
 
+def sql(stmt, **kvargs):
+    with dbopen(':memory:') as c:
+        for k, v in kvargs.items():
+            c.save(v, k)
+        return c.rows(stmt)
+
+    

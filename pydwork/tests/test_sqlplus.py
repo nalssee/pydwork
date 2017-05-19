@@ -330,6 +330,21 @@ class TestMisc2(unittest.TestCase):
             self.assertEqual(len(c.rows('iris')), 50)
 
 
+    def test_sql(self):
+        with dbopen(':memory:') as c:
+            c.save('iris.csv')
+            rs1 = c.rows('iris')
+            rs2 = c.rows('iris')
+            rs3 = sql("""
+            select a.*, b.sepal_length as sl2 
+            from t1 as a 
+            left join t2 as b 
+            on a.col == b.col
+            """, t1=rs1, t2=rs2)
+            self.assertEqual(rs3[0].sl2, 5.1)
+            self.assertEqual(len(rs1.where('col > 10 and col <= 20')), 10)
+
+
 if os.name != 'nt':
     class TestPmap(unittest.TestCase):
         def test_pmap(self):
