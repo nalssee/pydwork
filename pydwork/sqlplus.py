@@ -670,12 +670,14 @@ class SQLPlus:
         self.conn = sqlite3.connect(dbfile)
         self._cursor = self.conn.cursor()
         self.tables = self._list_tables()
+        self.dims = {}
 
         # load some user-defined functions from helpers.py
         self.conn.create_function('isnum', 1, isnum)
         self.conn.create_function('istext', 1, istext)
         self.conn.create_function('yyyymm', 2, yyyymm)
         self.conn.create_function('yyyymmdd', 2, yyyymmdd)
+    
 
     # args can be a list, a tuple or a dictionary
     # It is unlikely that we need to worry about the security issues
@@ -712,7 +714,7 @@ class SQLPlus:
     def df(self, query, cols=None, args=()):
         return self.rows(query, args=args).df(cols)
 
-    def save(self, x, name=None, fn=None, args=()):
+    def save(self, x, name=None, d1=None, d2=None, fn=None, args=()):
         """create a table from an iterator.
 
         ALWAYS OVERWRITES!!!
@@ -729,12 +731,16 @@ class SQLPlus:
             and x.split()[0].lower() == 'select' \
             and (fn is None):
 
+            name = name if name else _get_name_from_query(query)
+            self.dims[name] = (d1, d2)
+
             return self._new(x, name, args)
 
         name1, rows = _x2rows(x, self._cursor, args)
         name = name or name1
         if not name:
             raise ValueError('table name required')
+        self.dims[name] = (d1, d2)
 
         temp_name = 'table_' + random_string(10)
 
@@ -818,16 +824,12 @@ class SQLPlus:
         tables = [row[1].lower() for row in query]
         return sorted(tables)
 
+
+
     def _new(self, query, name, args):
         """Create new table from query
         """
-        def get_name_from_query(query):
-            query_list = query.lower().split()
-            idx = query_list.index('from')
-            return query_list[idx + 1]
-
         temp_name = 'table_' + random_string(10)
-        name = name if name else get_name_from_query(query)
 
         self.run(f"create table if not exists { temp_name } as { query }",
                  args=args)
@@ -1213,3 +1215,10 @@ def sql(stmt, **kvargs):
         return c.rows(stmt)
 
     
+def _get_name_from_query(query):
+    """'select * from foo where ...' => foo
+    """
+    query_list = query.lower().split()
+    idx = query_list.index('from')
+    return query_list[idx + 1]
+
