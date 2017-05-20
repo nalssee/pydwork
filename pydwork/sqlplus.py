@@ -33,7 +33,7 @@ __all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box', 'rmap', 'sql']
 
 workspace = ''
 
-ENCODING = 'cp949' if os.name == 'nt' else 'utf8'
+ENCODING = 'utf8'
 
 class Row:
     "mutable version of sqlite3.row"
