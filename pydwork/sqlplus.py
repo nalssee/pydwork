@@ -101,12 +101,12 @@ class Rows:
     # see 'where' method, you must return 'self' but it's not efficient
     # (at least afaik) if you inherit list
 
-    def __init__(self, rows, date=None, id=None):
+    def __init__(self, rows, d1=None, d2=None):
         self.rows = list(rows)
         # date column name
-        self.date = date
+        self.d1 = d1 
         # id column name
-        self.id = id
+        self.d2 = d2  
 
     def breaks(self, *args, **kvargs):
         """ break points for each date
@@ -142,19 +142,19 @@ class Rows:
 
     # dependent break points
     def _dbps(self, jump, **kvargs):
-        self.order(self.date)
+        self.order(self.d1)
         d = {}
 
         def update(rs, col, fn, prev):
             if not prev:
-                date = rs[0][self.date]
+                date = rs[0][self.d1]
                 bs = fn(rs.order(col).num(col)[col])
                 cnt = 1
                 for a, b in zip([float('-inf')] + bs, bs + [float('inf')]):
                     d[(date, cnt)] = [(col, a, b)]
                     cnt += 1
             else:
-                date = rs[0][self.date]
+                date = rs[0][self.d1]
                 newd = {}
                 for k, v in d.items():
                     if k[0] == date and len(k) == prev + 1:
@@ -168,7 +168,7 @@ class Rows:
                     d[k] = v
 
         for rs in self.roll(1, jump):
-            date = rs[0][self.date]
+            date = rs[0][self.d1]
             prev = 0
             for col, fn in kvargs.items():
                 update(rs, col, fn, prev)
@@ -183,11 +183,11 @@ class Rows:
 
     # independent break points
     def _ibps(self, jump, **kvargs):
-        self.order(self.date)
+        self.order(self.d1)
         d = {}
 
         for rs in self.roll(1, jump):
-            date = rs[0][self.date]
+            date = rs[0][self.d1]
             boxess = []
             for col, fn in kvargs.items():
                 bs = fn(rs.order(col).num(col)[col])
@@ -207,22 +207,22 @@ class Rows:
         pncols = listify(pncols) if pncols else \
                  [col for col in self.rows[0].columns if col.startswith('pn_')]
 
-        self.order(self.date)
+        self.order(self.d1)
         newrs = self.num(pncols + [col, wcol]) if wcol else self.num(pncols + [col])
 
         result = []
-        for rs in newrs.group(self.date):
+        for rs in newrs.group(self.d1):
             for pncols1 in product(*([pncol, None] for pncol in pncols)):
                 pncols1 = [pncol for pncol in pncols1 if pncol]
                 for rs1 in rs.order(pncols1).group(pncols1):
                     r = Row()
-                    r[self.date] = rs[0][self.date]
+                    r[self.d1] = rs[0][self.d1]
                     r.n = len(rs1)
                     for pncol in pncols:
                         r[pncol] = rs1[0][pncol] if pncol in pncols1 else 0
                     r[col] = rs1.wavg(col, wcol)
                     result.append(r)
-        return Rows(result, self.date)
+        return Rows(result, self.d1)
 
     def pn(self, *args, **kvargs):
         """ number portfolios
@@ -247,15 +247,15 @@ class Rows:
 
         for rs in self.num(cols).roll(jump, jump):
             # first date
-            fdate = rs[0][self.date]
+            fdate = rs[0][self.d1]
 
-            rs1 = rs.where(self.date, fdate)
+            rs1 = rs.where(self.d1, fdate)
 
             for k, v in brks.items():
                 if k[0] == fdate:
                     rs1._rsbox(v)[pncols] = list(k[1:])
 
-            for rs2 in rs.order([self.id, self.date]).group(self.id):
+            for rs2 in rs.order([self.d2, self.d1]).group(self.d2):
                 rs2[pncols] = [rs2[0][pncol] for pncol in pncols]
 
         return self
@@ -369,18 +369,18 @@ class Rows:
         "Fama Macbeth"
         xvs = ['intercept'] + parse_model(model)[1:]
         params = []
-        for rs1 in self.order(self.date).group(self.date):
+        for rs1 in self.order(self.d1).group(self.d1):
             rs1 = rs1.num(parse_model(model))
             if len(rs1) >= 2:
                 reg = rs1.ols(model)
                 r = Row()
-                r[self.date] = rs1[0][self.date]
+                r[self.d1] = rs1[0][self.d1]
                 for var, p in zip(xvs, reg.params):
                     r[var] = p
                 r.n = int(reg.nobs)
                 r.r2 = reg.rsquared
                 params.append(r)
-        return Rows(params, self.date)
+        return Rows(params, self.d1)
 
     def roll(self, period, jump, begdate=None, enddate=None):
         "group rows over time, allowing overlaps"
@@ -396,10 +396,10 @@ class Rows:
             else:
                 raise ValueError('Invalid date', date)
 
-        self.order(self.date)
+        self.order(self.d1)
 
-        begdate = int(begdate) if begdate else self.rows[0][self.date]
-        enddate = int(enddate) if enddate else self.rows[-1][self.date]
+        begdate = int(begdate) if begdate else self.rows[0][self.d1]
+        enddate = int(enddate) if enddate else self.rows[-1][self.d1]
 
         while begdate <= enddate:
             yield self.between(begdate, get_nextdate(begdate, period))
@@ -408,9 +408,9 @@ class Rows:
     def between(self, beg, end=None):
         "begdate <= x <  enddate"
         if end:
-            return self.where(lambda r: r[self.date] >= beg and r[self.date] < end)
+            return self.where(lambda r: r[self.d1] >= beg and r[self.d1] < end)
         else:
-            return self.where(lambda r: r[self.date] >= beg)
+            return self.where(lambda r: r[self.d1] >= beg)
 
     def __len__(self):
         return len(self.rows)
