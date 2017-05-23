@@ -23,9 +23,9 @@ import statsmodels.formula.api as sm
 import statistics as st
 import warnings
 
-from .util import isnum, istext, yyyymm, yyyymmdd, grouper, mrepr, \
+from .util import isnum, istext, ymd, grouper, mrepr, \
     listify, camel2snake, peek_first, parse_model, star, random_string, \
-    nchunks, bps
+    nchunks, bps, dictify
 
 
 __all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box', 'rmap', 'sql']
@@ -33,7 +33,7 @@ __all__ = ['dbopen', 'Row', 'Rows', 'set_workspace', 'Box', 'rmap', 'sql']
 
 workspace = ''
 
-ENCODING = 'utf8'
+ENCODING = 'cp949' if os.name == 'nt' else 'utf8'
 
 class Row:
     "mutable version of sqlite3.row"
@@ -142,6 +142,7 @@ class Rows:
 
     # dependent break points
     def _dbps(self, jump, **kvargs):
+
         self.order(self.d1)
         d = {}
 
@@ -167,7 +168,7 @@ class Rows:
                 for k, v in newd.items():
                     d[k] = v
 
-        for rs in self.roll(1, jump):
+        for rs in self.roll({next(iter(jump)): 1}, jump):
             date = rs[0][self.d1]
             prev = 0
             for col, fn in kvargs.items():
@@ -186,7 +187,7 @@ class Rows:
         self.order(self.d1)
         d = {}
 
-        for rs in self.roll(1, jump):
+        for rs in self.roll({next(iter(jump)): 1}, jump):
             date = rs[0][self.d1]
             boxess = []
             for col, fn in kvargs.items():
@@ -238,7 +239,7 @@ class Rows:
             brks = self.breaks(*args, **kvargs)
         else:
             brks = args[0]
-        jump = kvargs['jump'] if 'jump' in kvargs else 1
+        jump = kvargs['jump'] if 'jump' in kvargs else 2
 
         cols = [x[0] for x in next(iter(brks.values()))]
         pncols = ['pn_' + col for col in cols]
@@ -382,28 +383,19 @@ class Rows:
                 params.append(r)
         return Rows(params, self.d1)
 
-    def roll(self, period, jump, begdate=None, enddate=None):
+    def roll(self, period=None, jump=None, begdate=None, enddate=None):
         "group rows over time, allowing overlaps"
-        def get_nextdate(date, period):
-            "date after the period"
-            date = str(date)
-            if len(date) == 8:
-                return yyyymmdd(date, period)
-            elif len(date) == 6:
-                return yyyymm(date, period)
-            elif len(date) == 4:
-                return int(date) + period
-            else:
-                raise ValueError('Invalid date', date)
-
         self.order(self.d1)
 
-        begdate = int(begdate) if begdate else self.rows[0][self.d1]
-        enddate = int(enddate) if enddate else self.rows[-1][self.d1]
+        period = dictify(period)
+        jump = dictify(jump)
+        begdate = begdate if begdate else self.rows[0][self.d1]
+        enddate = enddate if enddate else self.rows[-1][self.d1]
 
         while begdate <= enddate:
-            yield self.between(begdate, get_nextdate(begdate, period))
-            begdate = get_nextdate(begdate, jump)
+            print(begdate)
+            yield self.between(begdate, ymd(begdate, **period))
+            begdate = ymd(begdate, **jump)
 
     def between(self, beg, end=None):
         "begdate <= x <  enddate"
@@ -667,17 +659,42 @@ class SQLPlus:
         """
         if dbfile != ':memory:':
             dbfile = os.path.join(WORKSPACE, dbfile)
+
+        self._mtable = '__highly_unlikely_name_for_a_metatable_for_tables__' 
         self.conn = sqlite3.connect(dbfile)
         self._cursor = self.conn.cursor()
         self.tables = self._list_tables()
-        self.dims = {}
+
+        if not self._mtable in self.tables:
+            stmt = _create_statement(self._mtable, ['name', 'd1', 'd2'])
+            self._cursor.execute(stmt)
+
+        self.dims = self._fetch_dims()
 
         # load some user-defined functions from helpers.py
         self.conn.create_function('isnum', 1, isnum)
         self.conn.create_function('istext', 1, istext)
-        self.conn.create_function('yyyymm', 2, yyyymm)
-        self.conn.create_function('yyyymmdd', 2, yyyymmdd)
-    
+        self.conn.create_function('ymd', -1, ymd)
+
+        # self.conn.create_function('yyyymmdd', 2, yyyymmdd)
+        # self.conn.create_function('yyyymmdd', 2, yyyymmdd)
+
+    def _fetch_dims(self):
+        d = {}
+        for r in self.reel(self._mtable):
+            d[r.name] = (r.d1, r.d2)
+        return d
+
+    def set_dims(self, table, d1, d2=None):
+        d = self._fetch_dims()
+        d[table] = (d1, d2)
+        self._cursor.execute(f'delete from {self._mtable}')
+
+        stmt = _insert_statement(self._mtable, 3)
+        for k, v in d.items():
+            self._cursor.execute(stmt, (k, *v))
+        self.dims = d
+
 
     # args can be a list, a tuple or a dictionary
     # It is unlikely that we need to worry about the security issues
@@ -731,8 +748,8 @@ class SQLPlus:
             and x.split()[0].lower() == 'select' \
             and (fn is None):
 
-            name = name if name else _get_name_from_query(query)
-            self.dims[name] = (d1, d2)
+            name = name if name else _get_name_from_query(x)
+            self.set_dims(name, d1, d2)
 
             return self._new(x, name, args)
 
@@ -740,8 +757,10 @@ class SQLPlus:
         name = name or name1
         if not name:
             raise ValueError('table name required')
-        self.dims[name] = (d1, d2)
 
+        self.set_dims(name, d1, d2)
+
+        self.dims[name] = (d1, d2)
         temp_name = 'table_' + random_string(10)
 
         rows1 = (fn(r) for r in rows) if fn else rows
@@ -824,8 +843,6 @@ class SQLPlus:
         tables = [row[1].lower() for row in query]
         return sorted(tables)
 
-
-
     def _new(self, query, name, args):
         """Create new table from query
         """
@@ -835,6 +852,88 @@ class SQLPlus:
                  args=args)
         self.run(f'drop table if exists { name }')
         self.run(f"alter table { temp_name } rename to { name }")
+        
+    def ljoin(self, tables, name=None):
+        def parse_table(table):
+            p = table.find(' ')
+            if p == -1:     
+                return table, ''
+            return table[0:p], table[p:].strip()
+
+        def getcols(table):
+            return next(self.reel(table)).columns 
+
+        tbls = OrderedDict()
+        for table in listify(tables):
+            tname, delta = parse_table(table)
+            tbls[tname] = delta
+        
+        t0 = next(iter(tbls))
+        assert not tbls[t0], 'Fist table should not contain keys'
+        for table in tbls:
+            assert any(d for d in self.dims[table]), 'dim must be set before merging'
+
+        # second to last tables
+        tables = list(iter(tbls))[1:]
+        tempstr = random_string()
+
+        temptables = []
+        # save table with modified d1 col
+        for table in tables:
+            # if relative delta exists 
+            delta = tbls[table]
+            if delta:
+                # only one relative delta condition is allowed, like 'months=3'
+                assert len(delta.split('=')) == 2
+                ds = self.dims[table]
+                stmt = f"""
+                select *, ymd({ds[0]}, '{delta}') as {ds[0]}_{tempstr}
+                from {table}
+                """
+                newtable = f"{table}_{tempstr}" 
+                self.save(stmt, newtable, d1=ds[0], d2=ds[1])
+                temptables.append(newtable)
+
+        cols = [f'{t0}.{col}' for col in getcols(t0)]
+        cols_set = set(getcols(t0))
+        conds = []
+        ds0 = self.dims[t0] 
+
+        for table in tables:
+            delta = tbls[table]
+            table = table + '_' + tempstr if delta else table
+
+            ds = self.dims[table]
+            cs = [col for col in getcols(table) \
+                  if not (col in cols_set or col in ds or col == ds[0] + '_' + tempstr)]
+            cols += [f'{table}.{c}' for c in cs]
+            cols_set |= set(cs)
+
+            cond = []
+            if ds0[0] and ds[0]:
+                if delta:
+                    cond.append(f'{t0}.{ds0[0]} = {table}.{ds[0]}_{tempstr}')
+                else:
+                    cond.append(f'{t0}.{ds0[0]} = {table}.{ds[0]}')
+
+            for dx, dy in zip(ds0[1:], ds[1:]):
+                if dx and dy:
+                    cond.append(f'{t0}.{dx} = {table}.{dy}')
+
+            # reversing seems to be faster in SQLite3 not sure tho
+            cond = ' and '.join(reversed(cond))
+            conds.append(f'left join {table} \non {cond}')
+
+        cols = ', '.join(cols)
+        conds = '\n'.join(conds)
+        
+        stmt = f"select {cols} \nfrom {t0} \n{conds}"
+        # print(stmt)
+        self.save(stmt, name if name else t0, d1=ds[0], d2=ds[1])
+        for table in temptables:
+            self.drop(table)                
+
+
 
 
 @contextmanager
@@ -1222,3 +1321,13 @@ def _get_name_from_query(query):
     idx = query_list.index('from')
     return query_list[idx + 1]
 
+# inferior ymd
+# def _ymd(date, jump):
+#     d = {}
+#     for x in listify(jump):
+#         a, b = x.split('=')
+#         d[a.strip()] = int(b)
+#     return ymd(date, **d)
+
+
+    

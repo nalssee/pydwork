@@ -12,8 +12,8 @@ PYPATH = os.path.join(TESTPATH, '..', '..')
 sys.path.append(PYPATH)
 
 from pydwork.sqlplus import *
-from pydwork.util import mpairs, isnum, istext, yyyymm, yyyymmdd, \
-    prepend_header, pmap, grouper, same
+from pydwork.util import mpairs, isnum, istext, \
+    prepend_header, pmap, grouper, same, ymd, dictify
 
 def mean0(seq):
     return round(st.mean(seq), 3)
@@ -78,7 +78,7 @@ class Testdbopen(unittest.TestCase):
             # All of the rows in a table is grouped.
             self.assertEqual(len(list(c.reel('first_char'))), 150)
             # list_tables, in alphabetical order
-            self.assertEqual(c.tables, ['first_char', 'top20_sl'])
+            self.assertEqual(c.tables[1:], ['first_char', 'top20_sl'])
 
             # get the whole rows
             for rs in c.reel('top20_sl', group=lambda r: 1):
@@ -544,8 +544,8 @@ class TestUserDefinedFunctions(unittest.TestCase):
 
             r = next(c.reel(
                 """
-                select *, yyyymmdd(date, '12 months') as yyyymm1,
-                yyyymmdd(date, '365 days') as yyyymmdd1
+                select *, ymd(date, 'months=12') as yyyymm1,
+                ymd(date, 'days=365') as yyyymmdd1
                 from indport
                 where date >= 20160801
                 """))
@@ -625,13 +625,13 @@ class TestPort(unittest.TestCase):
         rs2 = []
         start_month = 200101
         for i in range(36):
-            rs2.append(Row(yyyymm=yyyymm(start_month, i)))
+            rs2.append(Row(yyyymm=ymd(start_month, months=i)))
         self.rs2 = Rows(rs2, 'yyyymm')
 
         rs3 = []
         start_date = 20010101
         for i in range(30):
-            rs3.append(Row(yyyymmdd=yyyymmdd(start_date, i)))
+            rs3.append(Row(yyyymmdd=ymd(start_date, days=i)))
         self.rs3 = Rows(rs3, 'yyyymmdd')
 
         with dbopen(':memory:') as c:
@@ -734,8 +734,6 @@ class TestPort(unittest.TestCase):
         self.assertEqual(self.indport.pn('cnsmr', 2).pavg('other').pat('other').lines,
                          self.indport.pn('cnsmr', [0.5]).pavg('other').pat('other').lines)
 
-    
-
     def test_dpn(self):
         avgport = self.indport.pn(cnsmr=4, manuf=3, hlth=2, dependent=True).pavg('other')
 
@@ -755,15 +753,24 @@ class TestPort(unittest.TestCase):
 
 
     def test_pnroll(self):
-        a = self.indport.between(2003).pn(cnsmr=5, manuf=4, jump=5)
-        for rs in a.roll(5, 5):
-            for rs1 in rs.order('fcode, yyyy').group('fcode'):
-                self.assertTrue(same(rs1['pn_cnsmr, pn_manuf']))
+        print(ymd(201312, 'years: 5'))
+        print(ymd(201312, '  5 year, 3 months'))
+        print(ymd(201312, '  years= 12'))
+        
 
-        a = self.indport.between(2003).pn(cnsmr=5, manuf=4, hi_tec=3, jump=5)
-        for rs in a.roll(5, 5):
-            for rs1 in rs.order('fcode, yyyy').group('fcode'):
-                self.assertTrue(same(rs1['pn_cnsmr, pn_manuf, pn_hi_tec']))
+
+        # a = self.indport.between(2003).pn(cnsmr=5, manuf=4, jump='years: 5')
+        # for rs in a.roll('year=5', 'years:5'):
+        #     for rs1 in rs.order('fcode, yyyy').group('fcode'):
+        #         self.assertTrue(same(rs1['pn_cnsmr, pn_manuf']))
+        # print(ymd(201203, '5 years'))
+        # a = self.indport.between(2003).pn(cnsmr=5, manuf=4, hi_tec=3, jump={'years': 5})
+
+        # a = self.indport.between(2003).pn(cnsmr=5, manuf=4, hi_tec=3, jump='years: 5')
+
+        # for rs in a.roll('years:5', '5 years'):
+        #     for rs1 in rs.order('fcode, yyyy').group('fcode'):
+        #         self.assertTrue(same(rs1['pn_cnsmr, pn_manuf, pn_hi_tec']))
 
 
     def test_famac(self):
@@ -779,26 +786,70 @@ class TestPort(unittest.TestCase):
             self.assertEqual(mean1(fit[var]), val)
 
     def test_rollover(self):
+        print('yeah')
+        print(dictify('months:12'))
         lengths = []
-        for rs0 in self.rs1.roll(3, 2):
+        for rs0 in self.rs1.roll('years=3', 'years=2'):
             lengths.append(len(rs0))
         self.assertEqual(lengths, [3, 3, 3, 3, 2])
 
         lengths = []
-        for rs0 in self.rs2.where(lambda r: r.yyyymm > 200103).roll(12, 12):
+        for rs0 in self.rs2.where(lambda r: r.yyyymm > 200103)\
+            .roll('months:12', 'months:12'):
             lengths.append(len(rs0))
         self.assertEqual(lengths, [12, 12, 9])
 
-        lengths = []
-        for rs0 in self.rs2.where(lambda r: r.yyyymm > 200103).roll(24, 12):
-            lengths.append(len(rs0))
-        self.assertEqual(lengths, [24, 21, 9])
+        # lengths = []
+        # for rs0 in self.rs2.where(lambda r: r.yyyymm > 200103)\
+        #     .roll('24 months', '12 months'):
+        #     lengths.append(len(rs0))
+        # self.assertEqual(lengths, [24, 21, 9])
 
-        lengths = []
-        for rs0 in self.rs3.roll('2 weeks', '1 week'):
-            lengths.append(len(rs0))
-        self.assertEqual(lengths, [14, 14, 14, 9, 2])
+        # lengths = []
+        # for rs0 in self.rs3.roll('2 weeks', '1 week'):
+        #     lengths.append(len(rs0))
+        # self.assertEqual(lengths, [14, 14, 14, 9, 2])
 
+
+class TestReal(unittest.TestCase):
+    def setUp(self):
+        def add_yyyymm(r):
+            r.yyyymm = str(r.date)[:6]
+            return r
+
+        with dbopen('space.db') as c:
+        
+            c.save('indcode1.csv', d1='yyyymm', d2='fcode', fn=add_yyyymm)
+            c.save('mdata1.csv', fn=add_yyyymm)
+            c.set_dims('mdata1', 'yyyymm', 'fcode')
+            c.save('manal1.csv', fn=add_yyyymm)
+            c.set_dims('manal1', 'yyyymm', 'fcode')
+            c.save("""
+            select *, ret as sret from mdata1
+            where fcode="A005930"
+            """, 'sam1', d1='yyyymm')
+
+        pass
+
+    def test_simple(self):
+        with dbopen('space.db') as c:
+            c.ljoin('indcode1, mdata1 months=1 , manal1, sam1 months=-3', 'foo')
+            c.show('foo where fcode="A005930"')
+
+    # def test_ymd(self):
+    #     print(ymd(200412, year=2))
+    #     print(ymd('20130312', days= -120))
+    #     print(ymd('20130312', days= 120))
+    #     print(ymd('2013', days=365))
+    #     print(ymd('201304', months=365))
+        
+
+
+    def test_simple3(self):
+        pass         
+
+    # def tearDown(self):
+    #     os.remove(os.path.join('data', 'space.db'))
 
 
 unittest.main()
