@@ -13,7 +13,7 @@ sys.path.append(PYPATH)
 
 from pydwork.sqlplus import *
 from pydwork.util import mpairs, isnum, istext, \
-    prepend_header, pmap, grouper, same, ymd, dictify
+    prepend_header, pmap, grouper, same, ymd
 
 def mean0(seq):
     return round(st.mean(seq), 3)
@@ -343,6 +343,20 @@ class TestMisc2(unittest.TestCase):
             """, t1=rs1, t2=rs2)
             self.assertEqual(rs3[0].sl2, 5.1)
             self.assertEqual(len(rs1.where('col > 10 and col <= 20')), 10)
+
+    def test_foo(self):
+        with dbopen(':memory:') as c:
+            c.save('iris.csv')
+            c.save('select col, sepal_length as sl from iris', 'iris1') 
+            c.show("""
+            select a.*, col1 + sl as foo, iris1.col1
+            from iris as a
+            left join iris1
+            on a.col = iris1.col1
+            """)
+
+
+
 
 
 if os.name != 'nt':
@@ -819,22 +833,21 @@ class TestReal(unittest.TestCase):
 
         with dbopen('space.db') as c:
         
-            c.save('indcode1.csv', d1='yyyymm', d2='fcode', fn=add_yyyymm)
+            c.save('indcode1.csv', dcol='yyyymm', icol='fcode', fn=add_yyyymm)
             c.save('mdata1.csv', fn=add_yyyymm)
-            c.set_dims('mdata1', 'yyyymm', 'fcode')
+            c.set('mdata1', dcol='yyyymm', icol='fcode')
             c.save('manal1.csv', fn=add_yyyymm)
-            c.set_dims('manal1', 'yyyymm', 'fcode')
+            c.set('manal1', dcol='yyyymm', icol='fcode')
             c.save("""
             select *, ret as sret from mdata1
             where fcode="A005930"
-            """, 'sam1', d1='yyyymm')
+            """, 'sam1', dcol='yyyymm')
 
         pass
 
     def test_simple(self):
         with dbopen('space.db') as c:
-            c.ljoin('indcode1, mdata1 months=1 , manal1, sam1 months=-3', 'foo')
-            c.show('foo where fcode="A005930"')
+            c.ljoin('indcode1', 'mdata1:1' , 'manal1', 'sam1:-3', name='foo')
 
     # def test_ymd(self):
     #     print(ymd(200412, year=2))

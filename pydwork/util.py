@@ -186,42 +186,42 @@ def listify(x):
         return [x]
 
 
-def dictify(x):
-    """
-    dictify('months=3, 3 days, years:2') 
-    => {months: 3, days: 3, years: 2}
-    which is an ordered dict
-    """
-    def splitit(x1):
+# def dictify(x):
+#     """
+#     dictify('months=3, 3 days, years:2') 
+#     => {months: 3, days: 3, years: 2}
+#     which is an ordered dict
+#     """
+#     def splitit(x1):
     
-        p = x1.find('=')
-        if p != -1:
-            a, b = x1[:p].strip(), x1[p+1:]
-            return a, eval(b)
+#         p = x1.find('=')
+#         if p != -1:
+#             a, b = x1[:p].strip(), x1[p+1:]
+#             return a, eval(b)
 
-        p = x1.find(':')
-        if p != -1:
-            a, b = x1[:p].strip(), x1[p+1:]
-            return a, eval(b)
+#         p = x1.find(':')
+#         if p != -1:
+#             a, b = x1[:p].strip(), x1[p+1:]
+#             return a, eval(b)
         
-        p = x1.find(' ')
-        if p != -1:
-            a, b = x1[:p], x1[p+1:].strip()
-            return b, eval(a) 
+#         p = x1.find(' ')
+#         if p != -1:
+#             a, b = x1[:p], x1[p+1:].strip()
+#             return b, eval(a) 
 
-        raise ValueError(f'Unknown format: {x1}')
+#         raise ValueError(f'Unknown format: {x1}')
 
-    if isinstance(x, dict):
-        return x
+#     if isinstance(x, dict):
+#         return x
 
-    d = OrderedDict()
-    if not x.strip():
-        return d
-    for x1 in x.split(','):
-        a, b = splitit(x1.strip())
-        d[a] = b
+#     d = OrderedDict()
+#     if not x.strip():
+#         return d
+#     for x1 in x.split(','):
+#         a, b = splitit(x1.strip())
+#         d[a] = b
 
-    return d
+#     return d
 
 
 # !!!!!!!!!
@@ -380,35 +380,53 @@ def istext(x):
 #     d1 = datetime.strptime(str(date), '%Y%m%d') + rd
 #     return int(d1.strftime('%Y%m%d'))
 
-
-def ymd(date, *args, **kvargs):
-    args = ','.join(args)
-    d0 = dictify(args)
-    for k, v in kvargs.items():
-        d0[k] = v
-
-    d = OrderedDict()
-    for k, v in d0.items():
-        if k in ['year', 'month', 'day', \
-                 'hour', 'minute', 'second', 'milisecond']:
-            d[k + 's'] = v
-        else:
-            d[k] = v
-
+def ymd(date, n):
     date = str(date) 
-    fmt = '%Y%m%d' 
-
+    # yyyymm
     if len(date) == 6:
-        fmt = '%Y%m'
+        d1 = datetime.strptime(date, '%Y%m') + relativedelta(months=n)
+        return int(d1.strftime('%Y%m'))
+    # yyyymmdd
+    elif len(date) == 8:
+        d1 = datetime.strptime(date, '%Y%m%d') + relativedelta(days=n)
+        return int(d1.strftime('%Y%m'))
+    # yyyy
     elif len(date) == 4:
-        fmt = '%Y'
+        return int(date) + n
+    else:
+        raise ValueError('Invalid Date Format')
 
-    try:
-        date1 = datetime.strptime(date, fmt) 
-    except:
-        date1 = parse(date)
+
+# def ymd(date, *args, **kvargs):
+#     args = ','.join(args)
+#     d0 = dictify(args)
+#     for k, v in kvargs.items():
+#         d0[k] = v
+
+#     d = OrderedDict()
+#     for k, v in d0.items():
+#         if k in ['year', 'month', 'day', \
+#                  'hour', 'minute', 'second', 'milisecond']:
+#             d[k + 's'] = v
+#         else:
+#             d[k] = v
+
+#     date = str(date) 
+#     fmt = '%Y%m%d' 
+
+#     if len(date) == 6:
+#         fmt = '%Y%m'
+#     elif len(date) == 4:
+#         fmt = '%Y'
+
+#     try:
+#         date1 = datetime.strptime(date, fmt) 
+#     except:
+#         date1 = parse(date)
     
-    return int((date1 + relativedelta(**d)).strftime(fmt))
+#     return int((date1 + relativedelta(**d)).strftime(fmt))
+
+
 
 
 def same(iterator):
