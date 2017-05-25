@@ -791,15 +791,7 @@ class SQLPlus:
             # you can't use '?' for table name
             # '?' is for data insertion
             self.run('drop table if exists %s' % table)
-    
-        rs = []     
-        for r in self.rows(self._metatname):
-            if not r.name in tables:
-                rs.append(r)
-
-        self._cursor.execute(f'drop table if exists {self._metatname}')
-        _salite3_save(self._cursor, (r.values for r in rs), self._metatname, self._mcols)
-        
+       
         self.tables = self._list_tables()
 
     def rename(self, old, new):

@@ -794,6 +794,10 @@ class TestReal(unittest.TestCase):
             sam1:-3, ret as sret, tvol as stvol
             """, 'foo')
             c.show('foo where id="A005930"')
+    
+    def tearDown(self):
+        os.remove(os.path.join('data', 'space.db'))
+
 
     # def test_ymd(self):
     #     print(ymd(200412, year=2))
@@ -803,12 +807,6 @@ class TestReal(unittest.TestCase):
     #     print(ymd('201304', months=365))
         
 
-
-    def test_simple3(self):
-        pass         
-
-    # def tearDown(self):
-    #     os.remove(os.path.join('data', 'space.db'))
 
 
 unittest.main()
