@@ -899,7 +899,11 @@ class SQLPlus:
 
         s0 = f"select {', '.join(cols)} from {t0} {' '.join(cond)}"
         self.save(s0, name if name else parsed_stmt[0][0])
-    
+        
+        # delete temps
+        for tname, _, _, tempstr in parsed_stmt:
+            if tempstr:
+                self.drop(tname + tempstr)
 
 
 @contextmanager
