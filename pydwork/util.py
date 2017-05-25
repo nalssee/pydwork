@@ -17,7 +17,6 @@ from queue import Queue
 
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from dateutil.parser import parse
 
 from scipy.stats import ttest_1samp
 
@@ -186,44 +185,6 @@ def listify(x):
         return [x]
 
 
-# def dictify(x):
-#     """
-#     dictify('months=3, 3 days, years:2') 
-#     => {months: 3, days: 3, years: 2}
-#     which is an ordered dict
-#     """
-#     def splitit(x1):
-    
-#         p = x1.find('=')
-#         if p != -1:
-#             a, b = x1[:p].strip(), x1[p+1:]
-#             return a, eval(b)
-
-#         p = x1.find(':')
-#         if p != -1:
-#             a, b = x1[:p].strip(), x1[p+1:]
-#             return a, eval(b)
-        
-#         p = x1.find(' ')
-#         if p != -1:
-#             a, b = x1[:p], x1[p+1:].strip()
-#             return b, eval(a) 
-
-#         raise ValueError(f'Unknown format: {x1}')
-
-#     if isinstance(x, dict):
-#         return x
-
-#     d = OrderedDict()
-#     if not x.strip():
-#         return d
-#     for x1 in x.split(','):
-#         a, b = splitit(x1.strip())
-#         d[a] = b
-
-#     return d
-
-
 # !!!!!!!!!
 # CAUTION: pmap does NOT work on Windows
 
@@ -345,41 +306,8 @@ def isnum(x):
     return isinstance(x, float) or isinstance(x, int)
 
 
-def istext(x):
-    "Tests if x is string"
-    return isinstance(x, str)
-
-
-# def yyyymm(date, n):
-#     d1 = datetime.strptime(str(date), '%Y%m') + relativedelta(months=n)
-#     return int(d1.strftime('%Y%m'))
-
-
-# def yyyymmdd(date, nextstep):
-#     """example: yyyymmdd(19810101, '2 days') => 19810103
-
-#     year(s), month(s), week(s), or day(s)
-#     """
-#     if isinstance(nextstep, int):
-#         n, period = nextstep, 'days'
-#     else:
-#         n, period = nextstep.split()
-#         n = int(n)
-
-#     if period.startswith('year'):
-#         rd = relativedelta(years=n)
-#     elif period.startswith('month'):
-#         rd = relativedelta(months=n)
-#     elif period.startswith('week'):
-#         rd = relativedelta(weeks=n)
-#     elif period.startswith('day'):
-#         rd = relativedelta(days=n)
-#     else:
-#         raise ValueError("Unknown periods", period)
-
-#     d1 = datetime.strptime(str(date), '%Y%m%d') + rd
-#     return int(d1.strftime('%Y%m%d'))
-
+# If what you see is a number then it should be a number
+# That's a natural and less confusing way 
 def ymd(date, n):
     date = str(date) 
     # yyyymm
@@ -389,44 +317,12 @@ def ymd(date, n):
     # yyyymmdd
     elif len(date) == 8:
         d1 = datetime.strptime(date, '%Y%m%d') + relativedelta(days=n)
-        return int(d1.strftime('%Y%m'))
+        return int(d1.strftime('%Y%m%d'))
     # yyyy
     elif len(date) == 4:
         return int(date) + n
     else:
         raise ValueError('Invalid Date Format')
-
-
-# def ymd(date, *args, **kvargs):
-#     args = ','.join(args)
-#     d0 = dictify(args)
-#     for k, v in kvargs.items():
-#         d0[k] = v
-
-#     d = OrderedDict()
-#     for k, v in d0.items():
-#         if k in ['year', 'month', 'day', \
-#                  'hour', 'minute', 'second', 'milisecond']:
-#             d[k + 's'] = v
-#         else:
-#             d[k] = v
-
-#     date = str(date) 
-#     fmt = '%Y%m%d' 
-
-#     if len(date) == 6:
-#         fmt = '%Y%m'
-#     elif len(date) == 4:
-#         fmt = '%Y'
-
-#     try:
-#         date1 = datetime.strptime(date, fmt) 
-#     except:
-#         date1 = parse(date)
-    
-#     return int((date1 + relativedelta(**d)).strftime(fmt))
-
-
 
 
 def same(iterator):
@@ -454,7 +350,6 @@ def star(val, pval):
         return str(round(val, 3)) + '*'
     else:
         return str(round(val, 3))
-
 
 
 def mrepr(seq1, seq2=None):

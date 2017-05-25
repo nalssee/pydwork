@@ -12,7 +12,7 @@ PYPATH = os.path.join(TESTPATH, '..', '..')
 sys.path.append(PYPATH)
 
 from pydwork.sqlplus import *
-from pydwork.util import mpairs, isnum, istext, \
+from pydwork.util import mpairs, isnum,  \
     prepend_header, pmap, grouper, same, ymd
 
 def mean0(seq):
@@ -78,7 +78,7 @@ class Testdbopen(unittest.TestCase):
             # All of the rows in a table is grouped.
             self.assertEqual(len(list(c.reel('first_char'))), 150)
             # list_tables, in alphabetical order
-            self.assertEqual(c.tables[1:], ['first_char', 'top20_sl'])
+            self.assertEqual(c.tables, ['first_char', 'top20_sl'])
 
             # get the whole rows
             for rs in c.reel('top20_sl', group=lambda r: 1):
@@ -305,21 +305,11 @@ class TestMisc(unittest.TestCase):
         self.assertTrue(isnum(-3.32))
         self.assertFalse(isnum('32.3'))
 
-        self.assertFalse(istext(3))
-        self.assertTrue(istext('32.3'))
+        self.assertEqual(ymd(199912, 2), 200002)
+        self.assertEqual(ymd(199912, -2), 199910)
 
-        self.assertEqual(yyyymmdd(19991230, '2 months'), 20000229)
-        self.assertEqual(yyyymmdd(19991231, '-2 months'), 19991031)
-
-        self.assertEqual(yyyymm(199912, 2), 200002)
-        self.assertEqual(yyyymm(199912, -2), 199910)
-
-
-        # not 19990531
-        self.assertEqual(yyyymmdd(19990430, '1 month'), 19990530)
-
-        self.assertEqual(yyyymmdd(19991231, '2 days'), 20000102)
-        self.assertEqual(yyyymmdd(19991231, '-2 days'), 19991229)
+        self.assertEqual(ymd(19991231, 2), 20000102)
+        self.assertEqual(ymd(19991231, -2), 19991229)
 
 
 class TestMisc2(unittest.TestCase):
@@ -328,32 +318,6 @@ class TestMisc2(unittest.TestCase):
             c.save('iris.csv')
             c.save('select * from iris where species="setosa"')
             self.assertEqual(len(c.rows('iris')), 50)
-
-
-    def test_sql(self):
-        with dbopen(':memory:') as c:
-            c.save('iris.csv')
-            rs1 = c.rows('iris')
-            rs2 = c.rows('iris')
-            rs3 = sql("""
-            select a.*, b.sepal_length as sl2 
-            from t1 as a 
-            left join t2 as b 
-            on a.col == b.col
-            """, t1=rs1, t2=rs2)
-            self.assertEqual(rs3[0].sl2, 5.1)
-            self.assertEqual(len(rs1.where('col > 10 and col <= 20')), 10)
-
-    def test_foo(self):
-        with dbopen(':memory:') as c:
-            c.save('iris.csv')
-            c.save('select col, sepal_length as sl from iris', 'iris1') 
-            c.show("""
-            select a.*, col1 + sl as foo, iris1.col1
-            from iris as a
-            left join iris1
-            on a.col = iris1.col1
-            """)
 
 
 
@@ -552,19 +516,17 @@ class TestUserDefinedFunctions(unittest.TestCase):
                 """)
 
             na = len(c.rows("select * from indport1 where isnum(sign_cnsmr)"))
-            nb = len(c.rows("select * from indport1 where istext(sign_cnsmr)"))
+            nb = len(c.rows("select * from indport1 where not isnum(sign_cnsmr)"))
             nc = len(c.rows("select * from indport1"))
             self.assertEqual(na + nb, nc)
 
             r = next(c.reel(
                 """
-                select *, ymd(date, 'months=12') as yyyymm1,
-                ymd(date, 'days=365') as yyyymmdd1
+                select *, ymd(substr(date, 1, 6), 12) as yyyymm1
                 from indport
                 where date >= 20160801
                 """))
-            self.assertEqual(r.yyyymm1, 20170801)
-            self.assertEqual(r.yyyymmdd1, 20170801)
+            self.assertEqual(r.yyyymm1, 201708)
 
 
 class TestMpairs(unittest.TestCase):
@@ -633,20 +595,20 @@ class TestPort(unittest.TestCase):
     def setUp(self):
         rs1 = []
         for year in range(2001, 2011):
-            rs1.append(Row(yyyy=year))
-        self.rs1 = Rows(rs1, 'yyyy')
+            rs1.append(Row(date=year))
+        self.rs1 = Rows(rs1)
 
         rs2 = []
         start_month = 200101
         for i in range(36):
-            rs2.append(Row(yyyymm=ymd(start_month, months=i)))
-        self.rs2 = Rows(rs2, 'yyyymm')
+            rs2.append(Row(date=ymd(start_month, i)))
+        self.rs2 = Rows(rs2)
 
         rs3 = []
         start_date = 20010101
         for i in range(30):
-            rs3.append(Row(yyyymmdd=ymd(start_date, days=i)))
-        self.rs3 = Rows(rs3, 'yyyymmdd')
+            rs3.append(Row(date=ymd(start_date, i)))
+        self.rs3 = Rows(rs3)
 
         with dbopen(':memory:') as c:
             c.save('indport.csv')
@@ -654,22 +616,17 @@ class TestPort(unittest.TestCase):
             rs = []
             for rs1 in c.reel('indport order by date', group=lambda r: str(r.date)[0:4]):
                 for r in rs1:
-                    r.yyyy = int(str(r.date)[0:4])
-                    r.fcode = 'A' + str(r.date)[4:]
-                    del r.date
+                    date = str(r.date)
+                    r.date = int(date[:4])
+                    r.id = 'A' + date[4:]
                     rs.append(r)
-            self.indport = Rows(rs, 'yyyy', 'fcode')    
+            self.indport = Rows(rs)
 
 
     def test_indi_sort1(self):
-        
-        avgport = self.indport.where(lambda r: r.yyyy < 2009).pn(cnsmr=2, manuf=3).pavg('other')
-        avgport.between(2004, 2009).pat('other').csv()
-
-        
-        ap = avgport.order([avgport.date, 'pn_cnsmr', 'pn_manuf'])\
+        avgport = self.indport.where(lambda r: r.date < 2009).pn(cnsmr=2, manuf=3).pavg('other')
+        ap = avgport.order(['date', 'pn_cnsmr', 'pn_manuf'])\
              .where(lambda r: r.pn_cnsmr > 0 and r.pn_manuf > 0)
-             
         self.assertEqual(ap[0].n, 75)
         self.assertEqual(ap[1].n, 44)
         self.assertEqual(ap[2].n, 4)
@@ -679,19 +636,19 @@ class TestPort(unittest.TestCase):
 
         self.assertEqual(round(ap[0].other, 2), -0.64)
 
-        indport = self.indport.where(lambda r: r.yyyy < 2009) 
+        indport = self.indport.where(lambda r: r.date < 2009) 
         indport.pn(indport.breaks('cnsmr', 10))
 
         other1 = []
         for year in range(2001, 2009):
-            other1.append(mean0(indport.where('pn_cnsmr', 1, 'yyyy', year)['other']))
+            other1.append(mean0(indport.where('pn_cnsmr', 1, 'date', year)['other']))
 
         self.assertEqual(other1, [-1.277, -1.424, -0.859, -1.002, -0.963, -1.036, -1.799, -4.225])
         
-        indport = self.indport.where(lambda r: r.yyyy < 2009).pn('cnsmr', 10)
+        indport = self.indport.where(lambda r: r.date < 2009).pn('cnsmr', 10)
         other10 = []
         for year in range(2001, 2009):
-            other10.append(mean0(indport.where('pn_cnsmr', 10, 'yyyy', year)['other']))
+            other10.append(mean0(indport.where('pn_cnsmr', 10, 'date', year)['other']))
 
         self.assertEqual(other10, [1.399, 1.483, 1.234, 0.954, 1.04, 1.165, 1.313, 3.975])
         
@@ -704,8 +661,8 @@ class TestPort(unittest.TestCase):
         other21 = []
         other23 = []
         for year in range(2004, 2009):
-            pavg1 = indport.where('pn_cnsmr', 2, 'pn_manuf', 1, 'yyyy', year)['other']
-            pavg2 = indport.where('pn_cnsmr', 2, 'pn_manuf', 3, 'yyyy', year)['other']
+            pavg1 = indport.where('pn_cnsmr', 2, 'pn_manuf', 1, 'date', year)['other']
+            pavg2 = indport.where('pn_cnsmr', 2, 'pn_manuf', 3, 'date', year)['other']
             other21.append(st.mean(pavg1))
             other23.append(st.mean(pavg2))
 
@@ -715,7 +672,7 @@ class TestPort(unittest.TestCase):
         self.assertEqual(round(st.mean(other23), 3), float(pat[2][3].replace('*', '').split()[0]))
         self.assertEqual(round(st.mean(other23) - st.mean(other21), 3), float(pat[2][4][:5]))
 
-        # # test for avgs columns!!
+        # # # test for avgs columns!!
         pat1 = indport.pn('cnsmr', 2, 'manuf', 3)\
                .pavg('other', pncols='pn_cnsmr, pn_manuf')\
                .pat('other', pncols='pn_cnsmr, pn_manuf').lines
@@ -732,9 +689,9 @@ class TestPort(unittest.TestCase):
 
     def test_indi_sort2(self):
         "weighted average"
-        avgport = self.indport.where(lambda r: r.yyyy <= 2015).pn('cnsmr', 10)
-        hlth = avgport.where('yyyy', 2001, 'pn_cnsmr', 3)['hlth']
-        other = avgport.where('yyyy', 2001, 'pn_cnsmr', 3)['other']
+        avgport = self.indport.where(lambda r: r.date <= 2015).pn('cnsmr', 10)
+        hlth = avgport.where('date', 2001, 'pn_cnsmr', 3)['hlth']
+        other = avgport.where('date', 2001, 'pn_cnsmr', 3)['other']
 
         total = sum(hlth)
         result = []
@@ -742,7 +699,7 @@ class TestPort(unittest.TestCase):
             result.append(x * y / total)
         self.assertEqual(sum(result), 
                          avgport.pavg('other', 'hlth')\
-                         .where('yyyy', 2001, 'pn_cnsmr', 3)['other'][0])
+                         .where('date', 2001, 'pn_cnsmr', 3)['other'][0])
 
     def test_indi_sort3(self):
         self.assertEqual(self.indport.pn('cnsmr', 2).pavg('other').pat('other').lines,
@@ -752,7 +709,7 @@ class TestPort(unittest.TestCase):
         avgport = self.indport.pn(cnsmr=4, manuf=3, hlth=2, dependent=True).pavg('other')
 
         avgport1 = avgport.where(lambda r: r.pn_cnsmr != 0 and r.pn_manuf != 0 and r.pn_hlth != 0)
-        for r in avgport1.where(lambda r: r.yyyy < 2016):
+        for r in avgport1.where(lambda r: r.date < 2016):
             # must be about the same size
             self.assertTrue(r.n >= 10 or r.n < 14)
         
@@ -767,24 +724,17 @@ class TestPort(unittest.TestCase):
 
 
     def test_pnroll(self):
-        print(ymd(201312, 'years: 5'))
-        print(ymd(201312, '  5 year, 3 months'))
-        print(ymd(201312, '  years= 12'))
-        
+        a = self.indport.between(2003).pn(cnsmr=5, manuf=4, jump=5)
+        for rs in a.roll(5, 5):
+            for rs1 in rs.order('id, date').group('id'):
+                self.assertTrue(same(rs1['pn_cnsmr, pn_manuf']))
 
+        a = self.indport.between(2003).pn(cnsmr=5, manuf=4, hi_tec=3, jump=5)
+        a = self.indport.between(2003).pn(cnsmr=5, manuf=4, hi_tec=3, jump=5)
 
-        # a = self.indport.between(2003).pn(cnsmr=5, manuf=4, jump='years: 5')
-        # for rs in a.roll('year=5', 'years:5'):
-        #     for rs1 in rs.order('fcode, yyyy').group('fcode'):
-        #         self.assertTrue(same(rs1['pn_cnsmr, pn_manuf']))
-        # print(ymd(201203, '5 years'))
-        # a = self.indport.between(2003).pn(cnsmr=5, manuf=4, hi_tec=3, jump={'years': 5})
-
-        # a = self.indport.between(2003).pn(cnsmr=5, manuf=4, hi_tec=3, jump='years: 5')
-
-        # for rs in a.roll('years:5', '5 years'):
-        #     for rs1 in rs.order('fcode, yyyy').group('fcode'):
-        #         self.assertTrue(same(rs1['pn_cnsmr, pn_manuf, pn_hi_tec']))
+        for rs in a.roll(5, 5):
+            for rs1 in rs.order('id, date').group('id'):
+                self.assertTrue(same(rs1['pn_cnsmr, pn_manuf, pn_hi_tec']))
 
 
     def test_famac(self):
@@ -800,54 +750,50 @@ class TestPort(unittest.TestCase):
             self.assertEqual(mean1(fit[var]), val)
 
     def test_rollover(self):
-        print('yeah')
-        print(dictify('months:12'))
         lengths = []
-        for rs0 in self.rs1.roll('years=3', 'years=2'):
+        for rs0 in self.rs1.roll(3, 2):
             lengths.append(len(rs0))
         self.assertEqual(lengths, [3, 3, 3, 3, 2])
 
         lengths = []
-        for rs0 in self.rs2.where(lambda r: r.yyyymm > 200103)\
-            .roll('months:12', 'months:12'):
+        for rs0 in self.rs2.where(lambda r: r.date > 200103).roll(12, 12):
             lengths.append(len(rs0))
         self.assertEqual(lengths, [12, 12, 9])
 
-        # lengths = []
-        # for rs0 in self.rs2.where(lambda r: r.yyyymm > 200103)\
-        #     .roll('24 months', '12 months'):
-        #     lengths.append(len(rs0))
-        # self.assertEqual(lengths, [24, 21, 9])
+        lengths = []
+        for rs0 in self.rs2.where(lambda r: r.date > 200103).roll(24, 12):
+            lengths.append(len(rs0))
+        self.assertEqual(lengths, [24, 21, 9])
 
-        # lengths = []
-        # for rs0 in self.rs3.roll('2 weeks', '1 week'):
-        #     lengths.append(len(rs0))
-        # self.assertEqual(lengths, [14, 14, 14, 9, 2])
+        lengths = []
+        for rs0 in self.rs3.roll(14, 7): 
+            lengths.append(len(rs0))
+        self.assertEqual(lengths, [14, 14, 14, 9, 2])
 
 
 class TestReal(unittest.TestCase):
     def setUp(self):
-        def add_yyyymm(r):
-            r.yyyymm = str(r.date)[:6]
+        def dateid(r):
+            r.date = str(r.date)[:6]
+            r.id = r.fcode
+            del r.fcode
             return r
 
         with dbopen('space.db') as c:
         
-            c.save('indcode1.csv', dcol='yyyymm', icol='fcode', fn=add_yyyymm)
-            c.save('mdata1.csv', fn=add_yyyymm)
-            c.set('mdata1', dcol='yyyymm', icol='fcode')
-            c.save('manal1.csv', fn=add_yyyymm)
-            c.set('manal1', dcol='yyyymm', icol='fcode')
-            c.save("""
-            select *, ret as sret from mdata1
-            where fcode="A005930"
-            """, 'sam1', dcol='yyyymm')
-
-        pass
+            c.save('indcode1.csv', fn=dateid)
+            c.save('mdata1.csv', fn=dateid)
+            c.save('manal1.csv', fn=dateid)
+            c.save("mdata1 where id='A005930'" , 'sam1')
 
     def test_simple(self):
         with dbopen('space.db') as c:
-            c.ljoin('indcode1', 'mdata1:1' , 'manal1', 'sam1:-3', name='foo')
+            c.ljoin("""indcode1; 
+            mdata1:1; 
+            manal1; 
+            sam1:-3, ret as sret, tvol as stvol
+            """, 'foo')
+            c.show('foo where id="A005930"')
 
     # def test_ymd(self):
     #     print(ymd(200412, year=2))
